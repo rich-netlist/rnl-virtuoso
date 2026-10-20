@@ -17,6 +17,8 @@ type block struct {
 	Library, Cell     string
 	Instances         map[string][]string
 	InstanceOrder     []string
+	Expansions        map[string]*nativeExpansion
+	Globals           stringSet
 }
 type statement struct {
 	Start, End int
@@ -91,6 +93,9 @@ func readNative(text, top, dialect string) ([]string, map[string]*block, []strin
 	blocks := map[string]*block{}
 	keys := []string{}
 	var current, root *block
+	var expansion *nativeExpansion
+	var expansionBlock *block
+	globals := stringSet{"0": true}
 	lib, cellName := "", ""
 	comment := rx(`(?i)^\*\s*(Library|Cell) Name:\s*(\S+)`)
 	if dialect == "spectre" {
@@ -104,6 +109,27 @@ func readNative(text, top, dialect string) ([]string, map[string]*block, []strin
 			continue
 		}
 		if strings.HasPrefix(stmt, "*") && dialect == "cdl" || strings.HasPrefix(stmt, "//") && dialect == "spectre" {
+			if dialect == "spectre" {
+				if match := expansionStart.FindStringSubmatch(stmt); match != nil {
+					if expansion != nil {
+						fail("Nested native PDK expansion")
+					}
+					expansion = &nativeExpansion{Source: strings.TrimSpace(match[2]), Kind: match[1]}
+					expansionBlock = nil
+				} else if expansion != nil && stmt == "//End of "+expansion.Source {
+					if expansionBlock == nil {
+						fail("Empty native PDK expansion %s", expansion.Source)
+					}
+					if expansionBlock.Expansions == nil {
+						expansionBlock.Expansions = map[string]*nativeExpansion{}
+					}
+					if expansionBlock.Expansions[expansion.Source] != nil {
+						fail("Duplicate native PDK expansion %s", expansion.Source)
+					}
+					expansionBlock.Expansions[expansion.Source] = expansion
+					expansion = nil
+				}
+			}
 			if m := comment.FindStringSubmatch(stmt); m != nil {
 				if strings.EqualFold(m[1], "library") {
 					lib = m[2]
@@ -118,6 +144,9 @@ func readNative(text, top, dialect string) ([]string, map[string]*block, []strin
 			head = strings.ToLower(head)
 		}
 		if head == ".subckt" && dialect == "cdl" || head == "subckt" && dialect == "spectre" {
+			if expansion != nil {
+				fail("Native PDK expansion crosses a subcircuit boundary")
+			}
 			if dialect == "spectre" {
 				words = nativeNames(stmt)
 			}
@@ -147,6 +176,9 @@ func readNative(text, top, dialect string) ([]string, map[string]*block, []strin
 				cellName = ""
 			}
 		} else if head == ".ends" && dialect == "cdl" || head == "ends" && dialect == "spectre" {
+			if expansion != nil {
+				fail("Unterminated native PDK expansion %s", expansion.Source)
+			}
 			if current == nil {
 				fail("%s ends without subckt", dialect)
 			}
@@ -161,6 +193,11 @@ func readNative(text, top, dialect string) ([]string, map[string]*block, []strin
 		} else if dialect == "spectre" && (head == "simulator" || head == "global" || head == "parameters" || head == "ahdl_include") {
 			if head == "simulator" && stmt != "simulator lang=spectre" {
 				fail("Mixed simulator languages are not supported by this exporter")
+			}
+			if head == "global" {
+				for _, n := range nativeNames(stmt)[1:] {
+					globals[n] = true
+				}
 			}
 		} else {
 			key := head
@@ -198,10 +235,26 @@ func readNative(text, top, dialect string) ([]string, map[string]*block, []strin
 			}
 			b.Instances[key] = words
 			b.InstanceOrder = append(b.InstanceOrder, key)
+			if expansion != nil {
+				if expansionBlock != nil && expansionBlock != b {
+					fail("Native PDK expansion crosses a circuit boundary")
+				}
+				expansionBlock = b
+				expansion.Members = append(expansion.Members, key)
+			}
 		}
 	}
 	if current != nil || len(blocks) == 0 || dialect == "spectre" && root == nil {
 		fail("Incomplete or empty native %s circuit", dialect)
+	}
+	if expansion != nil {
+		fail("Unterminated native PDK expansion %s", expansion.Source)
+	}
+	for _, key := range keys {
+		blocks[key].Globals = globals
+		for _, group := range blocks[key].Expansions {
+			group.validate(blocks[key])
+		}
 	}
 	return lines, blocks, keys
 }
@@ -220,11 +273,23 @@ func matchInstances(b *block, c *cell, dialect string, mapping nameMap) map[stri
 	for _, source := range c.Instances {
 		actual := source.Name
 		var words []string
+		var group *nativeExpansion
 		if dialect == "spectre" {
 			if v, ok := mapping["inst"][actual]; ok {
 				actual = v
 			}
-			words = b.Instances[actual]
+			group = expansionFor(b, source.Name, actual)
+			if group != nil {
+				words = group.Words
+				for _, member := range group.Members {
+					if used[member] {
+						fail("Native PDK expansion overlaps another source instance: %s", source.Name)
+					}
+					used[member] = true
+				}
+			} else {
+				words = b.Instances[actual]
+			}
 		} else {
 			candidates := [][]string{}
 			for _, key := range b.InstanceOrder {
@@ -249,11 +314,13 @@ func matchInstances(b *block, c *cell, dialect string, mapping nameMap) map[stri
 			}
 			fail("No Spectre instance for %s/%s", b.Name, source.Name)
 		}
-		if used[actual] {
+		if used[actual] && group == nil {
 			fail("Ambiguous %s name for %s/%s", strings.ToUpper(dialect), b.Name, source.Name)
 		}
 		out[strings.ToLower(source.ID)] = words
-		used[actual] = true
+		if group == nil {
+			used[actual] = true
+		}
 	}
 	missing := []string{}
 	for k := range b.Instances {

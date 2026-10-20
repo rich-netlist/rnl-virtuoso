@@ -20,7 +20,9 @@ func loadOrders(text string) map[cellKey][]string {
 	for _, r := range parse(text, true).list {
 		ports := []string{}
 		for _, p := range r.at(2).list {
-			ports = append(ports, p.atom)
+			if strings.TrimSpace(p.atom) != "" {
+				ports = append(ports, p.atom)
+			}
 		}
 		out[cellKey{r.at(0).atom, r.at(1).atom}] = ports
 	}
@@ -169,7 +171,13 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 	}
 	orders := map[cellKey][]string{}
 	for _, row := range in.Orders {
-		orders[cellKey{row.Library, row.Cell}] = row.Ports
+		ports := []string{}
+		for _, p := range row.Ports {
+			if strings.TrimSpace(p) != "" {
+				ports = append(ports, p)
+			}
+		}
+		orders[cellKey{row.Library, row.Cell}] = ports
 	}
 	carrier, extension := "*", "sp"
 	if dialect == "spectre" {
@@ -301,6 +309,8 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 		}
 		endpoints := []endpoint{}
 		localSymbols := map[string]string{}
+		expandedTypes := map[int]string{}
+		expandedCount := 0
 		var symbolCell *cell
 		if key == topkey {
 			symbolCell = exported
@@ -324,6 +334,10 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 			words := bindings[strings.ToLower(ins.ID)]
 			if words == nil {
 				continue
+			}
+			group := expansionFor(b, ins.Name, words[0])
+			if group != nil && ins.Bundle != "" {
+				fail("Native PDK expansions inside drawn instance arrays are not yet supported: %s/%s", b.Name, ins.Name)
 			}
 			child := blockForCell[ins.Master]
 			order := []string{}
@@ -392,6 +406,33 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 				}
 			}
 			host := ref("#", words[0])
+			if group != nil {
+				host = "%expanded_" + strconvI(expandedCount)
+				expandedCount++
+				definition, ok := expandedTypes[len(order)]
+				if !ok {
+					definition = "%expanded_type_" + strconvI(len(order))
+					expandedTypes[len(order)] = definition
+					roles := []string{quote("{parts}")}
+					for i := range order {
+						roles = append(roles, "["+quote("p"+strconvI(i+1))+", "+quote("terminal")+"]")
+					}
+					ss = append(ss, definition+" = @DEFINE(roles=["+strings.Join(roles, ", ")+"]) {}")
+				}
+				if expandedCount == 1 {
+					ss = append(ss, "%expanded_members_symbol = @DEFINE-SYMBOL {}")
+				}
+				refs := []string{}
+				for _, name := range group.Members {
+					refs = append(refs, ref("#", name))
+				}
+				memberSet := "{" + strings.Join(refs, " ") + "}"
+				// Only the source PDK symbol is visible. The native devices remain
+				// real instances; explicit empty symbols also keep a later solver
+				// from revealing duplicate resistor bodies or default labels.
+				ss = append(ss, memberSet+" @SET-SYMBOL %expanded_members_symbol", memberSet+" @PLACE"+pt(scaled(ins.XY, scale)), expansionUsage(group, host, definition))
+				stats["expanded_instances"]++
+			}
 			if ins.Bundle != "" {
 				host = "%bundle_" + strconvI(len(doneBundles))
 				refs := []string{}
@@ -404,7 +445,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 			}
 			xy, outputOrient := scaled(ins.XY, scale), ins.Orient
 			symbol := ""
-			if master.Library == "analogLib" && child == nil {
+			if master.Library == "analogLib" && child == nil && group == nil {
 				symbol = standardNames[strings.ToLower(master.Name)]
 			}
 			var destination []point
@@ -438,8 +479,11 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 				xy, outputOrient = place(symbol, src, destination, ins.Orient, xy, rules)
 				ss = append(ss, host+" @SET-SYMBOL $"+symbol)
 				stats["standard_symbols"]++
-			} else if child == nil || !selected[normalize(child.Name, dialect)] {
+			} else if group != nil || child == nil || !selected[normalize(child.Name, dialect)] {
 				signature := ins.Master.Library + "\x00" + ins.Master.Cell + "\x00" + strings.Join(order, "\x00")
+				if group != nil {
+					signature += "\x00expanded"
+				}
 				sid, ok := localSymbols[signature]
 				if !ok {
 					sid = "%symbol_" + strconvI(len(localSymbols))
@@ -447,6 +491,9 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 					mapping := map[string]string{}
 					for i, p := range order {
 						mapping[p] = strconvI(i + 1)
+						if group != nil {
+							mapping[p] = quote("p" + strconvI(i+1))
+						}
 					}
 					ss = append(ss, symbolDefinition(master, sid, mapping, scale, &notes))
 					stats["custom_symbols"]++
@@ -454,11 +501,15 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 				ss = append(ss, host+" @SET-SYMBOL "+sid)
 			}
 			ss = append(ss, host+" @PLACE"+pt(xy)+" => @ORIENT("+quote(outputOrient)+")")
+			if group != nil {
+				ss = append(ss, host+" @TEXT("+quote(literal(ins.Name))+`, key="name")`)
+				ss = append(ss, host+" @TEXT("+quote(literal(words[len(words)-1]))+`, key="model")`)
+			}
 			if ins.Bundle != "" {
 				ss = append(ss, host+" @TEXT("+quote(literal(ins.BundleName))+`, key="name")`)
 			}
-			for _, group := range master.GroupOrder {
-				ports := master.Groups[group]
+			for _, portGroup := range master.GroupOrder {
+				ports := master.Groups[portGroup]
 				p := ports[0]
 				i := -1
 				for j, k := range order {
@@ -474,9 +525,16 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 						bits = append(bits, connections[terminal{strings.ToLower(m.ID), p}])
 					}
 				}
-				endpoints = append(endpoints, endpoint{unique(bits), original, host + ":" + strconvI(i+1)})
+				terminalRef := host + ":" + strconvI(i+1)
+				if group != nil {
+					terminalRef = host + ":p" + strconvI(i+1)
+				}
+				endpoints = append(endpoints, endpoint{unique(bits), original, terminalRef})
 			}
 			stats["instances"] += len(members)
+			if group != nil {
+				stats["instances"] += len(group.Members) - 1
+			}
 		}
 		for index, ins := range c.Instances {
 			if bindings[strings.ToLower(ins.ID)] != nil {

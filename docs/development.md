@@ -31,6 +31,10 @@ then runs the same 33 fixture tests against Python and Go. An RNL CLI with bus
 bundle symbol support is required for the checker/rendering assertions; use
 `--rnl` or `RNL_BIN`. Without it, those assertions are reported as skipped.
 Real PDK/design exports are not test fixtures and must not be committed.
+Three additional Go-only PDK regression tests cover native series/parallel
+expansions, boundary mapping and rejection of unexpected branches/members.
+They include all eight orientations and model/name labels. Go unit tests also
+check expansion delimiters, topology, shared/global terminals and CDF separators.
 
 To run the shared assertions separately after building:
 
@@ -46,7 +50,7 @@ cover atomic publication and refusal of existing files, directories and symlinks
 ## Packaging
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.5.1-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.5.2-linux-amd64.tar.gz
 ```
 
 Use `--go /path/to/go` or `--backend /path/to/prebuilt-linux-executable` if needed.

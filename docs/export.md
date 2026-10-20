@@ -76,6 +76,18 @@ report errors about drawing hidden bundle members.
   (including bus names and ground aliases); CDL uses native prefix/spelling
   candidates. Terminal-to-net correspondence is checked, and ambiguous or
   missing mappings fail. Spectre names retain their case sensitivity.
+- Blank separator entries in CDF `termOrder` are ignored; real terminal names
+  retain their spelling and order. Native scalar PDK series/parallel expansions
+  are recognized only through the netlister's explicit `//Series configuration
+  of ...` / `//Parallel configuration of ...` and matching `//End of ...`
+  delimiters. Each keeps all native device statements while a composite RNL usage
+  shows the original EDIF symbol, source name/model, orientation and external pins.
+  Its terminal roles bind actual member terminals. Native members get empty
+  symbols so they remain electrically present without duplicate bodies/labels.
+  Series chains, shared terminals, model/interface consistency and external/global
+  branches are checked before grouping. Device-name prefixes are never used to
+  guess expansion membership. `statistics.instances` counts native electrical
+  instances; `expanded_instances`, when present, counts source expansion groups.
 - Preflight follows the selected stop view and skips `nlAction=ignore/stop`
   markers such as ground and no-connect instead of requiring their schematic
   views to be checked and saved. A no-connect at a wire end is retained as a
@@ -130,6 +142,8 @@ the job directory. EDIF library/style colors and fonts are not copied: the
 result uses `eda-symbol` geometry with `eda-style` as the default presentation,
 and text is rendered by RNL. PDK coverage beyond the
 tested primitives still needs validation on actual designs.
+PDK expansion groups inside drawn instance arrays and expansion patterns without
+the supported native delimiters are not implemented; they fail explicitly.
 
 The output is for schematic interchange. Device model files and simulation
 analysis settings are not packaged. Native design variables remain symbolic;
