@@ -11,6 +11,18 @@ import test_symbols
 
 @unittest.skipIf(os.environ.get('RNL_EXPORT_BACKEND') == 'python', 'Native PDK expansions are a Go backend extension')
 class PDKTests(unittest.TestCase):
+    def test_optional_cdf_terminals_require_complete_active_pin_coverage(self):
+        source, _ = primitive_drawing('vsource', [(0, 3), (0, -3)], 'R0')
+        native = '// Library name: work\n// Cell name: top\nX0 (N1 N2) vsource type=pwl wave=[0 0 1n 1]\n'
+        orders = {('analogLib', 'vsource'): ['P1', 'P2', 'MODP', 'MODN']}
+        files, report = convert(native, source, orders, resources.read('eda-symbol.rnl'), 'top', dialect='spectre')
+        self.assertIn(native.splitlines()[-1], files['top.scs'])
+        self.assertTrue(any('MODP, MODN' in note for note in report['notes']))
+        test_symbols.SymbolTests().dump(files)
+        for metadata, text in [(['P1', 'MODP'], native), (orders['analogLib', 'vsource'], native.replace('(N1 N2)', '(N1 N2 EXTRA)'))]:
+            with self.assertRaisesRegex(ExportError, 'interface differ|node count differs'):
+                convert(text, source, {('analogLib', 'vsource'): metadata}, resources.read('eda-symbol.rnl'), 'top', dialect='spectre')
+
     def test_explicitly_ignored_instance_is_not_a_missing_native_device(self):
         source = drawing().replace('(instance R0 ', '(instance R0 (property nlAction (string "ignore")) ')
         native = spectre_netlist().replace('R0 (A B) resistor r=(Rbase + 1k)\n', '')

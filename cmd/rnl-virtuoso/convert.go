@@ -55,7 +55,7 @@ func normalize(s, dialect string) string {
 	}
 	return s
 }
-func portID(c *cell, spelling, dialect string, names map[string]string) string {
+func lookupPortID(c *cell, spelling, dialect string, names map[string]string) string {
 	matches := []string{}
 	for _, key := range c.PortOrder {
 		value := c.Ports[key]
@@ -73,10 +73,20 @@ func portID(c *cell, spelling, dialect string, names map[string]string) string {
 			}
 		}
 	}
+	if len(matches) == 0 {
+		return ""
+	}
 	if len(matches) != 1 {
 		fail("Cannot identify native netlist port %s in %s/%s", spelling, c.Library, c.Name)
 	}
 	return matches[0]
+}
+func portID(c *cell, spelling, dialect string, names map[string]string) string {
+	id := lookupPortID(c, spelling, dialect, names)
+	if id == "" {
+		fail("Cannot identify native netlist port %s in %s/%s", spelling, c.Library, c.Name)
+	}
+	return id
 }
 func header(carrier string) string {
 	return strings.ReplaceAll("* @RNL(type=\"header\") {\n*   @VERSION(\"0.3\");\n*   @USE-PACKAGE(name=\"eda-symbol\", version=\"0.1\", path=\"eda-symbol.rnl\");\n*   @USE-PACKAGE(name=\"eda-style\", version=\"0.1\", path=\"eda-style.rnl\")\n* }\n", "*", carrier)
@@ -361,8 +371,20 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 				if len(metadata) == 0 {
 					fail("Missing native simulator termOrder for %s/%s; refusing to guess positional pins", ins.Master.Library, ins.Master.Cell)
 				}
+				unused := []string{}
 				for _, p := range metadata {
+					// A PCell's base CDF can include optional terminals absent
+					// from its evaluated symbol (e.g. vsource modulation inputs).
+					// Retain the declared order of active pins, then verify full
+					// EDIF coverage and the actual native node count below.
+					if !ok && dialect == "spectre" && lookupPortID(master, p, dialect, nil) == "" {
+						unused = append(unused, p)
+						continue
+					}
 					order = append(order, port(master, p))
+				}
+				if len(unused) > 0 {
+					notes = append(notes, "CDF terminals absent from evaluated symbol "+master.Library+"/"+master.Name+": "+strings.Join(unused, ", "))
 				}
 			}
 			orderSet := set(order)

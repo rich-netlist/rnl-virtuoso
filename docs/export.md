@@ -152,7 +152,10 @@ report errors about drawing hidden bundle members.
   EDIF's leading `&` escape is removed from display/database names such as
   `&_experiment`; EDIF references and literal strings retain their identity.
 - Blank separator entries in CDF `termOrder` are ignored; real terminal names
-  retain their spelling and order. Native scalar PDK series/parallel expansions
+  retain their spelling and order. Spectre PCell CDFs may declare optional pins
+  absent from the evaluated EDIF symbol. Their absence is noted; active pins keep
+  CDF order, and complete symbol coverage and native node count are required.
+  Native scalar PDK series/parallel expansions
   are recognized only through the netlister's explicit `//Series configuration
   of ...` / `//Parallel configuration of ...` and matching `//End of ...`
   delimiters. Each keeps all native device statements while a composite RNL usage
