@@ -27,7 +27,7 @@ reuse lint
 ```
 
 The test driver builds the host test executable and the static Linux executable,
-then runs the same 33 fixture tests against Python and Go. An RNL CLI with bus
+then runs the shared fixture tests against Python and Go. An RNL CLI with bus
 bundle symbol support is required for the checker/rendering assertions; use
 `--rnl` or `RNL_BIN`. Without it, those assertions are reported as skipped.
 Real PDK/design exports are not test fixtures and must not be committed.
@@ -50,7 +50,7 @@ cover atomic publication and refusal of existing files, directories and symlinks
 ## Packaging
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.5.3-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.5.4-linux-amd64.tar.gz
 ```
 
 Use `--go /path/to/go` or `--backend /path/to/prebuilt-linux-executable` if needed.

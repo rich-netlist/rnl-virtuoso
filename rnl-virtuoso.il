@@ -123,7 +123,7 @@ procedure(rnlStartExport(lib cell view destination hierarchy split scale @option
     command = strcat(rnlShellQuote(strcat(rnlInstallDirectory "/bin/rnl-virtuoso")) " "
       rnlShellQuote(strcat(work "/request.sx")))
     rnlActiveJob = list(nil 'directory work 'destination destination
-      'entry if(format == "spectre" then "top.scs" else "top.sp"))
+      'entry strcat(cell if(format == "spectre" then ".scs" else ".sp")))
     rnlLastJob = rnlActiveJob
     rnlActiveJob->process = ipcBeginProcess(command "" 'rnlProcessOutput 'rnlProcessOutput 'rnlProcessDone)
     printf("RNL: exporting %s/%s/%s; logs: %s\n" lib cell view work)

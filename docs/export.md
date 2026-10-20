@@ -15,10 +15,13 @@ captured when the form opens.
 | EDIF units per RNL unit | Defaults to 10, matching the tested native export and `eda-symbol` dimensions. |
 
 Export runs in the background. The CIW reports progress; a modeless message
-shows the output location or error. Output contains `top.scs` (Spectre) or `top.sp` (CDL), optional
+shows the output location or error. Output contains `<schematic-cell-name>.scs` (Spectre)
+or `<schematic-cell-name>.sp` (CDL), optional
 `<native-subcircuit-name>.scs`/`.sp` files, `eda-symbol.rnl` and `eda-style.rnl` (both package version 0.1), and
 `export-report.json`. Their RNL language version is 0.3; both packages are
 referenced explicitly in every netlist file header.
+The entry filename uses the exported schematic cell's name and case in every
+mode, including portless schematics; the report and completion message give that path.
 Separate files use the exact subcircuit names from the native netlist, including
 case and any names Cadence assigns to distinguish cells from different libraries.
 Their include paths use the same names. Unsafe filenames or case-insensitive
@@ -53,8 +56,8 @@ netlist/EDIF, `si.env`, CDF terminal metadata, native name maps, logs and any er
 Validate or render with the [RNL toolkit](https://github.com/rich-netlist/rnl):
 
 ```sh
-rnl check /path/to/new-export/top.scs
-rnl render /path/to/new-export/top.scs -o /path/to/rendered-directory
+rnl check /path/to/new-export/myCell.scs
+rnl render /path/to/new-export/myCell.scs -o /path/to/rendered-directory
 ```
 
 Array exports require an RNL runtime whose package symbol rules select the

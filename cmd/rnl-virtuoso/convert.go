@@ -659,7 +659,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 		rendered[topkey] = strings.Join(lines[bodyStart:root.Close], "") + records[topkey]
 	}
 	files := map[string]string{}
-	entry := "top." + extension
+	entry := netlistFilename(in.Top, extension)
 	includes := []string{}
 	if in.Split && hierarchy {
 		filenames := stringSet{strings.ToLower(entry): true}
@@ -667,11 +667,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 			if key == topkey {
 				continue
 			}
-			name := blocks[key].Name
-			if strings.ContainsAny(name, "/\\\":<>|?*") || strings.IndexFunc(name, func(r rune) bool { return r < 32 || r == 127 }) >= 0 {
-				fail("Unsafe subcircuit filename for %s", name)
-			}
-			filename := name + "." + extension
+			filename := netlistFilename(blocks[key].Name, extension)
 			if filenames[strings.ToLower(filename)] {
 				fail("Subcircuit filename %s conflicts with the entry file or another subcircuit", filename)
 			}
@@ -717,4 +713,11 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 		kind = "subcircuit"
 	}
 	return files, map[string]any{"entry": entry, "top": root.Name, "root_kind": kind, "symbol_file": symbolFile, "statistics": stats, "notes": notes}
+}
+
+func netlistFilename(name, extension string) string {
+	if name == "" || strings.ContainsAny(name, "/\\\":<>|?*") || strings.IndexFunc(name, func(r rune) bool { return r < 32 || r == 127 }) >= 0 {
+		fail("Unsafe netlist filename for %s", name)
+	}
+	return name + "." + extension
 }

@@ -62,6 +62,12 @@ def interface_order(cell, metadata):
     return order if len(order) == len(set(order)) and set(order) == set(cell.ports) else None
 
 
+def _netlist_filename(name, extension):
+    if not name or any(c in '/\\\":<>|?*' or ord(c) < 32 or ord(c) == 127 for c in name):
+        raise ExportError('Unsafe netlist filename for '+name)
+    return name+'.'+extension
+
+
 def convert(netlist, drawing, orders, package, top, hierarchy=True, split=False, scale=10.0, dialect="cdl", name_maps=None, root_symbol=None, behavior_models=None, style_package=None, orientation_rules=None):
     if scale <= 0 or not math.isfinite(scale):
         raise ExportError("EDIF units per RNL unit must be positive and finite")
@@ -292,15 +298,12 @@ def convert(netlist, drawing, orders, package, top, hierarchy=True, split=False,
         body_start = next(end for start, end, _ in cdl.statements(lines) if start == root.start)
         rendered[topkey] = ''.join(lines[body_start:root.close])+records[topkey]
     files = {}
-    entry = "top." + extension
+    entry = _netlist_filename(top, extension)
     if split and hierarchy:
         includes = []
         filenames = {entry.lower()}
         for key in (k for k in blocks if k != topkey):
-            name = blocks[key].name
-            if any(c in '/\\\":<>|?*' or ord(c) < 32 or ord(c) == 127 for c in name):
-                raise ExportError('Unsafe subcircuit filename for '+name)
-            filename = name+'.'+extension
+            filename = _netlist_filename(blocks[key].name, extension)
             if filename.lower() in filenames:
                 raise ExportError('Subcircuit filename '+filename+' conflicts with the entry file or another subcircuit')
             filenames.add(filename.lower())

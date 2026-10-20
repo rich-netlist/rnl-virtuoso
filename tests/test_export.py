@@ -54,9 +54,31 @@ class ExportTests(unittest.TestCase):
                 self.assertIn((') ' if dialect == 'spectre' else '/ ')+name+'\n', files[report['entry']])
 
     def test_split_rejects_unsafe_names_and_entry_filename_collision(self):
-        for name, error in [('../outside', 'Unsafe subcircuit filename'), ('TOP', 'conflicts with the entry file')]:
+        for name, error in [('../outside', 'Unsafe netlist filename'), ('TOP', 'conflicts with the entry file')]:
             with self.subTest(name=name), self.assertRaisesRegex(ExportError, error):
                 convert(self.native_leaf(name, 'spectre'), drawing(), ORDERS, PACKAGE, 'top', dialect='spectre', split=True)
+
+    def test_entry_uses_exported_cell_name_in_every_mode(self):
+        for dialect, extension in [('cdl', 'sp'), ('spectre', 'scs')]:
+            for has_ports in (False, True):
+                if has_ports:
+                    native = spectre_netlist() if dialect == 'spectre' else netlist()
+                    source = drawing()
+                else:
+                    native = ('// Library name: work\n// Cell name: top\nR0 (A 0) resistor r=1k\n' if dialect == 'spectre' else
+                              '* Fixture\n* Library Name: work\n* Cell Name: top\n.SUBCKT top\nR0 A 0 1k\n.ENDS\n')
+                    source = marker_drawing()
+                source = source.replace('(cell top ', '(cell MyADC ')
+                native = (native.replace('Cell Name: top\n', 'Cell Name: MyADC\n')
+                          .replace('Cell name: top\n', 'Cell name: MyADC\n')
+                          .replace('.SUBCKT top', '.SUBCKT native_root_alias'))
+                for options in ({}, {'split': True}, {'hierarchy': False}):
+                    with self.subTest(dialect=dialect, has_ports=has_ports, options=options):
+                        files, report = convert(native, source, ORDERS, PACKAGE, 'MyADC', dialect=dialect, **options)
+                        self.assertEqual(report['entry'], 'MyADC.'+extension)
+                        self.assertIn(report['entry'], files)
+                        self.assertNotIn('top.'+extension, files)
+                        self.assertEqual(report['root_kind'], 'subcircuit' if has_ports else 'top')
 
     def test_spectre_preserves_electrical_text_and_native_hierarchy(self):
         files, _ = self.export(dialect='spectre')
