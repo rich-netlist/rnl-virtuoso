@@ -5,6 +5,10 @@ Check and Save the source schematic and its circuit descendants, then choose
 **RNL → Export RNL...**. The source is the currently edited cellview; it is
 captured when the form opens.
 
+The CIW also has **File → Export → RNL...**. In **Cell** mode, choose the
+library and schematic cell directly; the options and backend are the same as
+the schematic-editor entry. No editor window is required.
+
 | Option | Behavior |
 | --- | --- |
 | New output directory | A new folder on the Virtuoso host; its parent must exist. Existing exports are refused. |
@@ -33,6 +37,56 @@ and exported as `cell-symbol.rnl`, with the public symbol `$"library/cell"` in
 package `virtuoso/library/cell` version `0.1`. Even a portless top with a symbol
 gets this separate reusable symbol file.
 Keep the directory together when opening or copying the result.
+
+## Whole-library export
+
+Choose **Library** in the CIW form. All cells with a `schematic` view are exported;
+cells with only `symbol` are exported as reusable symbols. Cells with neither
+view are skipped and listed in `library-report.json`. The exporter reads saved
+views and does not check/save, create or edit source cells.
+
+Library mode always includes the library's own cells. **Include referenced
+external cells** controls foreign schematic definitions: when off, their instance
+calls and symbols remain as external interfaces. When on, schematic definitions
+emitted by the native hierarchy exporter are included. Native stop views, PDK
+primitives and Verilog-A leaves remain leaves; model references stay external.
+
+The common output directory contains:
+
+- `<cell>.scs` / `.sp`: an entry for each schematic cell, with its original native
+  header/footer and the required includes. Open these entries to view a cell.
+- `netlists/<native-subcircuit-name>.scs` / `.sp` in Separate files mode, or
+  `netlists/library.scs` / `.sp` in Combined file mode. Native definitions are
+  shared once. Portless roots stay at file level in their own entries, so
+  independent testbenches are never combined electrically.
+- `symbols.rnl`: package `virtuoso-library/<library>` version `0.1`, with reusable
+  symbols named `$"library/cell"`, including symbol-only cells and referenced
+  interfaces. For example: `@USE-PACKAGE(name="virtuoso-library/myLib", version="0.1", path="symbols.rnl")`.
+- Shared `eda-symbol.rnl`, `eda-style.rnl` and `library-report.json`. The report
+  maps source cells, native subcircuit names, entry paths and exported symbols,
+  and records model references, notes and skipped cells.
+
+The queue runs one native job at a time. Results are published together only
+after every cell and the merge succeed. Existing output directories are refused;
+a failed cell leaves its native files in the reported work directory. A library
+containing only symbols is supported, with no schematic entry files.
+
+Definitions are deduplicated only when the native name, source library/cell and
+electrical statements agree. Native context variants with distinct names stay
+distinct. Conflicting native names or symbol geometry stop the export with a
+diagnostic; the exporter does not rewrite device calls to invent global aliases.
+Large libraries can therefore require a native netlister naming policy that is
+consistent across roots. CIW menu installation and reload preserve existing site
+menu entries and never add a second RNL item.
+
+```skill
+rnlStartLibraryExport("myLib" "/path/to/new-library-export" t t 10.0 "spectre" nil)
+; library, new directory, includeHierarchy (t), separateFiles, scale,
+; optional format (spectre/cdl), includeExternalCells (default nil)
+```
+
+`rnlActiveBatch` is non-nil while a library export runs. `rnlLastBatch->status`
+records the final status; `rnlLastBatch->directory` holds queue/merge diagnostics.
 
 Use **Spectre (simulation)** for testbenches: native CDL is an LVS export and
 can omit voltage/controlled sources and switches or short their terminals.

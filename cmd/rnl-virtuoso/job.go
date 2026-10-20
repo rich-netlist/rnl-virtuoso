@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const version = "0.5.4"
+const version = "0.6.0"
 
 func resource(dir, name string) string { return readText(filepath.Join(dir, name)) }
 func writeText(path, text string) {
@@ -26,6 +26,15 @@ func mkdir(path string) {
 	}
 }
 func isFile(path string) bool { s, e := os.Stat(path); return e == nil && s.Mode().IsRegular() }
+func nativeEnvironment(working string) []string {
+	env := []string{}
+	for _, value := range os.Environ() {
+		if !strings.HasPrefix(value, "PWD=") {
+			env = append(env, value)
+		}
+	}
+	return append(env, "PWD="+working)
+}
 func jsonText(v any) string {
 	b, e := json.MarshalIndent(v, "", "  ")
 	if e != nil {
@@ -116,6 +125,20 @@ func runJob(request, resourceDir string) map[string]any {
 		fail("%s", e)
 	}
 	fields := parse(readText(request), true).list
+	if len(fields) > 0 {
+		switch fields[0].atom {
+		case "rnl-library-merge-v1":
+			return runLibraryMerge(request, fields, resourceDir)
+		case "rnl-symbol-job-v1":
+			return runSymbolJob(request, fields)
+		}
+	}
+	scope, capture := "", false
+	if len(fields) == 16 && fields[0].atom == "rnl-export-job-v4" {
+		scope, capture = fields[14].atom, fields[15].atom == "t"
+		fields = fields[:14]
+		fields[0] = atom("rnl-export-job-v3")
+	}
 	if len(fields) == 12 && fields[0].atom == "rnl-export-job-v1" {
 		fields = append(fields, atom("cdl"), atom("nil"))
 	} else if len(fields) == 13 && fields[0].atom == "rnl-export-job-v2" {
@@ -161,13 +184,7 @@ func runJob(request, resourceDir string) map[string]any {
 		fail("Output parent directory does not exist: %s", filepath.Dir(output))
 	}
 	packageText, style := resource(resourceDir, "eda-symbol.rnl"), resource(resourceDir, "eda-style.rnl")
-	env := []string{}
-	for _, v := range os.Environ() {
-		if !strings.HasPrefix(v, "PWD=") {
-			env = append(env, v)
-		}
-	}
-	env = append(env, "PWD="+working)
+	env := nativeEnvironment(working)
 	bins := filepath.Join(cadence, "bin")
 	if !isFile(filepath.Join(bins, "si")) {
 		bins = filepath.Join(cadence, "tools", "dfII", "bin")
@@ -216,7 +233,16 @@ func runJob(request, resourceDir string) map[string]any {
 		orders = append(orders, orderEntry{k.Library, k.Cell, v})
 	}
 	fmt.Println("Converting " + dialect + " + EDIF to RNL (Go)")
-	files, report := convert(convertInput{Netlist: electrical, Drawing: drawing, Orders: orders, Package: packageText, Top: cellName, Hierarchy: &hierarchy, Split: split, Scale: &scale, Dialect: dialect, NameMaps: maps, RootSymbol: rootSymbol, BehaviorModels: models, StylePackage: &style}, resourceDir)
+	var parts *libraryCapture
+	if capture {
+		parts = &libraryCapture{Library: library, Cell: cellName, Dialect: dialect}
+	}
+	files, report := convert(convertInput{Netlist: electrical, Drawing: drawing, Orders: orders, Package: packageText, Top: cellName, Hierarchy: &hierarchy, Split: split, Scale: &scale, Dialect: dialect, NameMaps: maps, RootSymbol: rootSymbol, BehaviorModels: models, StylePackage: &style, LibraryScope: scope, Capture: parts}, resourceDir)
+	if parts != nil {
+		parts.Notes = report["notes"].([]string)
+		parts.ModelReferences = refs
+		writeText(filepath.Join(work, "library-parts.json"), jsonText(parts))
+	}
 	report["version"], report["backend"], report["source"], report["work_directory"], report["output_directory"], report["format"], report["behavior_model_references"] = version, "go", map[string]string{"library": library, "cell": cellName, "view": view}, work, output, dialect, refs
 	staging, e := os.MkdirTemp(filepath.Dir(output), ".rnl-stage-")
 	if e != nil {

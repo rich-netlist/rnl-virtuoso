@@ -5,6 +5,7 @@
 | Path | Purpose |
 | --- | --- |
 | `rnl-virtuoso.il` | Menu, form, preflight and asynchronous native-export launcher |
+| `rnl-library.il` | CIW selection form and sequential library export queue |
 | `cmd/rnl-virtuoso/` | Pure Go backend, parsers, geometry, routing and native job tests |
 | `resources/` | Editable package snapshots and orientation corrections |
 | `scripts/` | Archive builder and test driver; development tools only |
@@ -35,6 +36,8 @@ Three additional Go-only PDK regression tests cover native series/parallel
 expansions, boundary mapping and rejection of unexpected branches/members.
 They include all eight orientations and model/name labels. Go unit tests also
 check expansion delimiters, topology, shared/global terminals and CDF separators.
+Go-only library fixtures check native-definition deduplication, conflicting names,
+symbol-only cells, portless entries, both formats/file modes and external-cell scope.
 
 To run the shared assertions separately after building:
 
@@ -50,7 +53,7 @@ cover atomic publication and refusal of existing files, directories and symlinks
 ## Packaging
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.5.4-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.6.0-linux-amd64.tar.gz
 ```
 
 Use `--go /path/to/go` or `--backend /path/to/prebuilt-linux-executable` if needed.

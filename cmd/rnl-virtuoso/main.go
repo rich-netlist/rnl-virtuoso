@@ -63,6 +63,8 @@ func testJSON(dir string) {
 		At                  point
 		Rules               map[string]orientationRule
 		Request             string
+		Library             string
+		Captures            []libraryCapture
 	}
 	out := map[string]any{}
 	message := guarded(func() {
@@ -70,6 +72,14 @@ func testJSON(dir string) {
 			fail("Invalid conversion JSON: %s", e)
 		}
 		switch req.Op {
+		case "capture":
+			capture := &libraryCapture{Library: req.Library, Cell: req.Top, Dialect: req.Dialect}
+			req.Capture = capture
+			convert(req.convertInput, dir)
+			out["capture"] = capture
+		case "library":
+			files, report := assembleLibrary(req.Captures, req.Library, req.Dialect, req.Split, dir)
+			out["files"], out["report"] = files, report
 		case "", "convert":
 			files, report := convert(req.convertInput, dir)
 			out["files"], out["report"] = files, report

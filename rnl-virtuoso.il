@@ -26,7 +26,7 @@ procedure(rnlCheckSaved(cv)
       cv->libName cv->cellName cv->viewName))
 )
 
-procedure(rnlCollectOrders(cv seen orders @optional (simulator "spectre"))
+procedure(rnlCollectOrders(cv seen orders @optional (simulator "spectre") (scope ""))
   let((key master cdf sim child result)
     key = list(cv->libName cv->cellName cv->viewName)
     unless(seen[key]
@@ -54,12 +54,12 @@ procedure(rnlCollectOrders(cv seen orders @optional (simulator "spectre"))
         ; analogLib/gnd and basic/noConn. Their schematic is not a child circuit.
         unless(member(master->nlAction list("ignore" "stop")) ||
           ddGetObj(master->libName master->cellName simulator)
-          when(ddGetObj(master->libName master->cellName "schematic")
+          when((scope == "" || master->libName == scope) && ddGetObj(master->libName master->cellName "schematic")
             child = dbOpenCellViewByType(master->libName master->cellName "schematic" nil "r")
             when(child
               unwindProtect(
                 unless(member(child->nlAction list("ignore" "stop"))
-                  rnlCollectOrders(child seen orders simulator))
+                  rnlCollectOrders(child seen orders simulator scope))
                 dbClose(child)))))
       )
     )
@@ -68,9 +68,11 @@ procedure(rnlCollectOrders(cv seen orders @optional (simulator "spectre"))
   )
 )
 
-procedure(rnlStartExport(lib cell view destination hierarchy split scale @optional (format "spectre"))
+procedure(rnlStartExport(lib cell view destination hierarchy split scale @optional (format "spectre") (scope "") (capture nil))
   let((cv rows work port cds command simulator hasSymbol symbol)
     when(rnlActiveJob error("An RNL export is already running.\n"))
+    when(boundp('rnlActiveBatch) && rnlActiveBatch && !rnlActiveBatch->starting
+      error("An RNL library export is already running.\n"))
     unless(destination && destination != "" error("Choose a new output directory.\n"))
     unless(scale && scale > 0 error("Drawing scale must be positive.\n"))
     unless(member(format list("spectre" "cdl")) error("Choose spectre or cdl.\n"))
@@ -78,7 +80,7 @@ procedure(rnlStartExport(lib cell view destination hierarchy split scale @option
     cv = dbOpenCellViewByType(lib cell view nil "r")
     unless(cv error("Cannot open %s/%s/%s.\n" lib cell view))
     unwindProtect(
-      rows = rnlCollectOrders(cv makeTable('rnlSeen nil) makeTable('rnlOrders nil) simulator)
+      rows = rnlCollectOrders(cv makeTable('rnlSeen nil) makeTable('rnlOrders nil) simulator scope)
       dbClose(cv))
     hasSymbol = ddGetObj(lib cell "symbol") != nil
     when(hasSymbol
@@ -117,8 +119,8 @@ procedure(rnlStartExport(lib cell view destination hierarchy split scale @option
     fprintf(port "%L\n" rows)
     close(port)
     port = outfile(strcat(work "/request.sx"))
-    fprintf(port "%L\n" list("rnl-export-job-v3" rnlInstallDirectory lib cell view cds
-      getWorkingDir() destination hierarchy split scale car(getInstallPath()) format hasSymbol))
+    fprintf(port "%L\n" list("rnl-export-job-v4" rnlInstallDirectory lib cell view cds
+      getWorkingDir() destination hierarchy split scale car(getInstallPath()) format hasSymbol scope capture))
     close(port)
     command = strcat(rnlShellQuote(strcat(rnlInstallDirectory "/bin/rnl-virtuoso")) " "
       rnlShellQuote(strcat(work "/request.sx")))
@@ -141,6 +143,9 @@ procedure(rnlProcessDone(process status)
     rnlActiveJob = nil
     when(job
       job->status = status
+      if(boundp('rnlActiveBatch) && rnlActiveBatch then
+        rnlBatchProcessDone(job status)
+      else
       if(status == 0 then
         message = strcat("Export complete: " job->destination "/" job->entry "\nLogs: " job->directory)
       else
@@ -152,6 +157,7 @@ procedure(rnlProcessDone(process status)
         message = strcat(message "\nLogs: " job->directory)
       )
       rnlNotice(message)
+      )
     )
   )
 )
@@ -216,6 +222,7 @@ procedure(rnlInstall(directory)
       cv = geGetWindowCellView(window)
       when(cv && cv->cellViewType == "schematic" && !member('rnlMenu hiGetBannerMenus(window))
         hiInsertBannerMenu(window rnlMenu length(hiGetBannerMenus(window)))))
+    rnlInstallCIW()
     printf("RNL: installed. Choose RNL > Export RNL... in a schematic editor.\n")
     t
   )
@@ -226,5 +233,6 @@ procedure(rnlInstall(directory)
 let((file directory)
   file = simplifyFilename(get_filename(piport))
   directory = substring(file 1 strlen(file)-strlen(car(reverse(parseString(file "/")))))
+  load(strcat(directory "/rnl-library.il"))
   rnlInstall(directory)
 )

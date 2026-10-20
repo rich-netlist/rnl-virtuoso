@@ -45,6 +45,8 @@ type convertInput struct {
 	StylePackage     *string                    `json:"style_package"`
 	OrientationRules map[string]orientationRule `json:"orientation_rules"`
 	Standard         map[string]string          `json:"standard"`
+	LibraryScope     string                     `json:"library_scope"`
+	Capture          *libraryCapture            `json:"-"`
 }
 
 func normalize(s, dialect string) string {
@@ -268,7 +270,9 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 	selected := stringSet{}
 	if hierarchy {
 		for _, k := range keys {
-			selected[k] = true
+			if k == topkey || in.LibraryScope == "" || source[k].Library == in.LibraryScope {
+				selected[k] = true
+			}
 		}
 	} else {
 		selected[topkey] = true
@@ -660,11 +664,15 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 	}
 	files := map[string]string{}
 	entry := netlistFilename(in.Top, extension)
+	rootBody := rendered[topkey]
+	if in.Capture != nil {
+		captureConversion(in.Capture, keys, selected, blocks, source, cells, rendered, exported, topkey, rootSub, scale, &notes)
+	}
 	includes := []string{}
 	if in.Split && hierarchy {
 		filenames := stringSet{strings.ToLower(entry): true}
 		for _, key := range keys {
-			if key == topkey {
+			if key == topkey || !selected[key] {
 				continue
 			}
 			filename := netlistFilename(blocks[key].Name, extension)
@@ -694,6 +702,22 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 	native := strings.Join(out, "")
 	firstLine, rest, _ := strings.Cut(native, "\n")
 	files[entry] = firstLine + "\n" + header(carrier) + strings.Join(includes, "") + rest
+	if in.Capture != nil {
+		in.Capture.Entry = entry
+		in.Capture.Template = files[entry]
+		prefix := ""
+		if dialect == "cdl" {
+			prefix = "."
+		}
+		for _, part := range in.Capture.Definitions {
+			filename := netlistFilename(part.Name, extension)
+			if part.Root {
+				in.Capture.Template = strings.Replace(in.Capture.Template, rootBody, prefix+"include "+quote("netlists/"+filename)+"\n", 1)
+			} else {
+				in.Capture.Template = strings.Replace(in.Capture.Template, prefix+"include "+quote(filename)+"\n", prefix+"include "+quote("netlists/"+filename)+"\n", 1)
+			}
+		}
+	}
 	files["eda-symbol.rnl"], files["eda-style.rnl"] = in.Package, style
 	var symbolFile any
 	if exported != nil {
