@@ -491,6 +491,9 @@ func readEDIF(text string) (map[cellKey]*cell, []*cell) {
 							rawNets = append(rawNets, rawNet{c, route, first(rn, "joined")})
 						}
 						c.Annotations = append(c.Annotations, children(page, "commentgraphics")...)
+						// Free figures on a page are notes, unlike the figures
+						// inside nets, pin implementations and symbol bodies.
+						c.Annotations = append(c.Annotations, children(page, "figure")...)
 					}
 				}
 			}

@@ -44,12 +44,27 @@ procedure(rnlCheckSavedSymbol(cv)
   )
 )
 
-procedure(rnlCollectOrders(cv seen orders @optional (simulator "spectre") (scope ""))
+; EDIF Out omits schematic note shapes on the text layer. Snapshot only these
+; non-electrical figures, in user units with the cellview's database scale.
+procedure(rnlCollectAnnotations(cv annotations)
+  let((figures points)
+    foreach(shape cv->shapes
+      when(shape->layerName == "text" && !shape->net && !shape->pin && !member(shape->objType list("label" "textDisplay"))
+        points = if(member(shape->objType list("rect" "ellipse")) then shape->bBox else shape->points)
+        when(shape->objType == "arc" points = shape->ellipseBBox)
+        figures = cons(list(shape->objType points
+          when(shape->objType == "arc" list(shape->startAngle shape->stopAngle))) figures)))
+    annotations[list(cv->libName cv->cellName)] = list(cv->libName cv->cellName cv->DBUPerUU reverse(figures))
+  )
+)
+
+procedure(rnlCollectOrders(cv seen orders @optional (simulator "spectre") (scope "") (annotations nil))
   let((key master cdf sim child result)
     key = list(cv->libName cv->cellName cv->viewName)
     unless(seen[key]
       seen[key] = t
       rnlCheckSaved(cv)
+      when(annotations rnlCollectAnnotations(cv annotations))
       ; The selected cell's interface is needed when wrapping it as a subckt.
       cdf = cdfGetBaseCellCDF(ddGetObj(cv->libName cv->cellName))
       sim = when(cdf get(cdf->simInfo concat(simulator)))
@@ -79,7 +94,7 @@ procedure(rnlCollectOrders(cv seen orders @optional (simulator "spectre") (scope
             when(child
               unwindProtect(
                 unless(member(child->nlAction list("ignore" "stop"))
-                  rnlCollectOrders(child seen orders simulator scope))
+                  rnlCollectOrders(child seen orders simulator scope annotations))
                 dbClose(child)))))
       )
     )
@@ -89,7 +104,7 @@ procedure(rnlCollectOrders(cv seen orders @optional (simulator "spectre") (scope
 )
 
 procedure(rnlStartExport(lib cell view destination hierarchy split scale @optional (format "spectre") (scope "") (capture nil))
-  let((cv rows work port cds command simulator hasSymbol symbol)
+  let((cv rows work port cds command simulator hasSymbol symbol annotations annotationRows)
     rnlPreflightError = nil
     when(rnlActiveJob error("An RNL export is already running.\n"))
     when(boundp('rnlActiveBatch) && rnlActiveBatch && !rnlActiveBatch->starting
@@ -100,8 +115,9 @@ procedure(rnlStartExport(lib cell view destination hierarchy split scale @option
     simulator = if(format == "spectre" then "spectre" else "auCdl")
     cv = dbOpenCellViewByType(lib cell view nil "r")
     unless(cv error("Cannot open %s/%s/%s.\n" lib cell view))
+    annotations = makeTable('rnlAnnotations nil)
     unwindProtect(
-      rows = rnlCollectOrders(cv makeTable('rnlSeen nil) makeTable('rnlOrders nil) simulator scope)
+      rows = rnlCollectOrders(cv makeTable('rnlSeen nil) makeTable('rnlOrders nil) simulator scope annotations)
       dbClose(cv))
     hasSymbol = ddGetObj(lib cell "symbol") != nil
     when(hasSymbol
@@ -140,6 +156,10 @@ procedure(rnlStartExport(lib cell view destination hierarchy split scale @option
     close(port)
     port = outfile(strcat(work "/orders.sx"))
     fprintf(port "%L\n" rows)
+    close(port)
+    foreach(key annotations annotationRows = cons(annotations[key] annotationRows))
+    port = outfile(strcat(work "/annotations.sx"))
+    fprintf(port "%L\n" annotationRows)
     close(port)
     port = outfile(strcat(work "/request.sx"))
     fprintf(port "%L\n" list("rnl-export-job-v4" rnlInstallDirectory lib cell view cds

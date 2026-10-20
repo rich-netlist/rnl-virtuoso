@@ -38,6 +38,9 @@ They include all eight orientations and model/name labels. Go unit tests also
 check expansion delimiters, topology, shared/global terminals and CDF separators.
 Go-only library fixtures check native-definition deduplication, conflicting names,
 symbol-only cells, portless entries, both formats/file modes and external-cell scope.
+Annotation fixtures check wire/net ownership, nearest-segment selection, repeated
+paths, bus range labels, text placement and note geometry from EDIF and the
+read-only `annotations.sx` snapshot. Ownership is checked through `rnl problem`.
 
 To run the shared assertions separately after building:
 
@@ -53,7 +56,7 @@ cover atomic publication and refusal of existing files, directories and symlinks
 ## Packaging
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.6.1-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.6.2-linux-amd64.tar.gz
 ```
 
 Use `--go /path/to/go` or `--backend /path/to/prebuilt-linux-executable` if needed.

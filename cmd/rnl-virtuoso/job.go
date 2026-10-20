@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const version = "0.6.1"
+const version = "0.6.2"
 
 func resource(dir, name string) string { return readText(filepath.Join(dir, name)) }
 func writeText(path, text string) {
@@ -233,11 +233,15 @@ func runJob(request, resourceDir string) map[string]any {
 		orders = append(orders, orderEntry{k.Library, k.Cell, v})
 	}
 	fmt.Println("Converting " + dialect + " + EDIF to RNL (Go)")
+	annotations := ""
+	if path := filepath.Join(work, "annotations.sx"); isFile(path) {
+		annotations = readText(path)
+	}
 	var parts *libraryCapture
 	if capture {
 		parts = &libraryCapture{Library: library, Cell: cellName, Dialect: dialect}
 	}
-	files, report := convert(convertInput{Netlist: electrical, Drawing: drawing, Orders: orders, Package: packageText, Top: cellName, Hierarchy: &hierarchy, Split: split, Scale: &scale, Dialect: dialect, NameMaps: maps, RootSymbol: rootSymbol, BehaviorModels: models, StylePackage: &style, LibraryScope: scope, Capture: parts}, resourceDir)
+	files, report := convert(convertInput{Netlist: electrical, Drawing: drawing, Orders: orders, Package: packageText, Top: cellName, Hierarchy: &hierarchy, Split: split, Scale: &scale, Dialect: dialect, NameMaps: maps, RootSymbol: rootSymbol, BehaviorModels: models, StylePackage: &style, LibraryScope: scope, Capture: parts, Annotations: annotations}, resourceDir)
 	if parts != nil {
 		parts.Notes = report["notes"].([]string)
 		parts.ModelReferences = refs

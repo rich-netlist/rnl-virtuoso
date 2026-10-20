@@ -154,9 +154,9 @@ func graphics(n node, scale float64) []string {
 				fail("EDIF arc needs three points")
 			}
 			out = append(out, "@ARC {"+pts()+"}")
-		case "figure", "shape", "openshape", "curve":
+		case "figure", "shape", "openshape", "curve", "annotate":
 			out = append(out, graphics(item, scale)...)
-		case "dot", "property", "figuregroupoverride", "display":
+		case "dot", "property", "figuregroupoverride", "display", "stringdisplay":
 		default:
 			fail("Unsupported EDIF graphic %s", kind)
 		}
@@ -183,6 +183,7 @@ func symbolDefinition(c *cell, id string, terminals map[string]string, scale flo
 		body = append(body, graphics(fig, scale)...)
 	}
 	for _, cg := range children(c.Symbol, "commentgraphics") {
+		body = append(body, graphics(cg, scale)...)
 		for _, sd := range walk(cg, "stringdisplay") {
 			value := decoded(sd.at(1).atom)
 			if strings.Contains(value, "cds") && strings.Contains(value, "(") {

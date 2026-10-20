@@ -47,6 +47,7 @@ type convertInput struct {
 	Standard         map[string]string          `json:"standard"`
 	LibraryScope     string                     `json:"library_scope"`
 	Capture          *libraryCapture            `json:"-"`
+	Annotations      string                     `json:"annotations"`
 }
 
 func normalize(s, dialect string) string {
@@ -198,6 +199,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 	}
 	lines, blocks, keys := readNative(in.Netlist, in.Top, dialect)
 	cells, cellOrder := readEDIF(in.Drawing)
+	annotationGraphics := loadAnnotations(in.Annotations, scale)
 	topkey := normalize(in.Top, dialect)
 	if blocks[topkey] == nil {
 		matches := []string{}
@@ -655,11 +657,14 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 		wires, count := drawRoutes(c, endpoints, netmap, scale)
 		ss = append(ss, wires...)
 		stats["wires"] += count
+		noteGraphics := []string{}
 		for _, cg := range c.Annotations {
+			noteGraphics = append(noteGraphics, graphics(cg, scale)...)
 			for _, sd := range walk(cg, "stringdisplay") {
 				ss = append(ss, textStatement(decoded(sd.at(1).atom), first(sd, "display"), scale, "", "", false))
 			}
 		}
+		ss = append(ss, unique(append(noteGraphics, annotationGraphics[cellKey{c.Library, c.Name}]...))...)
 		records[key] = record(ss, carrier)
 	}
 	rendered := map[string]string{}

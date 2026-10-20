@@ -88,9 +88,29 @@ func sortedPoints(ps map[point]bool) []point {
 	})
 	return out
 }
+
+// EDIF stores name displays on the net, which can contain many disconnected
+// drawn paths. Associate each display with the nearest segment of its path.
+func pathDistance(p point, path []point) float64 {
+	best := math.Inf(1)
+	for i, b := range path {
+		a := b
+		if i > 0 {
+			a = path[i-1]
+		}
+		dx, dy := b[0]-a[0], b[1]-a[1]
+		t := 0.0
+		if length := dx*dx + dy*dy; length > 0 {
+			t = math.Max(0, math.Min(1, ((p[0]-a[0])*dx+(p[1]-a[1])*dy)/length))
+		}
+		best = math.Min(best, math.Hypot(p[0]-a[0]-t*dx, p[1]-a[1]-t*dy))
+	}
+	return best
+}
+
 func drawRoutes(c *cell, endpoints []endpoint, netmap map[string]string, scale float64) ([]string, int) {
 	statements := []string{}
-	wireKeys := stringSet{}
+	wireKeys := map[string]string{}
 	joins := map[string]stringSet{}
 	joinOrder := []string{}
 	paths := [][][]point{}
@@ -181,7 +201,7 @@ func drawRoutes(c *cell, endpoints []endpoint, netmap map[string]string, scale f
 		references[p][key] = r
 		return r
 	}
-	wire := func(nets stringSet, vertices []string) {
+	wire := func(nets stringSet, vertices []string) string {
 		vs := []string{}
 		for _, v := range vertices {
 			if len(vs) == 0 || v != vs[len(vs)-1] {
@@ -189,7 +209,7 @@ func drawRoutes(c *cell, endpoints []endpoint, netmap map[string]string, scale f
 			}
 		}
 		if len(vs) < 2 {
-			return
+			return ""
 		}
 		ordered := sortedSet(nets)
 		sort.SliceStable(ordered, func(i, j int) bool {
@@ -221,10 +241,11 @@ func drawRoutes(c *cell, endpoints []endpoint, netmap map[string]string, scale f
 			forward = backward
 		}
 		key := strings.Join(sortedSet(set(actual)), "\x00") + "\x01" + forward
-		if wireKeys[key] {
-			return
+		if existing := wireKeys[key]; existing != "" {
+			return existing
 		}
-		wireKeys[key] = true
+		id := "%wire_" + strconvI(len(wireKeys))
+		wireKeys[key] = id
 		names := []string{}
 		for _, n := range actual {
 			names = append(names, ref("&", n))
@@ -233,7 +254,7 @@ func drawRoutes(c *cell, endpoints []endpoint, netmap map[string]string, scale f
 		if len(names) > 1 {
 			host = "{" + strings.Join(names, " ") + "}"
 		}
-		statements = append(statements, host+` @WIRE(mode="straight") {`+strings.Join(vs, " ")+"}")
+		statements = append(statements, id+" = "+host+` @WIRE(mode="straight") {`+strings.Join(vs, " ")+"}")
 		for i := 1; i < len(vs); i++ {
 			a, b := vs[i-1], vs[i]
 			if joins[a] == nil {
@@ -247,6 +268,7 @@ func drawRoutes(c *cell, endpoints []endpoint, netmap map[string]string, scale f
 			joins[a][b] = true
 			joins[b][a] = true
 		}
+		return id
 	}
 	for _, p := range terminalOrder {
 		attached := terminals[p]
@@ -274,6 +296,7 @@ func drawRoutes(c *cell, endpoints []endpoint, netmap map[string]string, scale f
 				}
 			}
 		}
+		owners := []string{}
 		for _, path := range paths[index] {
 			expanded := []point{}
 			for i := 1; i < len(path); i++ {
@@ -302,14 +325,25 @@ func drawRoutes(c *cell, endpoints []endpoint, netmap map[string]string, scale f
 			for _, p := range expanded {
 				vertices = append(vertices, reference(p, bits[index]))
 			}
-			wire(bits[index], vertices)
+			owners = append(owners, wire(bits[index], vertices))
 		}
 		for _, display := range route.Labels {
 			label := route.Name
 			if len(route.Bits) == 1 {
 				label = netmap[route.Bits[0]]
 			}
-			statements = append(statements, textStatement(label, display, scale, "", "", false))
+			owner, distance := "", math.Inf(1)
+			for i, path := range paths[index] {
+				if d := pathDistance(scaled(origin(display), scale), path); owners[i] != "" && d < distance {
+					owner, distance = owners[i], d
+				}
+			}
+			if owner == "" {
+				// A label without a drawable path still belongs to a net. Use
+				// one member for a bus to avoid duplicating its range label.
+				owner = ref("&", netmap[route.Bits[0]])
+			}
+			statements = append(statements, textStatement(label, display, scale, owner, "", false))
 		}
 	}
 	for _, p := range joinOrder {

@@ -208,6 +208,15 @@ report errors about drawing hidden bundle members.
   junctions without a suitable terminal. Repeated paths are deduplicated; pins
   elsewhere on the same net do not acquire extra coordinate connectors. These
   rules also apply when switching to the standard symbol package after export.
+- Net labels attach to the nearest drawn wire segment of that EDIF net, including
+  bus labels and deduplicated routes. Their original position, rotation, alignment
+  and text size are preserved. A label without a drawn path attaches to its net.
+- Free schematic notes remain RNL annotations. EDIF note figures are converted,
+  and a read-only snapshot supplements non-electrical shapes on the schematic's
+  `text` layer that Cadence EDIF Out omits. Lines, paths, rectangles, polygons,
+  ellipses and arcs retain their geometry and each cell's coordinate scale;
+  elliptical arcs use cubic Bezier approximations. Colors and line widths are
+  left to the presentation package. Notes add no electrical wires or connections.
 - One-dimensional bus ports become RNL bus pins, multiple nets share one bus
   wire, and iterated instances become `BUNDLE`s. Their scalar native statements
   remain intact. Range labels retain the source spelling and bit order. Repeated connections
