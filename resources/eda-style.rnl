@@ -1,0 +1,51 @@
+/* eda-style 0.1.
+   Universal IC schematic visual style package for RNL 0.3.
+   Applies Virtuoso-style green hairline symbol strokes (`linewidth=0, linecolor="#00cc66"`),
+   red symbol texts (`textcolor="#ff0000"`), solid red 0.8x0.8 terminal squares on all pins
+   via `@SELECT-TERMINAL`, solid red port polygons, hairline wires (`linewidth=0`), and a
+   Virtuoso-like monoline font (`Lucida Console, Monaco, DejaVu Sans Mono, Consolas, monospace`).
+   Can be used standalone or paired with `eda-symbol` 0.1. */
+@RNL(type="header") { @VERSION("0.3"); @PACKAGE(name="eda-style", version="0.1")}
+
+/* ---------------------------------------------------------------- Default EDA styles and pin square rules */
+@RNL {
+  /* Default EDA styles:
+     - $base: hairline wires and scene annotations (linewidth=0, dark #1d1d1f)
+     - $symbol: hairline green symbol strokes (linewidth=0, linecolor="#00cc66") and red symbol texts (textcolor="#ff0000")
+     - $port: solid red port polygons (linecolor="#ff0000", fillcolor="#ff0000") and red port texts (textcolor="#ff0000") */
+  $base = @DEFINE-STYLE(linecolor="#1d1d1f", textcolor="#1d1d1f", fillcolor="#ffffff", linewidth=0, cap="butt", join="miter", size=1, font="Lucida Console, Monaco, DejaVu Sans Mono, Consolas, monospace") {};
+  $symbol = @DEFINE-STYLE(linecolor="#00cc66", textcolor="#ff0000", fillcolor="#ffffff", linewidth=0, cap="butt", join="miter", size=1, font="Lucida Console, Monaco, DejaVu Sans Mono, Consolas, monospace") {};
+  $port = @DEFINE-STYLE(linecolor="#ff0000", textcolor="#ff0000", fillcolor="#ff0000", linewidth=0, cap="butt", join="miter", size=1, font="Lucida Console, Monaco, DejaVu Sans Mono, Consolas, monospace") {};
+  $bus = @DEFINE-STYLE(linestyle="bold") {};
+  $signal = @DEFINE-STYLE(linecolor="#1f4fd8", linestyle="bold") {$base};
+  $note = @DEFINE-STYLE(textcolor="#555555", size=0.9) {};
+  $grey = @DEFINE-STYLE(linecolor="#9a9a9a", textcolor="#9a9a9a") {};
+
+  # @SELECT-INSTANCE => @SET-STYLE $symbol;
+  # @SELECT-USAGE => @SET-STYLE $symbol;
+  # @SELECT-LABEL => @SET-STYLE $symbol;
+  # @SELECT-NET => @SELECT-LABEL => @SET-STYLE $base;
+  # @SELECT-WIRE => @SELECT-LABEL => @SET-STYLE $base;
+  # @SELECT-USAGE $JUNCTION => @SET-STYLE $base;
+  # @SELECT-USAGE $CURRENT_ARROW => @SET-STYLE $base;
+  # @SELECT-USAGE $IO_PORT => @SET-STYLE $port;
+  # @SELECT-INSTANCE(model="ipin*") => @SET-STYLE $port;
+  # @SELECT-INSTANCE(model="opin*") => @SET-STYLE $port;
+  # @SELECT-INSTANCE(model="io_port*") => @SET-STYLE $port;
+  # @SELECT-WIRE => @SET-STYLE $base;
+  # @SELECT-ANNOTATION => @SET-STYLE $base;
+  # @SELECT-WIRE(bus=true) => @SET-STYLE $bus;
+  # @SELECT-WIRE => @LAYER("bottom");
+
+  /* Automatic red terminal square on all pins via @SELECT-TERMINAL (applies to user-defined symbols too) */
+  $PIN_SQUARE = @DEFINE(roles=[["t", ["terminal", "usage", "point"]]]) {
+    ?t::position @RECTANGLE(width=0.8, height=0.8, fill="fillcolor", fillcolor="#ff0000", linestyle="none") => @LAYER("top")
+  };
+  $PIN_TERMINAL_SET = # @SELECT-TERMINAL;
+  # @SELECT-USAGE $GROUND => @ADD-TO $PIN_TERMINAL_SET;
+  # @SELECT-USAGE $SUPPLY => @ADD-TO $PIN_TERMINAL_SET;
+  # @SELECT-TERMINAL(model="ipin*") => @REMOVE-FROM $PIN_TERMINAL_SET;
+  # @SELECT-TERMINAL(model="opin*") => @REMOVE-FROM $PIN_TERMINAL_SET;
+  # @SELECT-TERMINAL(model="io_port*") => @REMOVE-FROM $PIN_TERMINAL_SET;
+  $PIN_SQUARE @ATTACH $PIN_TERMINAL_SET
+}

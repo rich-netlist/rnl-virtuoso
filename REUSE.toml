@@ -1,0 +1,16 @@
+version = 1
+
+[[annotations]]
+path = "**"
+SPDX-FileCopyrightText = "2026 many-question"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = ["resources/eda-symbol.rnl", "resources/eda-style.rnl"]
+SPDX-FileCopyrightText = "2026 many-question"
+SPDX-License-Identifier = "CC0-1.0"
+
+[[annotations]]
+path = "Go-LICENSE.txt"
+SPDX-FileCopyrightText = "2009 The Go Authors"
+SPDX-License-Identifier = "BSD-3-Clause"

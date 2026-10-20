@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "package": {"name": "eda-symbol", "version": "0.1"},
+  "convention": "world = source_orientation * package_to_source * package_point + origin; MY negates x, MX negates y",
+  "symbols": {
+    "DIODE": {"package_to_source": "R270"},
+    "ZENER_DIODE": {"package_to_source": "R90"},
+    "SCHOTTKY": {"package_to_source": "R270", "note": "Verified against the actual legacy package pins, not the handoff's reversed anode coordinates."},
+    "SWITCH": {"package_to_source": "MY"},
+    "CLOSED_SWITCH": {"package_to_source": "MY"},
+    "SPDT_SWITCH_SYMBOL": {"package_to_source": "MY"},
+    "SP3TSWITCH": {"package_to_source": "MY"},
+    "SP4TSWITCH": {"package_to_source": "MY"},
+    "EXTERNALLY_CONTROLLED_SWITCH": {"package_to_source": "R0", "align_pins": [1, 2], "note": "Control pin moved independently; keep the contact pins aligned. Wire endpoints follow the current control terminal."},
+    "VOLTAGE_CONTROLLED_SWITCH": {"package_to_source": "MYR90"},
+    "TRANSFORMER": {"package_to_source": "R90"},
+    "TRANSMISSION_LINE": {"package_to_source": "R0", "align_pins": [1, 3], "note": "Reference pins moved independently; keep the signal pins aligned."},
+    "IO_PORT_SYMBOL": {"package_to_source": "R0", "note": "The pin remains at the origin; the package now draws its body behind that pin."},
+    "D_FLIP_FLOP": {"package_to_source": "R0", "align_pins": [3, 4], "note": "D and CLK exchanged positions; keep the output side aligned."},
+    "D_FLIP_FLOP_Q_ONLY": {"package_to_source": "R0", "align_pins": [1, 2], "note": "Keep the input-side centroid aligned; Q moved to the center."},
+    "D_FLIP_FLOP_WITH_RESET": {"package_to_source": "R0", "align_pins": [3, 4, 5]},
+    "ADDER": {"package_to_source": "R0", "note": "Pins moved independently; retain orientation and attach routes to terminal references."},
+    "MULTIPLIER": {"package_to_source": "R0", "note": "Pins moved independently; retain orientation and attach routes to terminal references."}
+  }
+}

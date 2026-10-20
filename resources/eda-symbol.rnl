@@ -1,0 +1,2315 @@
+/* eda-symbol 0.1.
+   Streamlined, universal IC schematic symbol library for RNL 0.3.
+   Defines all 93 standard RNL 0.3 symbol names (`$RESISTOR`, `$CAPACITOR`, `$NMOS_4TERM`, `$OPAMP`,
+   `$AND_2INPUT`, etc.), 44 visually distinct universal IC schematic symbols (`$VSIN`, `$VPULSE`,
+   `$VPWL`, `$IDEAL_BALUN`, `$MIXER`, `$LOWPASS_FILTER`, `$VC_VG_DIFFAMP`, etc.), and instance/usage
+   symbol selection rules with pure, style-agnostic geometry. Pair with `eda-style` 0.1 for Virtuoso-like
+   green hairline strokes, red symbol texts, solid red terminal squares, and hairline wires. */
+@RNL(type="header") { @VERSION("0.3"); @PACKAGE(name="eda-symbol", version="0.1")}
+
+/* ---------------------------------------------------------------- Standard RNL 0.3 symbols (93 symbols) */
+@RNL {
+  /* p n; resistor */
+  $RESISTOR = @DEFINE-SYMBOL(box=[-2, -3, 2, 3]) {
+    @LINE {(0, -3) (0, -1.8) (-1, -1.5) (1, -0.9) (-1, -0.3) (1, 0.3) (-1, 0.9) (1, 1.5) (0, 1.8) (0, 3)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (0, -3) @PIN(terminal=2, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(1.5, 2);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(1.5, 0.5)
+  };
+
+  /* p n; variable resistor */
+  $VARIABLE_RESISTOR = @DEFINE-SYMBOL(box=[-2, -3, 2, 3]) {
+    @LINE {(0, -3) (0, -1.8) (-1, -1.5) (1, -0.9) (-1, -0.3) (1, 0.3) (-1, 0.9) (1, 1.5) (0, 1.8) (0, 3)};
+    @LINE {(-1.5, -1.5) (1.2, 1.2)};
+    @LINE(fill="linecolor", linestyle="none") {(1.5, 1.5) (0.8, 1.25) (1.25, 0.8) (1.5, 1.5)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (0, -3) @PIN(terminal=2, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(1.5, 2);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(1.5, 0.5)
+  };
+
+  /* p n; capacitor */
+  $CAPACITOR = @DEFINE-SYMBOL(box=[-2, -3, 2, 3]) {
+    @LINE {(1, 0.8) (-1, 0.8)};
+    @LINE {(0, 3) (0, 0.8)};
+    @LINE {(0, 0.2) (0, -3)};
+    @ARC {(1, -0.2) (0, 0.2) (-1, -0.2)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (0, -3) @PIN(terminal=2, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(1, 2);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(1.5, 0.5)
+  };
+
+  /* p n; variable capacitor */
+  $VARIABLE_CAPACITOR = @DEFINE-SYMBOL(box=[-2, -3, 2, 3]) {
+    @LINE {(1, 0.8) (-1, 0.8)};
+    @LINE {(0, 3) (0, 0.8)};
+    @LINE {(0, 0.2) (0, -3)};
+    @ARC {(1, -0.2) (0, 0.2) (-1, -0.2)};
+    @LINE {(-1.5, -1.5) (1.2, 1.2)};
+    @LINE(fill="linecolor", linestyle="none") {(1.5, 1.5) (0.8, 1.25) (1.25, 0.8) (1.5, 1.5)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (0, -3) @PIN(terminal=2, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(1, 2);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(1.5, 0.5)
+  };
+
+  /* p n; inductor */
+  $INDUCTOR = @DEFINE-SYMBOL(box=[-2, -3, 2, 3]) {
+    @LINE {(0, 1.6) (0.2, 1.6)};
+    @LINE {(0, -1.6) (0, -3)};
+    @LINE {(0, 0.8) (0.2, 0.8)};
+    (0.8, 2.2) @CIRCLE(radius=0.3);
+    @LINE {(0, 0) (0.2, 0)};
+    @LINE {(0, -1.6) (0.2, -1.6)};
+    @LINE {(0, -0.8) (0.2, -0.8)};
+    @LINE {(0, 3) (0, 1.6)};
+    @ARC {(0.3, -0.8) (0.7, -0.3) (0.2, 0)};
+    @ARC {(0.3, 0) (0.7, 0.5) (0.2, 0.8)};
+    @ARC {(0.3, -1.6) (0.7, -1.1) (0.2, -0.8)};
+    @ARC {(0.3, 0.8) (0.7, 1.3) (0.2, 1.6)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (0, -3) @PIN(terminal=2, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(1.5, 2);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(1.5, 0.5)
+  };
+
+  /* p n; variable inductor */
+  $VARIABLE_INDUCTOR = @DEFINE-SYMBOL(box=[-2, -3, 2, 3]) {
+    @LINE {(0, 1.6) (0.2, 1.6)};
+    @LINE {(0, -1.6) (0, -3)};
+    @LINE {(0, 0.8) (0.2, 0.8)};
+    (0.8, 2.2) @CIRCLE(radius=0.3);
+    @LINE {(0, 0) (0.2, 0)};
+    @LINE {(0, -1.6) (0.2, -1.6)};
+    @LINE {(0, -0.8) (0.2, -0.8)};
+    @LINE {(0, 3) (0, 1.6)};
+    @ARC {(0.3, -0.8) (0.7, -0.3) (0.2, 0)};
+    @ARC {(0.3, 0) (0.7, 0.5) (0.2, 0.8)};
+    @ARC {(0.3, -1.6) (0.7, -1.1) (0.2, -0.8)};
+    @ARC {(0.3, 0.8) (0.7, 1.3) (0.2, 1.6)};
+    @LINE {(-1.5, -1.5) (1.2, 1.2)};
+    @LINE(fill="linecolor", linestyle="none") {(1.5, 1.5) (0.8, 1.25) (1.25, 0.8) (1.5, 1.5)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (0, -3) @PIN(terminal=2, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(1.5, 2);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(1.5, 0.5)
+  };
+
+  /* p_plus p_minus s_plus s_minus; transformer */
+  $TRANSFORMER = @DEFINE-SYMBOL(box=[-3, -2, 3, 2]) {
+    @LINE {(-1.6, -2) (-3, -2)};
+    @LINE {(-0.8, 2) (-0.8, 1.8)};
+    @LINE {(-0.8, -2) (-0.8, -1.8)};
+    @LINE {(-1.6, 2) (-1.6, 1.8)};
+    @LINE {(-1.6, -2) (-1.6, -1.8)};
+    @LINE {(3, 2) (1.6, 2)};
+    (2.2, 0.9) @CIRCLE(radius=0.3);
+    @LINE {(0.8, 2) (0.8, 1.8)};
+    @LINE {(0, 2) (0, 1.8)};
+    @LINE {(1.6, 2) (1.6, 1.8)};
+    @LINE {(0, -2) (0, -1.8)};
+    @LINE {(1.6, -2) (1.6, -1.8)};
+    @LINE {(0.8, -2) (0.8, -1.8)};
+    (2.2, -0.9) @CIRCLE(radius=0.3);
+    @LINE {(3, -2) (1.6, -2)};
+    (0.5, 0) @CIRCLE(radius=0.1);
+    (-0.4, 0) @CIRCLE(radius=0.1);
+    @LINE {(-1.6, 2) (-3, 2)};
+    @ARC {(0.8, 1.7) (1.3, 1.3) (1.6, 1.8)};
+    @ARC {(-0.8, 1.7) (-0.3, 1.3) (0, 1.8)};
+    @ARC {(0.8, -1.7) (0.7, -1.4) (0.4, -1.3)};
+    @ARC {(-1.6, 1.7) (-1.1, 1.3) (-0.8, 1.8)};
+    @ARC {(0, -1.7) (-0.1, -1.4) (-0.4, -1.3)};
+    @ARC {(1.6, -1.7) (1.5, -1.4) (1.2, -1.3)};
+    @ARC {(-0.8, -1.7) (-0.9, -1.4) (-1.2, -1.3)};
+    @ARC {(0, 1.7) (0.5, 1.3) (0.8, 1.8)};
+    (3, 2) @PIN(terminal=1, direction="right");
+    (-3, 2) @PIN(terminal=2, direction="left");
+    (3, -2) @PIN(terminal=3, direction="right");
+    (-3, -2) @PIN(terminal=4, direction="left");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 2.6);
+    ? @TEXT("${value}", key="value", halign="middle") => @PLACE(0, -2.8)
+  };
+
+  /* p n; voltage source */
+  $VOLTAGE_SOURCE = @DEFINE-SYMBOL(box=[-2, -3, 2, 3]) {
+    @LINE {(0, 0.2) (0, 0.8)};
+    (0, 0) @CIRCLE(radius=1);
+    @LINE {(0.3, 0.5) (-0.3, 0.5)};
+    @LINE {(0, 1) (0, 3)};
+    @LINE {(0, -1) (0, -3)};
+    @LINE {(0.3, -0.5) (-0.3, -0.5)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (0, -3) @PIN(terminal=2, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 2);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(1.5, 0.5)
+  };
+
+  /* p n; current source */
+  $CURRENT_SOURCE = @DEFINE-SYMBOL(box=[-2, -3, 2, 3]) {
+    (0, 0.5) @CIRCLE(radius=1);
+    @LINE {(0, -1.5) (0, -3)};
+    @LINE {(0, 1.5) (0, 3)};
+    @LINE {(0, -1.1) (0.4, -0.6) (-0.4, -0.6) (0, -1.1)};
+    @LINE {(0, -1.1) (0, 1.2)};
+    (0, -0.5) @CIRCLE(radius=1);
+    (0, 3) @PIN(terminal=1, direction="up");
+    (0, -3) @PIN(terminal=2, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(1, 2);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(1.5, 0.5)
+  };
+
+  /* p n; multi-cell DC battery */
+  $BATTERY = @DEFINE-SYMBOL(box=[-1.5, -3, 1.5, 3]) {
+    @LINE {(0, 3) (0, 0.75)};
+    @LINE {(-1.2, 0.75) (1.2, 0.75)};
+    @LINE {(-0.6, 0.25) (0.6, 0.25)};
+    @LINE {(-1.2, -0.25) (1.2, -0.25)};
+    @LINE {(-0.6, -0.75) (0.6, -0.75)};
+    @LINE {(0, -0.75) (0, -3)};
+    @LINE {(-0.9, 1.4) (-0.5, 1.4)};
+    @LINE {(-0.7, 1.2) (-0.7, 1.6)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (0, -3) @PIN(terminal=2, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(1.4, 1.5);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(1.4, -0.5)
+  };
+
+  /* p n (cp) (cn); 2-terminal voltage-controlled voltage source */
+  $VCVS = @DEFINE-SYMBOL(box=[-2, -3, 2, 3]) {
+    (0, 0) @CIRCLE(radius=1);
+    @LINE {(0, -1) (0, -3)};
+    @LINE {(0, 1) (0, 3)};
+    @LINE {(-0.3, -0.5) (0.3, -0.5)};
+    @LINE {(-0.3, 0.5) (0.3, 0.5)};
+    @LINE {(0, 0.2) (0, 0.8)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (0, -3) @PIN(terminal=2, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(1, 2);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(1.5, 0.5)
+  };
+
+  /* p n (cp) (cn); 2-terminal voltage-controlled current source */
+  $VCCS = @DEFINE-SYMBOL(box=[-2, -3, 2, 3]) {
+    @LINE {(0, 1) (0, 3)};
+    @LINE {(0.5, 0) (0, -0.5) (-0.5, 0)};
+    @LINE {(0, 0.5) (0, -0.5)};
+    (0, 0) @CIRCLE(radius=1);
+    @LINE {(0, -1) (0, -3)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (0, -3) @PIN(terminal=2, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(1, 2);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(1.5, 0.5)
+  };
+
+  /* p n; current-controlled current source */
+  $CCCS = @DEFINE-SYMBOL(box=[-2, -3, 2, 3]) {
+    @LINE {(0, 1) (0, 3)};
+    @LINE {(0.5, 0) (0, -0.5) (-0.5, 0)};
+    @LINE {(0, 0.5) (0, -0.5)};
+    (0, 0) @CIRCLE(radius=1);
+    @LINE {(0, -1) (0, -3)};
+    @LINE {(-1.5, 0.7) (-1.5, -0.7)};
+    @LINE {(-1.7, -0.3) (-1.5, -0.7) (-1.3, -0.3)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (0, -3) @PIN(terminal=2, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(1, 2);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(1.5, 0.5)
+  };
+
+  /* p n; current-controlled voltage source */
+  $CCVS = @DEFINE-SYMBOL(box=[-2, -3, 2, 3]) {
+    (0, 0) @CIRCLE(radius=1);
+    @LINE {(0, -1) (0, -3)};
+    @LINE {(0, 1) (0, 3)};
+    @LINE {(-0.3, -0.5) (0.3, -0.5)};
+    @LINE {(-0.3, 0.5) (0.3, 0.5)};
+    @LINE {(0, 0.2) (0, 0.8)};
+    @LINE {(-1.5, 0.7) (-1.5, -0.7)};
+    @LINE {(-1.7, -0.3) (-1.5, -0.7) (-1.3, -0.3)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (0, -3) @PIN(terminal=2, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(1, 2);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(1.5, 0.5)
+  };
+
+  /* p n cp cn; 4-terminal voltage-controlled voltage source */
+  $VCVS_4TERM = @DEFINE-SYMBOL(box=[-1, -3, 3, 3]) {
+    (1, 0) @CIRCLE(radius=1);
+    @LINE {(1, -1) (1, -3)};
+    @LINE {(1, 1) (1, 3)};
+    @LINE {(-1, 1) (1, 1)};
+    @LINE {(-1, -1) (1, -1)};
+    @LINE {(0.7, -0.5) (1.3, -0.5)};
+    @LINE {(0.7, 0.5) (1.3, 0.5)};
+    @LINE {(1, 0.2) (1, 0.8)};
+    @LINE {(-0.5, -0.7) (-0.1, -0.7)};
+    @LINE {(-0.5, 1.3) (-0.1, 1.3)};
+    @LINE {(-0.3, 1.1) (-0.3, 1.5)};
+    (1, 3) @PIN(terminal=1, direction="up");
+    (1, -3) @PIN(terminal=2, direction="down");
+    (-1, 1) @PIN(terminal=3, direction="left");
+    (-1, -1) @PIN(terminal=4, direction="left");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(2.2, 2);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(2.5, 0.5)
+  };
+
+  /* p n cp cn; 4-terminal voltage-controlled current source */
+  $VCCS_4TERM = @DEFINE-SYMBOL(box=[-1, -3, 3, 3]) {
+    (1, 0) @CIRCLE(radius=1);
+    @LINE {(1.5, 0) (1, -0.5) (0.5, 0)};
+    @LINE {(1, -1) (1, -3)};
+    @LINE {(-1, 1) (1, 1)};
+    @LINE {(-1, -1) (1, -1)};
+    @LINE {(1, 0.5) (1, -0.5)};
+    @LINE {(1, 1) (1, 3)};
+    @LINE {(-0.5, -0.7) (-0.1, -0.7)};
+    @LINE {(-0.5, 1.3) (-0.1, 1.3)};
+    @LINE {(-0.3, 1.1) (-0.3, 1.5)};
+    (1, 3) @PIN(terminal=1, direction="up");
+    (1, -3) @PIN(terminal=2, direction="down");
+    (-1, 1) @PIN(terminal=3, direction="left");
+    (-1, -1) @PIN(terminal=4, direction="left");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(2.2, 2);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(2.5, 0.5)
+  };
+
+  /* p n (cp) (cn); open SPST switch */
+  $SWITCH = @DEFINE-SYMBOL(box=[-3, -0.2, 3, 1]) {
+    @LINE {(-1, 0) (-0.5, 0)};
+    (1, 0) @CIRCLE(radius=0.2);
+    @LINE {(-0.5, 0) (1, 1)};
+    @LINE {(3, 0) (1, 0)};
+    @LINE {(-3, 0) (-1, 0)};
+    (-0.5, 0) @CIRCLE(radius=0.2);
+    (-3, 0) @PIN(terminal=1, direction="left");
+    (3, 0) @PIN(terminal=2, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 1.5);
+    ? @TEXT("${value}", key="value", halign="middle") => @PLACE(0, -1.2)
+  };
+
+  /* p n (cp) (cn); closed SPST switch */
+  $CLOSED_SWITCH = @DEFINE-SYMBOL(box=[-3, -0.2, 3, 1]) {
+    @LINE {(-1, 0) (-0.5, 0)};
+    (1, 0) @CIRCLE(radius=0.2);
+    @LINE {(-0.5, 0) (1, 0.2)};
+    @LINE {(3, 0) (1, 0)};
+    @LINE {(-3, 0) (-1, 0)};
+    (-0.5, 0) @CIRCLE(radius=0.2);
+    (-3, 0) @PIN(terminal=1, direction="left");
+    (3, 0) @PIN(terminal=2, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 1.5);
+    ? @TEXT("${value}", key="value", halign="middle") => @PLACE(0, -1.2)
+  };
+
+  /* p n cp (cn); 3-terminal externally controlled switch */
+  $EXTERNALLY_CONTROLLED_SWITCH = @DEFINE-SYMBOL(box=[-3, -3, 1, 3]) {
+    @LINE {(0, 3) (0, 1)};
+    @LINE {(-1, -1) (0, 1)};
+    @LINE {(0, -1) (0, -3)};
+    @LINE {(-3, 0) (-0.8, 0)};
+    @LINE {(-1.3, 0.3) (-0.8, 0) (-1.3, -0.3)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (0, -3) @PIN(terminal=2, direction="down");
+    (-3, 0) @PIN(terminal=3, direction="left");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(1, 1.5);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(1, -0.5)
+  };
+
+  /* p n cp cn; 4-terminal voltage-controlled switch */
+  $VOLTAGE_CONTROLLED_SWITCH = @DEFINE-SYMBOL(box=[-3, -2, 3, 3]) {
+    @LINE {(3, -2) (1.5, -2) (1.5, 0.5)};
+    @LINE {(-3, 2) (-1, 2)};
+    @LINE {(-1.5, 0.5) (-1.5, -2) (-3, -2)};
+    @LINE {(1, 3) (-1, 2)};
+    @LINE {(1, 2) (3, 2)};
+    @ARC {(-1.5, 0.5) (-1, 1) (-0.5, 0.5)};
+    @ARC {(-0.5, 0.5) (0, 1) (0.5, 0.5)};
+    @ARC {(0.5, 0.5) (1, 1) (1.5, 0.5)};
+    (-3, 2) @PIN(terminal=1, direction="left");
+    (3, 2) @PIN(terminal=2, direction="right");
+    (-3, -2) @PIN(terminal=3, direction="left");
+    (3, -2) @PIN(terminal=4, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.5);
+    ? @TEXT("${value}", key="value", halign="middle") => @PLACE(0, -3.2)
+  };
+
+  /* draws $SPDT_SWITCH; com a b */
+  $SPDT_SWITCH_SYMBOL = @DEFINE-SYMBOL(box=[-3, -2, 3, 2]) {
+    @LINE {(-1, 1) (-0.5, 1)};
+    (1, 2) @CIRCLE(radius=0.2);
+    @LINE {(-0.5, 1) (1, 2)};
+    @LINE {(3, 2) (1, 2)};
+    @LINE {(3, -1) (1, -1)};
+    @LINE {(-3, 1) (-1, 1)};
+    (1, -1) @CIRCLE(radius=0.2);
+    (-0.5, 1) @CIRCLE(radius=0.2);
+    (-3, 1) @PIN(terminal=1, direction="left");
+    (3, 2) @PIN(terminal=2, direction="right");
+    (3, -1) @PIN(terminal=3, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 2.6);
+    ? @TEXT("${value}", key="value", halign="middle") => @PLACE(0, -2.2)
+  };
+
+  /* draws $GROUND; p */
+  $GROUND_SYMBOL = @DEFINE-SYMBOL(box=[-1, -4, 1, 0]) {
+    @LINE {(-1, -3) (1, -3) (0, -4) (-1, -3)};
+    @LINE {(0, 0) (0, -3)};
+    (0, 0) @PIN(terminal=1, direction="up")
+  };
+
+  /* draws $SUPPLY; p */
+  $SUPPLY_SYMBOL = @DEFINE-SYMBOL(box=[-2.5, 0, 2.5, 5]) {
+    @LINE {(0, 0) (0, 4)};
+    @LINE {(-2.5, 4) (2.5, 4)};
+    (0, 0) @PIN(terminal=1, direction="down");
+    ? @TEXT("${p}", key="name", halign="middle") => @PLACE(0, 5.5)
+  };
+
+  /* draws $IO_PORT; p */
+  $IO_PORT_SYMBOL = @DEFINE-SYMBOL(box=[-2.8, -1, 0, 1]) {
+    @LINE(fill="linecolor", linestyle="none") {(0, 0) (-0.9, -0.9) (-1.9, -0.9) (-2.8, 0) (-1.9, 0.9) (-0.9, 0.9) (0, 0)};
+    (0, 0) @PIN(terminal=1, direction="right");
+    ? @TEXT("${p}", key="name", halign="end", valign="middle") => @PLACE(-3.2, 0)
+  };
+
+  /* p n; behavioral source */
+  $BEHAVIORAL_SOURCE = @DEFINE-SYMBOL(box=[-1.5, -3, 1.5, 3]) {
+    (0, 0) @CIRCLE(radius=1.2);
+    @LINE {(0, 1.2) (0, 3)};
+    @LINE {(0, -1.2) (0, -3)};
+    @LINE {(-0.25, 0.7) (0.25, 0.7)};
+    @LINE {(0, 0.45) (0, 0.95)};
+    @LINE {(-0.25, -0.7) (0.25, -0.7)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (0, -3) @PIN(terminal=2, direction="down");
+    (0, 0) @TEXT("B", halign="middle", valign="middle", size=0.9);
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(1.4, 1.5)
+  };
+
+  /* p n; RF port */
+  $RF_PORT = @DEFINE-SYMBOL(box=[-3.5, -4, 2.1, 4]) {
+    @LINE {(0.3, -1) (-0.3, -1)};
+    @LINE {(0, -2.5) (0, -4)};
+    @LINE {(0, -0.5) (0, 0) (0.5, 0.5) (-0.5, 1) (0.5, 1.5) (-0.5, 2) (0.5, 2.5) (0, 3) (0, 4)};
+    @LINE {(0.3, -2) (-0.3, -2)};
+    (0, -1.5) @CIRCLE(radius=1);
+    @LINE {(0, -1.3) (0, -0.7)};
+    @LINE {(-3.5, 0.5) (-3, 1) (-2.5, 0.5) (-2, 1) (-1.5, 0.5)};
+    @LINE {(-3.5, -3) (-3, -3) (-2.5, -2) (-2, -3) (-1.5, -3)};
+    @ARC {(-1.5, -1) (-2, -0.5) (-2.5, -1)};
+    @ARC {(-3.5, -1) (-3, -1.5) (-2.5, -1)};
+    @ARC {(-2.3, 2.9) (-3, 2.7) (-3.4, 2.1)};
+    @ARC {(-2.4, 2.8) (-2, 2.2) (-1.3, 2)};
+    (0, 4) @PIN(terminal=1, direction="up");
+    (0, -4) @PIN(terminal=2, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(1.5, 2.5);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(1.5, 1.5)
+  };
+
+  /* p1 n1 p2 n2; transmission line */
+  $TRANSMISSION_LINE = @DEFINE-SYMBOL(box=[-4, -3, 4, 2]) {
+    @LINE {(-4, 1) (-2, 1)};
+    @LINE {(2, 1) (4, 1)};
+    @LINE {(-2, -1) (-3, -1) (-3, -3)};
+    @LINE {(2, -1) (3, -1) (3, -3)};
+    @RECTANGLE {(-2, 0.5) (2, 1.5)};
+    @RECTANGLE {(-2, -1.5) (2, -0.5)};
+    (-4, 1) @PIN(terminal=1, direction="left");
+    (-3, -3) @PIN(terminal=2, direction="down");
+    (4, 1) @PIN(terminal=3, direction="right");
+    (3, -3) @PIN(terminal=4, direction="down");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 2.2);
+    ? @TEXT("${value}", key="value", halign="middle") => @PLACE(0, -2.5)
+  };
+
+  /* a b ref; distributed RC line */
+  $RC_LINE = @DEFINE-SYMBOL(box=[-3, -2, 3, 2.5]) {
+    @LINE {(-3, 2) (-2, 2) (-2, 1) (-2.5, 1)};
+    @LINE {(2, 1) (2, 2) (3, 2)};
+    @LINE {(-2, 2) (-1.5, 2) (-1, 2.5) (-0.5, 1.5) (0, 2.5) (0.5, 1.5) (1, 2.5) (1.5, 2)};
+    @LINE {(-2, 1) (-1.5, 1)};
+    @LINE {(1.5, 2) (2, 2)};
+    @LINE {(-2, 0.5) (-2, -0.5) (0, -0.5)};
+    @LINE {(0, -0.5) (2, -0.5) (2, 0.5) (1.5, 0.5)};
+    @LINE {(-1.5, 0.5) (-2.5, 0.5)};
+    @LINE {(2, 0.5) (2.5, 0.5)};
+    @LINE {(0, -0.5) (0, -2)};
+    @LINE {(2.5, 1) (1.5, 1)};
+    (-3, 2) @PIN(terminal=1, direction="left");
+    (3, 2) @PIN(terminal=2, direction="right");
+    (0, -2) @PIN(terminal=3, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(3, 1);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(3, 0)
+  };
+
+  /* draws $NO_CONNECT */
+  $NO_CONNECT_SYMBOL = @DEFINE-SYMBOL(box=[-1, -5, 1, 0]) {
+    @LINE {(0, 0) (0, -3)};
+    @RECTANGLE {(-1, -5) (1, -3)};
+    @LINE {(1, -3) (-1, -5)};
+    @LINE {(-1, -3) (1, -5)}
+  };
+
+  /* the arrow head, drawn on a point (9.2.7); its definition is $ARROW */
+  $ARROW_SYMBOL = @DEFINE-SYMBOL(box=[-0.85, -0.4, 0.85, 0.4]) { @LINE(fill="linecolor", linestyle="none") {(0.8285, 0) (-0.8285, 0.3953) (-0.8285, -0.3953) (0.8285, 0)}};
+
+  /* the dot of a junction (13.2) */
+  $JUNCTION_SYMBOL = @DEFINE-SYMBOL(box=[-0.4, -0.4, 0.4, 0.4]) {(0, 0) @CIRCLE(radius=0.3779, fill="linecolor", linestyle="none")};
+
+  /* points right; ORIENT("R270") points down (15.2) */
+  $CURRENT_ARROW_SYMBOL = @DEFINE-SYMBOL(box=[-0.85, -0.4, 0.85, 0.4]) { @LINE(fill="linecolor", linestyle="none") {(0.8285, 0) (-0.8285, 0.3953) (-0.8285, -0.3953) (0.8285, 0)}};
+
+  /* a ground with the name of its net under it, for a ground net other than 0 */
+  $NAMED_GROUND_SYMBOL = @DEFINE-SYMBOL(box=[-1, -4, 1, 0]) {
+    $GROUND_SYMBOL;
+    ? @TEXT("${p}", key="name", halign="middle", valign="top") => @PLACE(0, -4.2)
+  };
+
+  /* a k; diode */
+  $DIODE = @DEFINE-SYMBOL(box=[-3, -2, 3, 2]) {
+    @LINE {(3, 0) (0.5, 0)};
+    @LINE {(0.5, -1) (0.5, 1)};
+    @LINE {(-1, 0) (-3, 0)};
+    @LINE {(-1, -1) (-1, 1) (0.5, 0) (-1, -1)};
+    (-3, 0) @PIN(terminal=1, direction="left");
+    (3, 0) @PIN(terminal=2, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 1.5);
+    ? @TEXT("${model}", key="model", halign="middle") => @PLACE(0, -1.8)
+  };
+
+  /* a k; Zener diode */
+  $ZENER_DIODE = @DEFINE-SYMBOL(box=[-3, -2, 3, 2]) {
+    @LINE {(-0.7, 0) (-3, 0)};
+    @LINE {(0.8, -1) (0.4, -1.2)};
+    @LINE {(3, 0) (0.8, 0)};
+    @LINE {(0.8, 0.9) (0.8, -1)};
+    @LINE {(1.2, 1.1) (0.8, 0.9)};
+    @LINE {(-0.7, 1) (-0.7, -1) (0.8, 0) (-0.7, 1)};
+    (-3, 0) @PIN(terminal=1, direction="left");
+    (3, 0) @PIN(terminal=2, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 1.5);
+    ? @TEXT("${model}", key="model", halign="middle") => @PLACE(0, -1.8)
+  };
+
+  /* d g s (b); 3-terminal NMOS */
+  $NMOS = @DEFINE-SYMBOL(box=[-4, -3, 0, 3]) {
+    @LINE {(-4, 0) (-2.5, 0)};
+    @LINE {(-2, 1.5) (0, 1.5) (0, 3)};
+    @LINE {(-1, -1) (0, -1.5) (-1, -2)};
+    @LINE {(-2.5, 1.5) (-2.5, -1.5)};
+    @LINE {(-2, -1.5) (0, -1.5) (0, -3)};
+    @LINE {(-2, -1.5) (-2, 1.5)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (-4, 0) @PIN(terminal=2, direction="left");
+    (0, -3) @PIN(terminal=3, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 2);
+    ? @TEXT("${model}", key="model", halign="start") => @PLACE(0.5, 0.5)
+  };
+
+  /* d g s b; 4-terminal NMOS */
+  $NMOS_4TERM = @DEFINE-SYMBOL(box=[-4, -3, 0, 3]) {
+    @LINE {(-2, 1.5) (0, 1.5) (0, 3)};
+    @LINE {(-2, -1.5) (-2, 1.5)};
+    @LINE {(-1, -1) (0, -1.5) (-1, -2)};
+    @LINE {(-4, 0) (-2.5, 0)};
+    @LINE {(-2.5, 1.5) (-2.5, -1.5)};
+    @LINE {(-2, 0) (0, 0)};
+    @LINE {(-2, -1.5) (0, -1.5) (0, -3)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (-4, 0) @PIN(terminal=2, direction="left");
+    (0, -3) @PIN(terminal=3, direction="down");
+    (0, 0) @PIN(terminal=4, direction="right");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 2);
+    ? @TEXT("${model}", key="model", halign="start") => @PLACE(0.5, -1.8)
+  };
+
+  /* d g s (b); 3-terminal PMOS */
+  $PMOS = @DEFINE-SYMBOL(box=[-4, -3, 0, 3]) {
+    @LINE {(-4, 0) (-2.5, 0)};
+    @LINE {(-2, -1.5) (0, -1.5) (0, -3)};
+    @LINE {(-2, -1.5) (-2, 1.5)};
+    @LINE {(-2, 1.5) (0, 1.5) (0, 3)};
+    @LINE {(-2.5, 1.5) (-2.5, -1.5)};
+    @LINE {(0, 2) (-1, 1.5) (0, 1)};
+    (0, -3) @PIN(terminal=1, direction="down");
+    (-4, 0) @PIN(terminal=2, direction="left");
+    (0, 3) @PIN(terminal=3, direction="up");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 2);
+    ? @TEXT("${model}", key="model", halign="start") => @PLACE(0.5, 0.5)
+  };
+
+  /* d g s b; 4-terminal PMOS */
+  $PMOS_4TERM = @DEFINE-SYMBOL(box=[-4, -3, 0, 3]) {
+    @LINE {(-2.5, 1.5) (-2.5, -1.5)};
+    @LINE {(-2, -1.5) (0, -1.5) (0, -3)};
+    @LINE {(-2, 1.5) (0, 1.5) (0, 3)};
+    @LINE {(-4, 0) (-2.5, 0)};
+    @LINE {(-0.3, 2) (-1.3, 1.5) (-0.3, 1)};
+    @LINE {(-2, 0) (0, 0)};
+    @LINE {(-2, -1.5) (-2, 1.5)};
+    (0, -3) @PIN(terminal=1, direction="down");
+    (-4, 0) @PIN(terminal=2, direction="left");
+    (0, 3) @PIN(terminal=3, direction="up");
+    (0, 0) @PIN(terminal=4, direction="right");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 2);
+    ? @TEXT("${model}", key="model", halign="start") => @PLACE(0.5, -1.8)
+  };
+
+  /* d g s (b); depletion NMOS */
+  $DEPLETION_NMOS = @DEFINE-SYMBOL(box=[-4, -3, 0, 3]) {
+    @LINE {(-4, 0) (-2.5, 0)};
+    @LINE {(-2, 1.5) (0, 1.5) (0, 3)};
+    @LINE {(-1, -1) (0, -1.5) (-1, -2)};
+    @LINE {(-2.5, 1.5) (-2.5, -1.5)};
+    @LINE {(-2, -1.5) (0, -1.5) (0, -3)};
+    @LINE {(-2, -1.5) (-2, 1.5)};
+    @RECTANGLE(fill="linecolor") {(-2.15, -1.5) (-1.85, 1.5)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (-4, 0) @PIN(terminal=2, direction="left");
+    (0, -3) @PIN(terminal=3, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 2);
+    ? @TEXT("${model}", key="model", halign="start") => @PLACE(0.5, 0.5)
+  };
+
+  /* d g s b; 4-terminal depletion NMOS */
+  $DEPLETION_NMOS_4TERM = @DEFINE-SYMBOL(box=[-4, -3, 0, 3]) {
+    @LINE {(-2, 1.5) (0, 1.5) (0, 3)};
+    @LINE {(-2, -1.5) (-2, 1.5)};
+    @LINE {(-1, -1) (0, -1.5) (-1, -2)};
+    @LINE {(-4, 0) (-2.5, 0)};
+    @LINE {(-2.5, 1.5) (-2.5, -1.5)};
+    @LINE {(-2, 0) (0, 0)};
+    @LINE {(-2, -1.5) (0, -1.5) (0, -3)};
+    @RECTANGLE(fill="linecolor") {(-2.15, -1.5) (-1.85, 1.5)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (-4, 0) @PIN(terminal=2, direction="left");
+    (0, -3) @PIN(terminal=3, direction="down");
+    (0, 0) @PIN(terminal=4, direction="right");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 2);
+    ? @TEXT("${model}", key="model", halign="start") => @PLACE(0.5, -1.8)
+  };
+
+  /* d g s (b); depletion PMOS */
+  $DEPLETION_PMOS = @DEFINE-SYMBOL(box=[-4, -3, 0, 3]) {
+    @LINE {(-4, 0) (-2.5, 0)};
+    @LINE {(-2, -1.5) (0, -1.5) (0, -3)};
+    @LINE {(-2, -1.5) (-2, 1.5)};
+    @LINE {(-2, 1.5) (0, 1.5) (0, 3)};
+    @LINE {(-2.5, 1.5) (-2.5, -1.5)};
+    @LINE {(0, 2) (-1, 1.5) (0, 1)};
+    @RECTANGLE(fill="linecolor") {(-2.15, -1.5) (-1.85, 1.5)};
+    (0, -3) @PIN(terminal=1, direction="down");
+    (-4, 0) @PIN(terminal=2, direction="left");
+    (0, 3) @PIN(terminal=3, direction="up");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 2);
+    ? @TEXT("${model}", key="model", halign="start") => @PLACE(0.5, 0.5)
+  };
+
+  /* d g s b; 4-terminal depletion PMOS */
+  $DEPLETION_PMOS_4TERM = @DEFINE-SYMBOL(box=[-4, -3, 0, 3]) {
+    @LINE {(-2.5, 1.5) (-2.5, -1.5)};
+    @LINE {(-2, -1.5) (0, -1.5) (0, -3)};
+    @LINE {(-2, 1.5) (0, 1.5) (0, 3)};
+    @LINE {(-4, 0) (-2.5, 0)};
+    @LINE {(-0.3, 2) (-1.3, 1.5) (-0.3, 1)};
+    @LINE {(-2, 0) (0, 0)};
+    @LINE {(-2, -1.5) (-2, 1.5)};
+    @RECTANGLE(fill="linecolor") {(-2.15, -1.5) (-1.85, 1.5)};
+    (0, -3) @PIN(terminal=1, direction="down");
+    (-4, 0) @PIN(terminal=2, direction="left");
+    (0, 3) @PIN(terminal=3, direction="up");
+    (0, 0) @PIN(terminal=4, direction="right");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 2);
+    ? @TEXT("${model}", key="model", halign="start") => @PLACE(0.5, -1.8)
+  };
+
+  /* d g s (b); NDMOS */
+  $NDMOS = @DEFINE-SYMBOL(box=[-4, -3, 0, 3]) {
+    @LINE {(-4, 0) (-2.5, 0)};
+    @LINE {(-2, 1.5) (0, 1.5) (0, 3)};
+    @LINE {(-1, -1) (0, -1.5) (-1, -2)};
+    @LINE {(-2.5, 1.5) (-2.5, -1.5)};
+    @LINE {(-2, -1.5) (0, -1.5) (0, -3)};
+    @LINE {(-2, -1.5) (-2, 1.5)};
+    @LINE {(-1.7, 0.4) (-1.7, 1.8)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (-4, 0) @PIN(terminal=2, direction="left");
+    (0, -3) @PIN(terminal=3, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 2);
+    ? @TEXT("${model}", key="model", halign="start") => @PLACE(0.5, 0.5)
+  };
+
+  /* d g s b; 4-terminal NDMOS */
+  $NDMOS_4TERM = @DEFINE-SYMBOL(box=[-4, -3, 0, 3]) {
+    @LINE {(-2, 1.5) (0, 1.5) (0, 3)};
+    @LINE {(-2, -1.5) (-2, 1.5)};
+    @LINE {(-1, -1) (0, -1.5) (-1, -2)};
+    @LINE {(-4, 0) (-2.5, 0)};
+    @LINE {(-2.5, 1.5) (-2.5, -1.5)};
+    @LINE {(-2, 0) (0, 0)};
+    @LINE {(-2, -1.5) (0, -1.5) (0, -3)};
+    @LINE {(-1.7, 0.4) (-1.7, 1.8)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (-4, 0) @PIN(terminal=2, direction="left");
+    (0, -3) @PIN(terminal=3, direction="down");
+    (0, 0) @PIN(terminal=4, direction="right");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 2);
+    ? @TEXT("${model}", key="model", halign="start") => @PLACE(0.5, -1.8)
+  };
+
+  /* d g s (b); PDMOS */
+  $PDMOS = @DEFINE-SYMBOL(box=[-4, -3, 0, 3]) {
+    @LINE {(-4, 0) (-2.5, 0)};
+    @LINE {(-2, -1.5) (0, -1.5) (0, -3)};
+    @LINE {(-2, -1.5) (-2, 1.5)};
+    @LINE {(-2, 1.5) (0, 1.5) (0, 3)};
+    @LINE {(-2.5, 1.5) (-2.5, -1.5)};
+    @LINE {(0, 2) (-1, 1.5) (0, 1)};
+    @LINE {(-1.7, -1.8) (-1.7, -0.4)};
+    (0, -3) @PIN(terminal=1, direction="down");
+    (-4, 0) @PIN(terminal=2, direction="left");
+    (0, 3) @PIN(terminal=3, direction="up");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 2);
+    ? @TEXT("${model}", key="model", halign="start") => @PLACE(0.5, 0.5)
+  };
+
+  /* d g s b; 4-terminal PDMOS */
+  $PDMOS_4TERM = @DEFINE-SYMBOL(box=[-4, -3, 0, 3]) {
+    @LINE {(-2.5, 1.5) (-2.5, -1.5)};
+    @LINE {(-2, -1.5) (0, -1.5) (0, -3)};
+    @LINE {(-2, 1.5) (0, 1.5) (0, 3)};
+    @LINE {(-4, 0) (-2.5, 0)};
+    @LINE {(-0.3, 2) (-1.3, 1.5) (-0.3, 1)};
+    @LINE {(-2, 0) (0, 0)};
+    @LINE {(-2, -1.5) (-2, 1.5)};
+    @LINE {(-1.7, -1.8) (-1.7, -0.4)};
+    (0, -3) @PIN(terminal=1, direction="down");
+    (-4, 0) @PIN(terminal=2, direction="left");
+    (0, 3) @PIN(terminal=3, direction="up");
+    (0, 0) @PIN(terminal=4, direction="right");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 2);
+    ? @TEXT("${model}", key="model", halign="start") => @PLACE(0.5, -1.8)
+  };
+
+  /* c b e (s); NPN bipolar transistor */
+  $NPN = @DEFINE-SYMBOL(box=[-4, -3, 0, 3]) {
+    @LINE {(-0.5, -0.5) (0, -1.5) (-1.1, -2)};
+    @LINE {(-4, 0) (-2, 0)};
+    @LINE {(0, -3) (0, -1.5) (-2, -0.7)};
+    @LINE {(0, 3) (0, 1.5) (-2, 0.7)};
+    @LINE {(-2, -1.5) (-2, 1.5)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (-4, 0) @PIN(terminal=2, direction="left");
+    (0, -3) @PIN(terminal=3, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 2);
+    ? @TEXT("${model}", key="model", halign="start") => @PLACE(0.5, 0.5)
+  };
+
+  /* c b e (s); PNP bipolar transistor */
+  $PNP = @DEFINE-SYMBOL(box=[-4, -3, 0, 3]) {
+    @LINE {(-4, 0) (-2, 0)};
+    @LINE {(-2, -1.5) (-2, 1.5)};
+    @LINE {(0, -3) (0, -1.5) (-2, -0.7)};
+    @LINE {(0, 3) (0, 1.5) (-2, 0.7)};
+    @LINE {(-0.6, 1.9) (-0.9, 1.1) (0, 0.8)};
+    (0, -3) @PIN(terminal=1, direction="down");
+    (-4, 0) @PIN(terminal=2, direction="left");
+    (0, 3) @PIN(terminal=3, direction="up");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 2);
+    ? @TEXT("${model}", key="model", halign="start") => @PLACE(0.5, 0.5)
+  };
+
+  /* d g s; N-channel JFET */
+  $NJFET = @DEFINE-SYMBOL(box=[-4, -3, 0, 3]) {
+    @LINE {(-2, 1.5) (0, 1.5) (0, 3)};
+    @LINE {(-2, -1.5) (0, -1.5) (0, -3)};
+    @LINE {(-4, 0) (-2, 0)};
+    @LINE {(-2, -1.5) (-2, 1.5)};
+    @LINE {(-1, -1) (0, -1.5) (-1, -2)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (-4, 0) @PIN(terminal=2, direction="left");
+    (0, -3) @PIN(terminal=3, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 2);
+    ? @TEXT("${model}", key="model", halign="start") => @PLACE(0.5, 0.5)
+  };
+
+  /* d g s; P-channel JFET */
+  $PJFET = @DEFINE-SYMBOL(box=[-4, -3, 0, 3]) {
+    @LINE {(-2, -1.5) (0, -1.5) (0, -3)};
+    @LINE {(-4, 0) (-2, 0)};
+    @LINE {(-0.2, 2) (-1.2, 1.5) (-0.2, 1)};
+    @LINE {(-2, -1.5) (-2, 1.5)};
+    @LINE {(-2, 1.5) (0, 1.5) (0, 3)};
+    (0, -3) @PIN(terminal=1, direction="down");
+    (-4, 0) @PIN(terminal=2, direction="left");
+    (0, 3) @PIN(terminal=3, direction="up");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 2);
+    ? @TEXT("${model}", key="model", halign="start") => @PLACE(0.5, 0.5)
+  };
+
+  /* inp inn out; operational amplifier */
+  $OPAMP = @DEFINE-SYMBOL(box=[-8, -4, 8, 4]) {
+    @LINE {(-3, -2) (-2, -2)};
+    @LINE {(-3, 2) (-2, 2)};
+    @LINE {(-2.5, 1.6) (-2.5, 2.4)};
+    @LINE {(-4, 4) (4, 0) (-4, -4) (-4, 4)};
+    @LINE {(8, 0) (4, 0)};
+    @LINE {(-8, -2) (-4, -2)};
+    @LINE {(-8, 2) (-4, 2)};
+    (-8, 2) @PIN(terminal=1, direction="left");
+    (-8, -2) @PIN(terminal=2, direction="left");
+    (8, 0) @PIN(terminal=3, direction="right");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(-3.2, 4.8);
+    ? @TEXT("${value}", key="value", halign="middle") => @PLACE(0, 1.2)
+  };
+
+  /* inp inn (vp) (vn) out; 5-terminal operational amplifier */
+  $OPAMP_5TERM = @DEFINE-SYMBOL(box=[-8, -4, 8, 4]) {
+    @LINE {(-3, -2) (-2, -2)};
+    @LINE {(-3, 2) (-2, 2)};
+    @LINE {(-2.5, 1.6) (-2.5, 2.4)};
+    @LINE {(-4, 4) (4, 0) (-4, -4) (-4, 4)};
+    @LINE {(8, 0) (4, 0)};
+    @LINE {(-8, -2) (-4, -2)};
+    @LINE {(-8, 2) (-4, 2)};
+    (-8, 2) @PIN(terminal=1, direction="left");
+    (-8, -2) @PIN(terminal=2, direction="left");
+    (8, 0) @PIN(terminal=5, direction="right");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(-3.2, 4.8);
+    ? @TEXT("${value}", key="value", halign="middle") => @PLACE(0, 1.2)
+  };
+
+  /* inp inn outp outn (vp) (vn); fully differential operational amplifier */
+  $DIFFERENTIAL_OPAMP = @DEFINE-SYMBOL(box=[-8, -4, 8, 4]) {
+    @LINE {(-4, 4) (4, 0) (-4, -4) (-4, 4)};
+    @LINE {(-8, 2) (-4, 2)};
+    @LINE {(-8, -2) (-4, -2)};
+    @LINE {(0, 2) (8, 2)};
+    @LINE {(0, -2) (8, -2)};
+    @LINE {(-3, 2) (-2, 2)};
+    @LINE {(-2.5, 1.6) (-2.5, 2.4)};
+    @LINE {(-3, -2) (-2, -2)};
+    @LINE {(-0.9, 1.2) (-0.3, 1.2)};
+    @LINE {(-0.6, 0.9) (-0.6, 1.5)};
+    @LINE {(-0.9, -1.2) (-0.3, -1.2)};
+    (-8, 2) @PIN(terminal=1, direction="left");
+    (-8, -2) @PIN(terminal=2, direction="left");
+    (8, 2) @PIN(terminal=3, direction="right");
+    (8, -2) @PIN(terminal=4, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 4.5)
+  };
+
+  /* inp inn out (vp) (vn); comparator */
+  $COMPARATOR = @DEFINE-SYMBOL(box=[-8, -4, 8, 4]) {
+    @LINE {(-8, 2) (-4, 2)};
+    @LINE {(-3, -2) (-2, -2)};
+    @LINE {(-3, 2) (-2, 2)};
+    @LINE {(-2.5, 1.6) (-2.5, 2.4)};
+    @LINE {(-4, 4) (4, 0) (-4, -4) (-4, 4)};
+    @LINE {(8, 0) (4, 0)};
+    @LINE {(-8, -2) (-4, -2)};
+    @LINE {(-1.4, -0.8) (-0.4, -0.8) (-0.4, 0.8) (0.6, 0.8)};
+    (-8, 2) @PIN(terminal=1, direction="left");
+    (-8, -2) @PIN(terminal=2, direction="left");
+    (8, 0) @PIN(terminal=3, direction="right");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(-2.2, 5.5);
+    ? @TEXT("${value}", key="value", halign="middle") => @PLACE(0, 1.1)
+  };
+
+  /* inp inn (vp) (vn) out; 5-terminal comparator */
+  $COMPARATOR_5TERM = @DEFINE-SYMBOL(box=[-8, -4, 8, 4]) {
+    @LINE {(-8, 2) (-4, 2)};
+    @LINE {(-3, -2) (-2, -2)};
+    @LINE {(-3, 2) (-2, 2)};
+    @LINE {(-2.5, 1.6) (-2.5, 2.4)};
+    @LINE {(-4, 4) (4, 0) (-4, -4) (-4, 4)};
+    @LINE {(8, 0) (4, 0)};
+    @LINE {(-8, -2) (-4, -2)};
+    @LINE {(-1.4, -0.8) (-0.4, -0.8) (-0.4, 0.8) (0.6, 0.8)};
+    (-8, 2) @PIN(terminal=1, direction="left");
+    (-8, -2) @PIN(terminal=2, direction="left");
+    (8, 0) @PIN(terminal=5, direction="right");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(-2.2, 5.5);
+    ? @TEXT("${value}", key="value", halign="middle") => @PLACE(0, 1.1)
+  };
+
+  /* in out (vp) (vn); voltage amplifier */
+  $VOLTAGE_AMPLIFIER = @DEFINE-SYMBOL(box=[-8, -5, 8, 5]) {
+    @LINE {(-4, 0) (-8, 0)};
+    @LINE {(8, 0) (4, 0)};
+    @LINE {(-4, 4) (4, 0) (-4, -4) (-4, 4)};
+    (-8, 0) @PIN(terminal=1, direction="left");
+    (8, 0) @PIN(terminal=2, direction="right");
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(3, -2);
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.7, 3.4)
+  };
+
+  /* in out (vp) (vn); transconductor */
+  $TRANSCONDUCTOR = @DEFINE-SYMBOL(box=[-8, -4, 8, 4]) {
+    @LINE {(-4, 4) (4, 0) (-4, -4) (-4, 4)};
+    @LINE {(8, 0) (4, 0)};
+    @LINE {(-8, 0) (-4, 0)};
+    (-8, 0) @PIN(terminal=1, direction="left");
+    (8, 0) @PIN(terminal=2, direction="right");
+    ? @TEXT("\textit{g}_{m}", key="formula", halign="middle", valign="middle", size=1.1) => @PLACE(-1.2, 0);
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 4.5)
+  };
+
+  /* inp inn out (vp) (vn); differential transconductor */
+  $DIFFERENTIAL_TRANSCONDUCTOR = @DEFINE-SYMBOL(box=[-8, -5, 8, 5]) {
+    @LINE {(8, 0) (4, 0)};
+    @LINE {(-4, -2) (-8, -2)};
+    @LINE {(-1.3, -0.6) (-0.8, 0.4) (1.2, 0.4) (1.7, 1.4)};
+    @LINE {(-4, -4) (-4, 4) (4, 4) (4, -4) (-4, -4)};
+    @LINE {(-4, 2) (-8, 2)};
+    @LINE {(-3.3, -2) (-2.7, -2)};
+    @LINE {(-3.3, 2) (-2.7, 2)};
+    @LINE {(-3, 1.7) (-3, 2.3)};
+    (-8, 2) @PIN(terminal=1, direction="left");
+    (-8, -2) @PIN(terminal=2, direction="left");
+    (8, 0) @PIN(terminal=3, direction="right");
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(5, -3);
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(2.4, 4.3)
+  };
+
+  /* in out (vp) (vn); analog-to-digital converter */
+  $ADC = @DEFINE-SYMBOL(box=[-8, -3, 8, 3]) {
+    @LINE {(-8, 0) (-5, 0)};
+    @LINE {(4, 3) (-2, 3) (-5, 0) (-2, -3) (4, -3) (4, 3)};
+    @LINE {(4, 0) (8, 0)};
+    (-8, 0) @PIN(terminal=1, direction="left");
+    (8, 0) @PIN(terminal=2, direction="right");
+    ? @TEXT("ADC", key="formula", halign="middle", valign="middle", size=1.2) => @PLACE(0, 0);
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+
+  /* in out (vp) (vn); digital-to-analog converter */
+  $DAC = @DEFINE-SYMBOL(box=[-8, -3, 8, 3]) {
+    @LINE {(-8, 0) (-4, 0)};
+    @LINE {(-4, 3) (2, 3) (5, 0) (2, -3) (-4, -3) (-4, 3)};
+    @LINE {(5, 0) (8, 0)};
+    (-8, 0) @PIN(terminal=1, direction="left");
+    (8, 0) @PIN(terminal=2, direction="right");
+    ? @TEXT("DAC", key="formula", halign="middle", valign="middle", size=1.2) => @PLACE(0, 0);
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+
+  /* n1 n2 tap; center-tap inductor */
+  $CENTER_TAP_INDUCTOR = @DEFINE-SYMBOL(box=[-5, -2, 5, 1]) {
+    @LINE {(-5, 0) (-4.5, 0)};
+    @ARC {(-4.5, 0) (-4, 0.5) (-3.5, 0)};
+    @ARC {(-3.5, 0) (-3, 0.5) (-2.5, 0)};
+    @ARC {(-2.5, 0) (-2, 0.5) (-1.5, 0)};
+    @ARC {(-1.5, 0) (-1, 0.5) (-0.5, 0)};
+    @LINE {(-0.5, 0) (0.5, 0)};
+    @ARC {(0.5, 0) (1, 0.5) (1.5, 0)};
+    @ARC {(1.5, 0) (2, 0.5) (2.5, 0)};
+    @ARC {(2.5, 0) (3, 0.5) (3.5, 0)};
+    @ARC {(3.5, 0) (4, 0.5) (4.5, 0)};
+    @LINE {(4.5, 0) (5, 0)};
+    @LINE {(0, 0) (0, -2)};
+    (-5, 0) @PIN(terminal=1, direction="left");
+    (5, 0) @PIN(terminal=2, direction="right");
+    (0, -2) @PIN(terminal=3, direction="down");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 0.9)
+  };
+
+  /* n1 n2 tap; T-coil */
+  $T_COIL = @DEFINE-SYMBOL(box=[-9, -2, 9, 5.1]) {
+    @LINE {(-9, 0) (-6, 0)};
+    @ARC {(-6, 0) (-5.5, -0.5) (-5, 0)};
+    @ARC {(-5, 0) (-4.5, -0.5) (-4, 0)};
+    @ARC {(-4, 0) (-3.5, -0.5) (-3, 0)};
+    @ARC {(-3, 0) (-2.5, -0.5) (-2, 0)};
+    @LINE {(-2, 0) (2, 0)};
+    @ARC {(2, 0) (2.5, -0.5) (3, 0)};
+    @ARC {(3, 0) (3.5, -0.5) (4, 0)};
+    @ARC {(4, 0) (4.5, -0.5) (5, 0)};
+    @ARC {(5, 0) (5.5, -0.5) (6, 0)};
+    @LINE {(6, 0) (9, 0)};
+    @LINE {(0, 0) (0, -2)};
+    @LINE {(-8, 0) (-8, 4.3) (-0.3, 4.3)};
+    @LINE {(-0.3, 5.1) (-0.3, 3.5)};
+    @LINE {(0.3, 5.1) (0.3, 3.5)};
+    @LINE {(0.3, 4.3) (8, 4.3) (8, 0)};
+    (-9, 0) @PIN(terminal=1, direction="left");
+    (9, 0) @PIN(terminal=2, direction="right");
+    (0, -2) @PIN(terminal=3, direction="down");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 5.5)
+  };
+
+  /* a b y (vp) (vn); 2-input AND gate */
+  $AND_2INPUT = @DEFINE-SYMBOL(box=[-10, -4, 10, 4]) {
+    @LINE {(0.5, -3) (-4, -3)};
+    @LINE {(-4, -2) (-10, -2)};
+    @LINE {(-4, 3) (0.5, 3)};
+    @LINE {(-4, -3) (-4, 3)};
+    @LINE {(10, 0) (3.5, 0)};
+    @LINE {(-4, 2) (-10, 2)};
+    @ARC {(0.5, -3) (3.5, 0) (0.5, 3)};
+    (-10, 2) @PIN(terminal=1, direction="left");
+    (-10, -2) @PIN(terminal=2, direction="left");
+    (10, 0) @PIN(terminal=3, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+
+  /* a b c y (vp) (vn); 3-input AND gate */
+  $AND_3INPUT = @DEFINE-SYMBOL(box=[-10, -4, 10, 4]) {
+    @LINE {(0.5, -3) (-4, -3)};
+    @LINE {(-4, -2) (-10, -2)};
+    @LINE {(-4, 3) (0.5, 3)};
+    @LINE {(-4, -3) (-4, 3)};
+    @LINE {(10, 0) (3.5, 0)};
+    @LINE {(-4, 2) (-10, 2)};
+    @ARC {(0.5, -3) (3.5, 0) (0.5, 3)};
+    @LINE {(-10, 0) (-4, 0)};
+    (-10, 2) @PIN(terminal=1, direction="left");
+    (-10, 0) @PIN(terminal=2, direction="left");
+    (-10, -2) @PIN(terminal=3, direction="left");
+    (10, 0) @PIN(terminal=4, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+
+  /* a b c d y (vp) (vn); 4-input AND gate */
+  $AND_4INPUT = @DEFINE-SYMBOL(box=[-10, -4, 10, 4]) {
+    @LINE {(0.5, -3) (-4, -3)};
+    @LINE {(-4, -2) (-10, -2)};
+    @LINE {(-4, 3) (0.5, 3)};
+    @LINE {(-4, -3) (-4, 3)};
+    @LINE {(10, 0) (3.5, 0)};
+    @LINE {(-4, 2) (-10, 2)};
+    @ARC {(0.5, -3) (3.5, 0) (0.5, 3)};
+    @LINE {(-10, 1) (-4, 1)};
+    @LINE {(-10, -1) (-4, -1)};
+    (-10, 2) @PIN(terminal=1, direction="left");
+    (-10, 1) @PIN(terminal=2, direction="left");
+    (-10, -1) @PIN(terminal=3, direction="left");
+    (-10, -2) @PIN(terminal=4, direction="left");
+    (10, 0) @PIN(terminal=5, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+
+  /* a b y (vp) (vn); 2-input NAND gate */
+  $NAND_2INPUT = @DEFINE-SYMBOL(box=[-10, -4, 10, 4]) {
+    @LINE {(10, 0) (4.5, 0)};
+    @LINE {(-4, 2) (-10, 2)};
+    @LINE {(0.5, -3) (-4, -3)};
+    @LINE {(-4, -2) (-10, -2)};
+    (4, 0) @CIRCLE(radius=0.5);
+    @LINE {(-4, -3) (-4, 3)};
+    @LINE {(-4, 3) (0.5, 3)};
+    @ARC {(0.5, -3) (3.5, 0) (0.5, 3)};
+    (-10, 2) @PIN(terminal=1, direction="left");
+    (-10, -2) @PIN(terminal=2, direction="left");
+    (10, 0) @PIN(terminal=3, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+
+  /* a b c y (vp) (vn); 3-input NAND gate */
+  $NAND_3INPUT = @DEFINE-SYMBOL(box=[-10, -4, 10, 4]) {
+    @LINE {(10, 0) (4.5, 0)};
+    @LINE {(-4, 2) (-10, 2)};
+    @LINE {(0.5, -3) (-4, -3)};
+    @LINE {(-4, -2) (-10, -2)};
+    (4, 0) @CIRCLE(radius=0.5);
+    @LINE {(-4, -3) (-4, 3)};
+    @LINE {(-4, 3) (0.5, 3)};
+    @ARC {(0.5, -3) (3.5, 0) (0.5, 3)};
+    @LINE {(-10, 0) (-4, 0)};
+    (-10, 2) @PIN(terminal=1, direction="left");
+    (-10, 0) @PIN(terminal=2, direction="left");
+    (-10, -2) @PIN(terminal=3, direction="left");
+    (10, 0) @PIN(terminal=4, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+
+  /* a b c d y (vp) (vn); 4-input NAND gate */
+  $NAND_4INPUT = @DEFINE-SYMBOL(box=[-10, -4, 10, 4]) {
+    @LINE {(10, 0) (4.5, 0)};
+    @LINE {(-4, 2) (-10, 2)};
+    @LINE {(0.5, -3) (-4, -3)};
+    @LINE {(-4, -2) (-10, -2)};
+    (4, 0) @CIRCLE(radius=0.5);
+    @LINE {(-4, -3) (-4, 3)};
+    @LINE {(-4, 3) (0.5, 3)};
+    @ARC {(0.5, -3) (3.5, 0) (0.5, 3)};
+    @LINE {(-10, 1) (-4, 1)};
+    @LINE {(-10, -1) (-4, -1)};
+    (-10, 2) @PIN(terminal=1, direction="left");
+    (-10, 1) @PIN(terminal=2, direction="left");
+    (-10, -1) @PIN(terminal=3, direction="left");
+    (-10, -2) @PIN(terminal=4, direction="left");
+    (10, 0) @PIN(terminal=5, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+
+  /* a b y (vp) (vn); 2-input OR gate */
+  $OR_2INPUT = @DEFINE-SYMBOL(box=[-10, -4, 10, 4]) {
+    @LINE {(-0.6, -3) (-3.8, -3)};
+    @LINE {(-0.6, 3) (-3.8, 3)};
+    @LINE {(-3.4, 2) (-10, 2)};
+    @LINE {(4.5, 0) (10, 0)};
+    @LINE {(-3.4, -2) (-10, -2)};
+    @ARC {(-3.8, -3) (-3, 0) (-3.8, 3)};
+    @ARC {(4.5, 0) (2.4, 2.2) (-0.6, 3)};
+    @ARC {(-0.6, -3) (2.4, -2.2) (4.5, 0)};
+    (-10, 2) @PIN(terminal=1, direction="left");
+    (-10, -2) @PIN(terminal=2, direction="left");
+    (10, 0) @PIN(terminal=3, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+
+  /* a b c y (vp) (vn); 3-input OR gate */
+  $OR_3INPUT = @DEFINE-SYMBOL(box=[-10, -4, 10, 4]) {
+    @LINE {(-0.6, -3) (-3.8, -3)};
+    @LINE {(-0.6, 3) (-3.8, 3)};
+    @LINE {(-3.4, 2) (-10, 2)};
+    @LINE {(4.5, 0) (10, 0)};
+    @LINE {(-3.4, -2) (-10, -2)};
+    @ARC {(-3.8, -3) (-3, 0) (-3.8, 3)};
+    @ARC {(4.5, 0) (2.4, 2.2) (-0.6, 3)};
+    @ARC {(-0.6, -3) (2.4, -2.2) (4.5, 0)};
+    @LINE {(-10, 0) (-3, 0)};
+    (-10, 2) @PIN(terminal=1, direction="left");
+    (-10, 0) @PIN(terminal=2, direction="left");
+    (-10, -2) @PIN(terminal=3, direction="left");
+    (10, 0) @PIN(terminal=4, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+
+  /* a b c d y (vp) (vn); 4-input OR gate */
+  $OR_4INPUT = @DEFINE-SYMBOL(box=[-10, -4, 10, 4]) {
+    @LINE {(-0.6, -3) (-3.8, -3)};
+    @LINE {(-0.6, 3) (-3.8, 3)};
+    @LINE {(-3.4, 2) (-10, 2)};
+    @LINE {(4.5, 0) (10, 0)};
+    @LINE {(-3.4, -2) (-10, -2)};
+    @ARC {(-3.8, -3) (-3, 0) (-3.8, 3)};
+    @ARC {(4.5, 0) (2.4, 2.2) (-0.6, 3)};
+    @ARC {(-0.6, -3) (2.4, -2.2) (4.5, 0)};
+    @LINE {(-10, 1) (-3.2, 1)};
+    @LINE {(-10, -1) (-3.2, -1)};
+    (-10, 2) @PIN(terminal=1, direction="left");
+    (-10, 1) @PIN(terminal=2, direction="left");
+    (-10, -1) @PIN(terminal=3, direction="left");
+    (-10, -2) @PIN(terminal=4, direction="left");
+    (10, 0) @PIN(terminal=5, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+
+  /* a b y (vp) (vn); 2-input NOR gate */
+  $NOR_2INPUT = @DEFINE-SYMBOL(box=[-10, -4, 10, 4]) {
+    @LINE {(-0.6, -3) (-3.8, -3)};
+    @LINE {(-0.6, 3) (-3.8, 3)};
+    @LINE {(-3.4, 2) (-10, 2)};
+    @LINE {(-3.4, -2) (-10, -2)};
+    @LINE {(5.5, 0) (10, 0)};
+    (5, 0) @CIRCLE(radius=0.5);
+    @ARC {(-3.8, -3) (-3, 0) (-3.8, 3)};
+    @ARC {(-0.6, -3) (2.4, -2.2) (4.5, 0)};
+    @ARC {(4.5, 0) (2.4, 2.2) (-0.6, 3)};
+    (-10, 2) @PIN(terminal=1, direction="left");
+    (-10, -2) @PIN(terminal=2, direction="left");
+    (10, 0) @PIN(terminal=3, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+
+  /* a b c y (vp) (vn); 3-input NOR gate */
+  $NOR_3INPUT = @DEFINE-SYMBOL(box=[-10, -4, 10, 4]) {
+    @LINE {(-0.6, -3) (-3.8, -3)};
+    @LINE {(-0.6, 3) (-3.8, 3)};
+    @LINE {(-3.4, 2) (-10, 2)};
+    @LINE {(-3.4, -2) (-10, -2)};
+    @LINE {(5.5, 0) (10, 0)};
+    (5, 0) @CIRCLE(radius=0.5);
+    @ARC {(-3.8, -3) (-3, 0) (-3.8, 3)};
+    @ARC {(-0.6, -3) (2.4, -2.2) (4.5, 0)};
+    @ARC {(4.5, 0) (2.4, 2.2) (-0.6, 3)};
+    @LINE {(-10, 0) (-3, 0)};
+    (-10, 2) @PIN(terminal=1, direction="left");
+    (-10, 0) @PIN(terminal=2, direction="left");
+    (-10, -2) @PIN(terminal=3, direction="left");
+    (10, 0) @PIN(terminal=4, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+
+  /* a b c d y (vp) (vn); 4-input NOR gate */
+  $NOR_4INPUT = @DEFINE-SYMBOL(box=[-10, -4, 10, 4]) {
+    @LINE {(-0.6, -3) (-3.8, -3)};
+    @LINE {(-0.6, 3) (-3.8, 3)};
+    @LINE {(-3.4, 2) (-10, 2)};
+    @LINE {(-3.4, -2) (-10, -2)};
+    @LINE {(5.5, 0) (10, 0)};
+    (5, 0) @CIRCLE(radius=0.5);
+    @ARC {(-3.8, -3) (-3, 0) (-3.8, 3)};
+    @ARC {(-0.6, -3) (2.4, -2.2) (4.5, 0)};
+    @ARC {(4.5, 0) (2.4, 2.2) (-0.6, 3)};
+    @LINE {(-10, 1) (-3.2, 1)};
+    @LINE {(-10, -1) (-3.2, -1)};
+    (-10, 2) @PIN(terminal=1, direction="left");
+    (-10, 1) @PIN(terminal=2, direction="left");
+    (-10, -1) @PIN(terminal=3, direction="left");
+    (-10, -2) @PIN(terminal=4, direction="left");
+    (10, 0) @PIN(terminal=5, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+
+  /* a b y (vp) (vn); 2-input XOR gate */
+  $XOR_2INPUT = @DEFINE-SYMBOL(box=[-10, -4, 10, 4]) {
+    @LINE {(-3.4, -2) (-10, -2)};
+    @LINE {(-3.4, 2) (-10, 2)};
+    @LINE {(0.4, -3) (-2.8, -3)};
+    @LINE {(0.4, 3) (-2.8, 3)};
+    @LINE {(5.5, 0) (10, 0)};
+    @ARC {(-2.8, -3) (-2, 0) (-2.8, 3)};
+    @ARC {(-3.8, -3) (-3, 0) (-3.8, 3)};
+    @ARC {(0.4, -3) (3.4, -2.2) (5.5, 0)};
+    @ARC {(5.5, 0) (3.4, 2.2) (0.4, 3)};
+    (-10, 2) @PIN(terminal=1, direction="left");
+    (-10, -2) @PIN(terminal=2, direction="left");
+    (10, 0) @PIN(terminal=3, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+
+  /* a b c y (vp) (vn); 3-input XOR gate */
+  $XOR_3INPUT = @DEFINE-SYMBOL(box=[-10, -4, 10, 4]) {
+    @LINE {(-3.4, -2) (-10, -2)};
+    @LINE {(-3.4, 2) (-10, 2)};
+    @LINE {(0.4, -3) (-2.8, -3)};
+    @LINE {(0.4, 3) (-2.8, 3)};
+    @LINE {(5.5, 0) (10, 0)};
+    @ARC {(-2.8, -3) (-2, 0) (-2.8, 3)};
+    @ARC {(-3.8, -3) (-3, 0) (-3.8, 3)};
+    @ARC {(0.4, -3) (3.4, -2.2) (5.5, 0)};
+    @ARC {(5.5, 0) (3.4, 2.2) (0.4, 3)};
+    @LINE {(-10, 0) (-3, 0)};
+    (-10, 2) @PIN(terminal=1, direction="left");
+    (-10, 0) @PIN(terminal=2, direction="left");
+    (-10, -2) @PIN(terminal=3, direction="left");
+    (10, 0) @PIN(terminal=4, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+
+  /* a b c d y (vp) (vn); 4-input XOR gate */
+  $XOR_4INPUT = @DEFINE-SYMBOL(box=[-10, -4, 10, 4]) {
+    @LINE {(-3.4, -2) (-10, -2)};
+    @LINE {(-3.4, 2) (-10, 2)};
+    @LINE {(0.4, -3) (-2.8, -3)};
+    @LINE {(0.4, 3) (-2.8, 3)};
+    @LINE {(5.5, 0) (10, 0)};
+    @ARC {(-2.8, -3) (-2, 0) (-2.8, 3)};
+    @ARC {(-3.8, -3) (-3, 0) (-3.8, 3)};
+    @ARC {(0.4, -3) (3.4, -2.2) (5.5, 0)};
+    @ARC {(5.5, 0) (3.4, 2.2) (0.4, 3)};
+    @LINE {(-10, 1) (-3.2, 1)};
+    @LINE {(-10, -1) (-3.2, -1)};
+    (-10, 2) @PIN(terminal=1, direction="left");
+    (-10, 1) @PIN(terminal=2, direction="left");
+    (-10, -1) @PIN(terminal=3, direction="left");
+    (-10, -2) @PIN(terminal=4, direction="left");
+    (10, 0) @PIN(terminal=5, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+
+  /* a b y (vp) (vn); 2-input XNOR gate */
+  $XNOR_2INPUT = @DEFINE-SYMBOL(box=[-10, -4, 10, 4]) {
+    @LINE {(-3.4, -2) (-10, -2)};
+    @LINE {(-3.4, 2) (-10, 2)};
+    @LINE {(0.4, -3) (-2.8, -3)};
+    @LINE {(0.4, 3) (-2.8, 3)};
+    (6, 0) @CIRCLE(radius=0.5);
+    @LINE {(6.5, 0) (10, 0)};
+    @ARC {(-2.8, -3) (-2, 0) (-2.8, 3)};
+    @ARC {(-3.8, -3) (-3, 0) (-3.8, 3)};
+    @ARC {(0.4, -3) (3.4, -2.2) (5.5, 0)};
+    @ARC {(5.5, 0) (3.4, 2.2) (0.4, 3)};
+    (-10, 2) @PIN(terminal=1, direction="left");
+    (-10, -2) @PIN(terminal=2, direction="left");
+    (10, 0) @PIN(terminal=3, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+
+  /* a b c y (vp) (vn); 3-input XNOR gate */
+  $XNOR_3INPUT = @DEFINE-SYMBOL(box=[-10, -4, 10, 4]) {
+    @LINE {(-3.4, -2) (-10, -2)};
+    @LINE {(-3.4, 2) (-10, 2)};
+    @LINE {(0.4, -3) (-2.8, -3)};
+    @LINE {(0.4, 3) (-2.8, 3)};
+    (6, 0) @CIRCLE(radius=0.5);
+    @LINE {(6.5, 0) (10, 0)};
+    @ARC {(-2.8, -3) (-2, 0) (-2.8, 3)};
+    @ARC {(-3.8, -3) (-3, 0) (-3.8, 3)};
+    @ARC {(0.4, -3) (3.4, -2.2) (5.5, 0)};
+    @ARC {(5.5, 0) (3.4, 2.2) (0.4, 3)};
+    @LINE {(-10, 0) (-3, 0)};
+    (-10, 2) @PIN(terminal=1, direction="left");
+    (-10, 0) @PIN(terminal=2, direction="left");
+    (-10, -2) @PIN(terminal=3, direction="left");
+    (10, 0) @PIN(terminal=4, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+
+  /* a b c d y (vp) (vn); 4-input XNOR gate */
+  $XNOR_4INPUT = @DEFINE-SYMBOL(box=[-10, -4, 10, 4]) {
+    @LINE {(-3.4, -2) (-10, -2)};
+    @LINE {(-3.4, 2) (-10, 2)};
+    @LINE {(0.4, -3) (-2.8, -3)};
+    @LINE {(0.4, 3) (-2.8, 3)};
+    (6, 0) @CIRCLE(radius=0.5);
+    @LINE {(6.5, 0) (10, 0)};
+    @ARC {(-2.8, -3) (-2, 0) (-2.8, 3)};
+    @ARC {(-3.8, -3) (-3, 0) (-3.8, 3)};
+    @ARC {(0.4, -3) (3.4, -2.2) (5.5, 0)};
+    @ARC {(5.5, 0) (3.4, 2.2) (0.4, 3)};
+    @LINE {(-10, 1) (-3.2, 1)};
+    @LINE {(-10, -1) (-3.2, -1)};
+    (-10, 2) @PIN(terminal=1, direction="left");
+    (-10, 1) @PIN(terminal=2, direction="left");
+    (-10, -1) @PIN(terminal=3, direction="left");
+    (-10, -2) @PIN(terminal=4, direction="left");
+    (10, 0) @PIN(terminal=5, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+
+  /* a y (vp) (vn); buffer */
+  $BUFFER = @DEFINE-SYMBOL(box=[-10, -3, 10, 3]) {
+    @LINE {(-4, 3) (3.5, 0) (-4, -3) (-4, 3)};
+    @LINE {(-10, 0) (-4, 0)};
+    @LINE {(3.5, 0) (10, 0)};
+    (-10, 0) @PIN(terminal=1, direction="left");
+    (10, 0) @PIN(terminal=2, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+
+  /* a y (vp) (vn); inverter */
+  $INVERTER = @DEFINE-SYMBOL(box=[-10, -3, 10, 3]) {
+    @LINE {(-4, 3) (3.5, 0) (-4, -3) (-4, 3)};
+    (4, 0) @CIRCLE(radius=0.5);
+    @LINE {(-10, 0) (-4, 0)};
+    @LINE {(4.5, 0) (10, 0)};
+    (-10, 0) @PIN(terminal=1, direction="left");
+    (10, 0) @PIN(terminal=2, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+
+  /* d ck q qb (vp) (vn); D flip-flop */
+  $D_FLIP_FLOP = @DEFINE-SYMBOL(box=[-8, -5, 8, 5]) {
+    @RECTANGLE {(-4, -5) (4, 5)};
+    @LINE {(-4, -3) (-8, -3)};
+    @LINE {(5, -3) (8, -3)};
+    @LINE {(4, 3) (8, 3)};
+    @LINE {(-4, 3) (-8, 3)};
+    (4.5, -3) @CIRCLE(radius=0.5);
+    (-8, 3) @PIN(terminal=1, direction="left");
+    (-8, -3) @PIN(terminal=2, direction="left");
+    (8, 3) @PIN(terminal=3, direction="right");
+    (8, -3) @PIN(terminal=4, direction="right");
+    (2.4, 2.6) @TEXT("Q", halign="middle", valign="baseline", size=1);
+    (-3, 2.6) @TEXT("D", halign="middle", valign="baseline", size=1);
+    (2.6, -3.6) @TEXT("Q-", halign="middle", valign="baseline", size=1);
+    (-2.2, -3.4) @TEXT("CLK", halign="middle", valign="baseline", size=1);
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(-3, 6);
+    ? @TEXT("${value}", key="value", halign="middle") => @PLACE(0, 1.2)
+  };
+
+  /* d ck q (vp) (vn); D flip-flop (Q output only) */
+  $D_FLIP_FLOP_Q_ONLY = @DEFINE-SYMBOL(box=[-8, -5, 8, 5]) {
+    @RECTANGLE {(-4, -5) (4, 5)};
+    @LINE {(-4, 3) (-8, 3)};
+    @LINE {(-4, -3) (-8, -3)};
+    @LINE {(4, 0) (8, 0)};
+    (-8, 3) @PIN(terminal=1, direction="left");
+    (-8, -3) @PIN(terminal=2, direction="left");
+    (8, 0) @PIN(terminal=3, direction="right");
+    (2.4, -0.4) @TEXT("Q", halign="middle", valign="baseline", size=1);
+    (-3, 2.6) @TEXT("D", halign="middle", valign="baseline", size=1);
+    (-2.2, -3.4) @TEXT("CLK", halign="middle", valign="baseline", size=1);
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(-3, 6);
+    ? @TEXT("${value}", key="value", halign="middle") => @PLACE(0, 1.2)
+  };
+
+  /* d ck rst q qb (vp) (vn); D flip-flop with reset */
+  $D_FLIP_FLOP_WITH_RESET = @DEFINE-SYMBOL(box=[-8, -6, 8, 5]) {
+    @RECTANGLE {(-4, -5) (4, 5)};
+    @LINE {(-4, -3) (-8, -3)};
+    @LINE {(5, -3) (8, -3)};
+    @LINE {(4, 3) (8, 3)};
+    @LINE {(-4, 3) (-8, 3)};
+    (4.5, -3) @CIRCLE(radius=0.5);
+    @LINE {(0, -5) (0, -6)};
+    (-8, 3) @PIN(terminal=1, direction="left");
+    (-8, -3) @PIN(terminal=2, direction="left");
+    (0, -6) @PIN(terminal=3, direction="down");
+    (8, 3) @PIN(terminal=4, direction="right");
+    (8, -3) @PIN(terminal=5, direction="right");
+    (2.4, 2.6) @TEXT("Q", halign="middle", valign="baseline", size=1);
+    (-3, 2.6) @TEXT("D", halign="middle", valign="baseline", size=1);
+    (2.6, -3.6) @TEXT("Q-", halign="middle", valign="baseline", size=1);
+    (-2.2, -3.4) @TEXT("CLK", halign="middle", valign="baseline", size=1);
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(-3, 6);
+    ? @TEXT("${value}", key="value", halign="middle") => @PLACE(0, 1.2);
+    (0, -4.6) @TEXT("R", halign="middle", valign="baseline", size=0.9)
+  };
+
+  /* draws $DELAY_CELL; a y */
+  $DELAY_CELL_SYMBOL = @DEFINE-SYMBOL(box=[-11, -2, 11, 2]) {
+    @LINE {(-11, 0) (-7, 0)};
+    @LINE {(11, 0) (7, 0)};
+    @RECTANGLE {(-7, -2) (7, 2)};
+    (-11, 0) @PIN(terminal=1, direction="left");
+    (11, 0) @PIN(terminal=2, direction="right");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(9, 2);
+    (0, 0) @TEXT("delay", halign="middle", valign="middle", size=1)
+  };
+
+  /* a b y (vp) (vn); adder */
+  $ADDER = @DEFINE-SYMBOL(box=[-4, -4, 4, 2]) {
+    @LINE {(0, 1) (0, -1)};
+    @LINE {(-1, 0) (1, 0)};
+    (0, 0) @CIRCLE(radius=2);
+    @LINE {(-4, 0) (-2, 0)};
+    @LINE {(0, -4) (0, -2)};
+    @LINE {(2, 0) (4, 0)};
+    (-4, 0) @PIN(terminal=1, direction="left");
+    (0, -4) @PIN(terminal=2, direction="down");
+    (4, 0) @PIN(terminal=3, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 2.6);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(2.2, -2.5)
+  };
+
+  /* a b y (vp) (vn); multiplier */
+  $MULTIPLIER = @DEFINE-SYMBOL(box=[-4, -4, 4, 2]) {
+    @LINE {(-1, -1) (1, 1)};
+    @LINE {(-1, 1) (1, -1)};
+    (0, 0) @CIRCLE(radius=2);
+    @LINE {(-4, 0) (-2, 0)};
+    @LINE {(0, -4) (0, -2)};
+    @LINE {(2, 0) (4, 0)};
+    (-4, 0) @PIN(terminal=1, direction="left");
+    (0, -4) @PIN(terminal=2, direction="down");
+    (4, 0) @PIN(terminal=3, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 2.6);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(2.2, -2.5)
+  };
+
+  /* draws $INTEGRATOR; a y */
+  $INTEGRATOR_SYMBOL = @DEFINE-SYMBOL(box=[-8, -4, 8, 4]) {
+    @RECTANGLE {(-4, -4) (4, 4)};
+    @LINE {(-8, 0) (-4, 0)};
+    @LINE {(4, 0) (8, 0)};
+    @LINE {(-0.2, -1.4) (0.2, 1.4)};
+    @ARC {(-1.0, -1.4) (-0.6, -1.9) (-0.2, -1.4)};
+    @ARC {(1.0, 1.4) (0.6, 1.9) (0.2, 1.4)};
+    (-8, 0) @PIN(terminal=1, direction="left");
+    (8, 0) @PIN(terminal=2, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 4.6)
+  };
+
+  /* draws $DISCRETE_TIME_INTEGRATOR; a y */
+  $DISCRETE_TIME_INTEGRATOR_SYMBOL = @DEFINE-SYMBOL(box=[-8, -4, 8, 4]) {
+    @RECTANGLE {(-4, -4) (4, 4)};
+    @LINE {(-8, 0) (-4, 0)};
+    @LINE {(4, 0) (8, 0)};
+    (-8, 0) @PIN(terminal=1, direction="left");
+    (8, 0) @PIN(terminal=2, direction="right");
+    ? @TEXT("\frac{\textit{z}^{-1}}{1-\textit{z}^{-1}}", key="formula", halign="middle", valign="middle", size=1.1) => @PLACE(0, 0);
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 4.6)
+  };
+
+  /* draws $QUANTIZER; a y */
+  $QUANTIZER_SYMBOL = @DEFINE-SYMBOL(box=[-8, -4, 8, 4]) {
+    @RECTANGLE {(-4, -4) (4, 4)};
+    @LINE {(8, 0) (4, 0)};
+    @LINE {(-8, 0) (-4, 0)};
+    (-8, 0) @PIN(terminal=1, direction="left");
+    (8, 0) @PIN(terminal=2, direction="right");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(4, 4);
+    ? @TEXT("${value}", key="value", halign="middle") => @PLACE(0, 1.2)
+  };
+
+  /* draws $UNIT_DELAY; a y */
+  $UNIT_DELAY_SYMBOL = @DEFINE-SYMBOL(box=[-6, -3, 6, 3]) {
+    @RECTANGLE {(-3, -3) (3, 3)};
+    @LINE {(-6, 0) (-3, 0)};
+    @LINE {(3, 0) (6, 0)};
+    (-6, 0) @PIN(terminal=1, direction="left");
+    (6, 0) @PIN(terminal=2, direction="right");
+    ? @TEXT("\textit{z}^{-1}", key="formula", halign="middle", valign="middle", size=1.2) => @PLACE(0, 0);
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.6)
+  };
+}
+
+/* ---------------------------------------------------------------- Universal schematic symbols (44 symbols) */
+@RNL {
+  /* 4-terminal voltage-controlled resistor */
+  $VCRES = @DEFINE-SYMBOL(box=[-2.5, -4, 1, 4]) {
+    @LINE {(0.5, 1.5) (0, 1.5)};
+    @LINE {(1, -2) (-1, -2)};
+    @LINE {(0.5, 1.5) (0.5, 1)};
+    @LINE {(-1, -4) (-1, -3)};
+    @LINE {(1, 2) (-1, 2)};
+    @LINE {(-1, 2.5) (-1, 4)};
+    @LINE {(-1, -3) (-1, -1.8) (-2, -1.5) (0, -0.9) (-2, -0.3) (0, 0.3) (-2, 0.9) (0, 1.5) (-1, 1.8) (-1, 3)};
+    @LINE {(-2.5, -1.5) (0.5, 1.5)};
+    (-1, 4) @PIN(terminal=1, direction="up");
+    (-1, -4) @PIN(terminal=2, direction="down");
+    (1, 2) @PIN(terminal=3, direction="right");
+    (1, -2) @PIN(terminal=4, direction="right");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 3);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(-0.5, 1)
+  };
+
+  /* 4-terminal voltage-controlled capacitor */
+  $VCCAP = @DEFINE-SYMBOL(box=[-2.5, -4, 1, 4]) {
+    @LINE {(-1, 2) (-1, 2.5)};
+    @LINE {(-1, -2) (-1, -3)};
+    @LINE {(-1, 0) (-1, -2)};
+    @LINE {(-1, 1) (0, 1)};
+    @LINE {(0.5, 1.5) (0, 1.5)};
+    @LINE {(1, -2) (-1, -2)};
+    @LINE {(0.5, 1.5) (0.5, 1)};
+    @LINE {(-1, -4) (-1, -3)};
+    @LINE {(1, 2) (-1, 2)};
+    @LINE {(-1, 2.5) (-1, 4)};
+    @LINE {(-1, 2) (-1, 1) (-2, 1)};
+    @LINE {(-2.5, -1.5) (0.5, 1.5)};
+    @ARC {(0, -0.6) (-1, -0.1) (-2, -0.6)};
+    (-1, 4) @PIN(terminal=1, direction="up");
+    (-1, -4) @PIN(terminal=2, direction="down");
+    (1, 2) @PIN(terminal=3, direction="right");
+    (1, -2) @PIN(terminal=4, direction="right");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 3);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(-0.5, 1)
+  };
+
+  /* 4-terminal ideal balun transformer */
+  $IDEAL_BALUN = @DEFINE-SYMBOL(box=[-3, -3, 3, 3]) {
+    @LINE {(1.2, 3) (3, 3)};
+    @LINE {(1.2, 0.7) (2.1, 0.7) (2.1, -2.1) (-3, -2.1) (-3, -3)};
+    @LINE {(-1.2, 3) (-3, 3)};
+    @LINE {(-1.2, 0.6) (-1.7, 0.6) (-2.1, 1) (-2.1, 3)};
+    @LINE {(1.2, 0.8) (1.2, 0.6)};
+    @LINE {(-0.2, 2.8) (-0.2, 1)};
+    @LINE {(1.2, -1.6) (3, -1.6) (3, -3)};
+    @LINE {(-2.1, -1.6) (-0.8, -3) (-0.4, -3)};
+    @LINE {(-1.2, 0.8) (-1.7, 0.8) (-2.1, 0.5) (-2.1, -1.6) (-1.2, -1.6)};
+    @LINE {(0.2, 2.8) (0.2, 1)};
+    @LINE {(-0.2, 0.4) (-0.2, -1.4)};
+    @LINE {(0.2, 0.4) (0.2, -1.4)};
+    @ARC {(1.2, 3) (0.6, 2.4) (1.2, 1.8)};
+    @ARC {(1.2, 2) (0.6, 1.4) (1.2, 0.8)};
+    @ARC {(1.2, 0.6) (0.6, 0) (1.2, -0.6)};
+    @ARC {(1.2, -0.4) (0.6, -1) (1.2, -1.6)};
+    @ARC {(1.2, -0.6) (1.6, -0.5) (1.2, -0.4)};
+    @ARC {(-1.2, -1.6) (-0.6, -1) (-1.2, -0.4)};
+    @ARC {(1.2, 1.8) (1.6, 1.9) (1.2, 2)};
+    @ARC {(-1.2, -0.6) (-0.6, 0) (-1.2, 0.6)};
+    @ARC {(-1.2, 0.8) (-0.6, 1.4) (-1.2, 2)};
+    @ARC {(-1.2, 1.8) (-0.6, 2.4) (-1.2, 3)};
+    @ARC {(-1.2, 2) (-1.6, 1.9) (-1.2, 1.8)};
+    @ARC {(-1.2, -0.4) (-1.6, -0.5) (-1.2, -0.6)};
+    (3, 3) @PIN(terminal=1, direction="right");
+    (3, -3) @PIN(terminal=2, direction="down");
+    (-3, 3) @PIN(terminal=3, direction="left");
+    (-3, -3) @PIN(terminal=4, direction="down");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(4, 1)
+  };
+
+  /* AC / sinusoidal voltage source */
+  $VSIN = @DEFINE-SYMBOL(box=[-2, -3, 2, 3]) {
+    @LINE {(0, 0.2) (0, 0.8)};
+    (0, 0) @CIRCLE(radius=1);
+    @LINE {(0.3, -0.5) (-0.3, -0.5)};
+    @LINE {(0, 1) (0, 3)};
+    @LINE {(0, -1) (0, -3)};
+    @LINE {(0.3, 0.5) (-0.3, 0.5)};
+    @ARC {(-2.3, 0.1) (-1.9, -0.3) (-1.5, 0.1)};
+    @ARC {(-2.3, 0.1) (-2.7, 0.5) (-3.1, 0.1)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (0, -3) @PIN(terminal=2, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(1, 2);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(1.5, 0.5)
+  };
+
+  /* AC / sinusoidal current source */
+  $ISIN = @DEFINE-SYMBOL(box=[-2, -3, 2, 3]) {
+    @LINE {(0, -0.8) (0, 0.8)};
+    (0, 0) @CIRCLE(radius=1);
+    @LINE {(0, -1) (0, -3)};
+    @LINE {(0, 1) (0, 3)};
+    @LINE {(0, -0.8) (0.4, -0.3) (-0.4, -0.3) (0, -0.8)};
+    @ARC {(-2.3, 0.1) (-1.9, -0.3) (-1.5, 0.1)};
+    @ARC {(-2.3, 0.1) (-2.7, 0.5) (-3.1, 0.1)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (0, -3) @PIN(terminal=2, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(1, 2);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(1.5, 0.5)
+  };
+
+  /* pulse / digital bit-stream voltage source */
+  $VPULSE = @DEFINE-SYMBOL(box=[-2, -3, 2, 3]) {
+    @LINE {(0, 0.2) (0, 0.8)};
+    (0, 0) @CIRCLE(radius=1);
+    @LINE {(0.3, -0.5) (-0.3, -0.5)};
+    @LINE {(0, 1) (0, 3)};
+    @LINE {(0, -1) (0, -3)};
+    @LINE {(-3.1, -0.3) (-2.8, -0.3) (-2.8, 0.3) (-2.4, 0.3) (-2.4, -0.3) (-2, -0.3) (-2, 0.3) (-1.6, 0.3) (-1.6, -0.3) (-1.3, -0.3)};
+    @LINE {(0.3, 0.5) (-0.3, 0.5)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (0, -3) @PIN(terminal=2, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(1, 2);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(1.5, 0.5)
+  };
+
+  /* pulse / digital bit-stream current source */
+  $IPULSE = @DEFINE-SYMBOL(box=[-2, -3, 2, 3]) {
+    (0, 0) @CIRCLE(radius=1);
+    @LINE {(0, -1) (0, -3)};
+    @LINE {(0, 1) (0, 3)};
+    @LINE {(-3.1, -0.3) (-2.8, -0.3) (-2.8, 0.3) (-2.4, 0.3) (-2.4, -0.3) (-2, -0.3) (-2, 0.3) (-1.6, 0.3) (-1.6, -0.3) (-1.3, -0.3)};
+    @LINE {(0, -0.8) (0.4, -0.3) (-0.4, -0.3) (0, -0.8)};
+    @LINE {(0, -0.8) (0, 0.8)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (0, -3) @PIN(terminal=2, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(1, 2);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(1.5, 0.5)
+  };
+
+  /* piecewise-linear / step voltage source */
+  $VPWL = @DEFINE-SYMBOL(box=[-2, -3, 2, 3]) {
+    @LINE {(0, 0.2) (0, 0.8)};
+    (0, 0) @CIRCLE(radius=1);
+    @LINE {(0.3, -0.5) (-0.3, -0.5)};
+    @LINE {(0, 1) (0, 3)};
+    @LINE {(0, -1) (0, -3)};
+    @LINE {(0.3, 0.5) (-0.3, 0.5)};
+    @LINE {(-3.1, -0.3) (-2.6, 0.3) (-2.2, -0.3) (-1.8, 0.3) (-1.3, -0.3)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (0, -3) @PIN(terminal=2, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(1, 2);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(1.5, 0.5)
+  };
+
+  /* piecewise-linear / step current source */
+  $IPWL = @DEFINE-SYMBOL(box=[-2, -3, 2, 3]) {
+    @LINE {(0, -0.8) (0, 0.8)};
+    (0, 0) @CIRCLE(radius=1);
+    @LINE {(0, -1) (0, -3)};
+    @LINE {(0, 1) (0, 3)};
+    @LINE {(0, -0.8) (0.4, -0.3) (-0.4, -0.3) (0, -0.8)};
+    @LINE {(-3.1, -0.3) (-2.6, 0.3) (-2.2, -0.3) (-1.8, 0.3) (-1.3, -0.3)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (0, -3) @PIN(terminal=2, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(1, 2);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(1.5, 0.5)
+  };
+
+  /* differential-output 4-terminal VCVS */
+  $VCVSP = @DEFINE-SYMBOL(box=[-3.3, -4, 3.3, 4]) {
+    @LINE {(-1.8, -1) (-3, -1)};
+    @LINE {(-1.8, 1) (-3, 1)};
+    @LINE {(0, -1) (3, -1)};
+    @LINE {(0, 1) (3, 1)};
+    (0, 0) @CIRCLE(radius=1);
+    @RECTANGLE {(-1.8, -4) (1.8, 4)};
+    @LINE {(-1.8, -0.9) (-1.2, -0.9)};
+    @LINE {(-1.8, 1.1) (-1.2, 1.1)};
+    @LINE {(-1.5, 0.8) (-1.5, 1.4)};
+    @LINE {(-0.3, -0.5) (0.3, -0.5)};
+    @LINE {(-0.3, 0.5) (0.3, 0.5)};
+    @LINE {(0, 0.2) (0, 0.8)};
+    (3, 1) @PIN(terminal=1, direction="right");
+    (3, -1) @PIN(terminal=2, direction="right");
+    (-3, 1) @PIN(terminal=3, direction="left");
+    (-3, -1) @PIN(terminal=4, direction="left");
+    ? @TEXT("${value}", key="value", halign="end") => @PLACE(3.8, 4.4);
+    ? @TEXT("${name}", key="name", halign="end") => @PLACE(2.5, -4.2)
+  };
+
+  /* differential-output 4-terminal VCCS */
+  $VCCSP = @DEFINE-SYMBOL(box=[-3.3, -4, 3.3, 4]) {
+    @LINE {(0, 0.5) (0, -0.5)};
+    @LINE {(0, -0.5) (0.2, 0)};
+    @LINE {(0, -0.5) (-0.2, 0)};
+    @LINE {(-1.8, -1) (-3, -1)};
+    @LINE {(-1.8, 1) (-3, 1)};
+    @LINE {(0, -1) (3, -1)};
+    @LINE {(0, 1) (3, 1)};
+    (0, 0) @CIRCLE(radius=1);
+    @RECTANGLE {(-1.8, -4) (1.8, 4)};
+    @LINE {(-1.8, -0.9) (-1.2, -0.9)};
+    @LINE {(-1.8, 1.1) (-1.2, 1.1)};
+    @LINE {(-1.5, 0.8) (-1.5, 1.4)};
+    (3, 1) @PIN(terminal=1, direction="right");
+    (3, -1) @PIN(terminal=2, direction="right");
+    (-3, 1) @PIN(terminal=3, direction="left");
+    (-3, -1) @PIN(terminal=4, direction="left");
+    ? @TEXT("${value}", key="value", halign="end") => @PLACE(3.8, 4.4);
+    ? @TEXT("${name}", key="name", halign="end") => @PLACE(2.5, -4.2)
+  };
+
+  /* 2-terminal current probe / ammeter */
+  $IPROBE = @DEFINE-SYMBOL(box=[-2.5, 0, 2.5, 5]) {
+    @LINE {(1, 1) (1, 0)};
+    @LINE {(1.5, 1.5) (1, 1) (1, 2) (1.5, 1.5)};
+    @LINE {(-0.5, 1.5) (1, 1.5)};
+    @LINE {(-1, 1) (-1, 0)};
+    @LINE {(-1, 4) (0, 2.5)};
+    @LINE {(-1.5, 1) (2.5, 1)};
+    @LINE {(-1.5, 1) (-2.5, 1) (-2.5, 5) (2.5, 5) (2.5, 1)};
+    @ARC {(2, 1.8) (0, 2.4) (-2, 1.8)};
+    (-1, 0) @PIN(terminal=1, direction="down");
+    (1, 0) @PIN(terminal=2, direction="down");
+    (2, 4) @TEXT("A", halign="middle", valign="baseline", size=0.5);
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(2.5, 4.5);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(2.5, 3)
+  };
+
+  /* Schottky barrier diode */
+  $SCHOTTKY = @DEFINE-SYMBOL(box=[-3, -2, 3, 2]) {
+    @LINE {(3, 0) (0.5, 0)};
+    @LINE {(0.9, -0.8) (0.9, -0.9) (0.8, -1) (0.6, -1) (0.5, -0.9) (0.5, -0.8)};
+    @LINE {(0.5, -0.8) (0.5, 0.8)};
+    @LINE {(0.1, 0.8) (0.1, 0.9) (0.2, 1) (0.4, 1) (0.5, 0.9) (0.5, 0.8)};
+    @LINE {(-1, -1) (-1, 1) (0.5, 0) (-1, -1)};
+    @LINE {(-1, 0) (-3, 0)};
+    (-3, 0) @PIN(terminal=1, direction="left");
+    (3, 0) @PIN(terminal=2, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 1.5);
+    ? @TEXT("${model}", key="model", halign="middle") => @PLACE(0, -1.8)
+  };
+
+  /* 4-terminal silicon-controlled rectifier */
+  $SCR = @DEFINE-SYMBOL(box=[-2, -3, 2, 3]) {
+    @LINE {(-1, 1) (1, 1) (0, -0.5) (-1, 1)};
+    @LINE {(-1, -0.5) (1, -0.5)};
+    @LINE {(0, -3) (0, -0.5)};
+    @LINE {(-0.5, 1) (-2, 2.5) (-2, 3)};
+    @LINE {(0, 1) (0, 3)};
+    @LINE {(0.5, -0.5) (2, -2) (2, -3)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (-2, 3) @PIN(terminal=2, direction="up");
+    (2, -3) @PIN(terminal=3, direction="down");
+    (0, -3) @PIN(terminal=4, direction="down");
+    ? @TEXT("${name}", key="name", halign="end") => @PLACE(-1.5, 1);
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(2, 1.5)
+  };
+
+  /* 3-terminal thyristor */
+  $THYRISTOR = @DEFINE-SYMBOL(box=[-8, -8, 4, 8]) {
+    @RECTANGLE {(-4, -4) (4, 4)};
+    @LINE {(0, -8) (0, -4)};
+    @LINE {(0, 8) (0, 4)};
+    @LINE {(-8, 0) (-4, 0)};
+    (0, 8) @PIN(terminal=1, direction="up");
+    (0, -8) @PIN(terminal=2, direction="down");
+    (-8, 0) @PIN(terminal=3, direction="left");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(4, 4);
+    ? @TEXT("${value}", key="value", halign="middle") => @PLACE(0, 1.2)
+  };
+
+  /* 4-terminal NPN bipolar transistor with substrate */
+  $NPN4 = @DEFINE-SYMBOL(box=[-3, -3, 3, 3.1]) {
+    @LINE {(-1, -1.5) (-1, 1.5)};
+    @LINE {(1, 3) (1, 1.5) (-1, 0.7)};
+    @LINE {(1, -3) (1, -1.5) (-1, -0.7)};
+    @LINE {(0.5, -0.5) (1, -1.5) (-0.1, -2)};
+    @LINE {(-3, 0) (-1, 0)};
+    @LINE {(0.5, -0.8) (0.5, 0.8)};
+    @LINE {(0.5, 0) (3, 0)};
+    (1, 3) @PIN(terminal=1, direction="up");
+    (-3, 0) @PIN(terminal=2, direction="left");
+    (1, -3) @PIN(terminal=3, direction="down");
+    (3, 0) @PIN(terminal=4, direction="right");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(1.6, 2);
+    ? @TEXT("${model}", key="model", halign="start") => @PLACE(1.6, -2)
+  };
+
+  /* 4-terminal N-channel MESFET */
+  $NMES4 = @DEFINE-SYMBOL(box=[-4, -3, 0, 3]) {
+    @LINE {(-4, 0) (-2, 0)};
+    @LINE {(-1.5, -1.5) (-2, -1.5) (-2, 1.5) (-1.5, 1.5)};
+    @LINE {(-2, 0) (-3, -0.5) (-3, 0.5) (-2, 0)};
+    @LINE {(0, 3) (0, 1.5) (-1.5, 1.5) (-1.5, -1.5) (0, -1.5) (0, -3)};
+    @LINE {(-2, 0) (0, 0)};
+    (0, 3) @PIN(terminal=1, direction="up");
+    (-4, 0) @PIN(terminal=2, direction="left");
+    (0, -3) @PIN(terminal=3, direction="down");
+    (0, 0) @PIN(terminal=4, direction="right");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 2);
+    ? @TEXT("${model}", key="model", halign="start") => @PLACE(0.5, -1.8)
+  };
+
+  /* SP3T switch */
+  $SP3TSWITCH = @DEFINE-SYMBOL(box=[-4, -2.2, 4, 2.2]) {
+    @LINE {(1, 0) (4, 0)};
+    (0.5, 2) @CIRCLE(radius=0.2);
+    @LINE {(4, 2) (0.5, 2)};
+    (0.5, -2) @CIRCLE(radius=0.2);
+    @LINE {(-1, 0) (-4, 0)};
+    (1, 0) @CIRCLE(radius=0.2);
+    (-1, 0) @CIRCLE(radius=0.2);
+    @LINE {(-1, 0) (0.5, 2)};
+    @LINE {(4, -2) (0.5, -2)};
+    (-4, 0) @PIN(terminal=1, direction="left");
+    (4, 2) @PIN(terminal=2, direction="right");
+    (4, 0) @PIN(terminal=3, direction="right");
+    (4, -2) @PIN(terminal=4, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.5);
+    ? @TEXT("${value}", key="value", halign="middle") => @PLACE(0, -3.5)
+  };
+
+  /* SP4T switch */
+  $SP4TSWITCH = @DEFINE-SYMBOL(box=[-4, -3, 4, 3]) {
+    @LINE {(1, 1) (4, 1)};
+    (0.5, 3) @CIRCLE(radius=0.2);
+    @LINE {(4, 3) (0.5, 3)};
+    (1, -1) @CIRCLE(radius=0.2);
+    @LINE {(-4, 0) (-1, 0)};
+    (0.5, -3) @CIRCLE(radius=0.2);
+    (1, 1) @CIRCLE(radius=0.2);
+    (-1, 0) @CIRCLE(radius=0.2);
+    @LINE {(-1, 0) (1, 1)};
+    @LINE {(4, -3) (0.5, -3)};
+    @LINE {(4, -1) (1, -1)};
+    (-4, 0) @PIN(terminal=1, direction="left");
+    (4, 3) @PIN(terminal=2, direction="right");
+    (4, 1) @PIN(terminal=3, direction="right");
+    (4, -1) @PIN(terminal=4, direction="right");
+    (4, -3) @PIN(terminal=5, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.5);
+    ? @TEXT("${value}", key="value", halign="middle") => @PLACE(0, -3.5)
+  };
+
+  /* 6-terminal operational amplifier with supplies and reference */
+  $OPAMP_6TERM = @DEFINE-SYMBOL(box=[-8, -7, 8, 7]) {
+    @LINE {(-2.5, 1.6) (-2.5, 2.4)};
+    @LINE {(-4, 4) (4, 0) (-4, -4) (-4, 4)};
+    @LINE {(-3, 2) (-2, 2)};
+    @LINE {(-3, -2) (-2, -2)};
+    @LINE {(-2, -7) (-2, -3)};
+    @LINE {(0, -6) (0, -2)};
+    @LINE {(-2, 7) (-2, 3)};
+    @LINE {(8, 0) (4, 0)};
+    @LINE {(-8, -2) (-4, -2)};
+    @LINE {(-8, 2) (-4, 2)};
+    (8, 0) @PIN(terminal=1, direction="right");
+    (0, -6) @PIN(terminal=2, direction="down");
+    (-8, 2) @PIN(terminal=3, direction="left");
+    (-8, -2) @PIN(terminal=4, direction="left");
+    (-2, 7) @PIN(terminal=5, direction="up");
+    (-2, -7) @PIN(terminal=6, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 5.4);
+    ? @TEXT("${value}", key="value", halign="middle") => @PLACE(8, 2.2)
+  };
+
+  /* differential amplifier with deadband */
+  $DEADBAND_DIFFAMP = @DEFINE-SYMBOL(box=[-8, -4, 8, 4]) {
+    @LINE {(-2.7, -1.6) (-1.9, -0.5) (-0.3, -0.5) (0.5, 0.7)};
+    @LINE {(-3.5, -2) (-2.5, -2)};
+    @LINE {(-3.5, 2) (-2.5, 2)};
+    @LINE {(-3, 1.6) (-3, 2.4)};
+    @LINE {(-4, 4) (4, 0) (-4, -4) (-4, 4)};
+    @LINE {(8, 0) (4, 0)};
+    @LINE {(-8, -2) (-4, -2)};
+    @LINE {(-8, 2) (-4, 2)};
+    (-8, 2) @PIN(terminal=1, direction="left");
+    (-8, -2) @PIN(terminal=2, direction="left");
+    (8, 0) @PIN(terminal=3, direction="right");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(-7, 5);
+    ? @TEXT("${value}", key="value", halign="middle") => @PLACE(0, 1.2)
+  };
+
+  /* limiting differential amplifier */
+  $LIMITING_DIFFAMP = @DEFINE-SYMBOL(box=[-8, -4, 8, 4]) {
+    @LINE {(-4, 4) (4, 0) (-4, -4) (-4, 4)};
+    @LINE {(-2.5, 1.6) (-2.5, 2.4)};
+    @LINE {(-3, 2) (-2, 2)};
+    @LINE {(-3, -2) (-2, -2)};
+    @LINE {(-2.6, -1.4) (-1.4, -1.4) (0.4, 0.4) (1.6, 0.4)};
+    @LINE {(8, 0) (4, 0)};
+    @LINE {(-8, 1) (-4, 1)};
+    @LINE {(-8, -1) (-4, -1)};
+    (-8, 1) @PIN(terminal=1, direction="left");
+    (-8, -1) @PIN(terminal=2, direction="left");
+    (8, 0) @PIN(terminal=3, direction="right");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(-2, 4.4);
+    ? @TEXT("${value}", key="value", halign="middle") => @PLACE(0, 1.2)
+  };
+
+  /* voltage-controlled variable-gain differential amplifier */
+  $VC_VG_DIFFAMP = @DEFINE-SYMBOL(box=[-8, -7.1, 8, 7]) {
+    @LINE {(-4, 4) (4, 0) (-4, -4) (-4, 4)};
+    @LINE {(-3, -2) (-2, -2)};
+    @LINE {(-3, 2) (-2, 2)};
+    @LINE {(-2.5, 1.6) (-2.5, 2.4)};
+    @LINE {(-2, -3) (-2, -7)};
+    @LINE {(-2, 7) (-2, 3)};
+    @LINE {(8, 0) (4, 0)};
+    @LINE {(-8, -2) (-4, -2)};
+    @LINE {(-8, 2) (-4, 2)};
+    (-8, 2) @PIN(terminal=1, direction="left");
+    (-8, -2) @PIN(terminal=2, direction="left");
+    (-2, 7) @PIN(terminal=3, direction="up");
+    (-2, -7) @PIN(terminal=4, direction="down");
+    (8, 0) @PIN(terminal=5, direction="right");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.8, 2.8);
+    ? @TEXT("${value}", key="value", halign="middle") => @PLACE(7.7, 6.6)
+  };
+
+  /* 5-terminal variable-gain amplifier */
+  $VARIABLE_GAIN_AMPLIFIER = @DEFINE-SYMBOL(box=[-8, -5, 8, 5]) {
+    @LINE {(-3.5, -1.1) (-2.8, -1.1) (-2.2, 0.9) (-1.5, 0.9)};
+    @LINE {(-4, 2) (-8, 2)};
+    @LINE {(-4, -2) (-8, -2)};
+    @LINE {(0, 5) (0, 2)};
+    @LINE {(0, -2) (0, -5)};
+    @LINE {(8, 0) (4, 0)};
+    @LINE {(-4, 4) (4, 0) (-4, -4) (-4, 4)};
+    @LINE {(-3.2, 2) (-2.6, 2)};
+    @LINE {(-2.9, 1.7) (-2.9, 2.3)};
+    @LINE {(-3.2, -2) (-2.6, -2)};
+    (-8, 2) @PIN(terminal=1, direction="left");
+    (-8, -2) @PIN(terminal=2, direction="left");
+    (0, 5) @PIN(terminal=3, direction="up");
+    (0, -5) @PIN(terminal=4, direction="down");
+    (8, 0) @PIN(terminal=5, direction="right");
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(3, -2);
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.6, 3.2)
+  };
+
+  /* differentiator block d(vin)/dt */
+  $DIFFERENTIATOR = @DEFINE-SYMBOL(box=[-8, -5, 8, 5]) {
+    @LINE {(-4, -4) (-4, 4) (4, 4) (4, -4) (-4, -4)};
+    @LINE {(8, 0) (4, 0)};
+    @LINE {(-4, 0) (-8, 0)};
+    (-8, 0) @PIN(terminal=1, direction="left");
+    (8, 0) @PIN(terminal=2, direction="right");
+    ? @TEXT("\frac{d}{d\textit{t}}", key="formula", halign="middle", valign="middle", size=1.1) => @PLACE(0, 0);
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 4.6)
+  };
+
+  /* analog divider */
+  $DIVIDER = @DEFINE-SYMBOL(box=[-4, -4, 5, 4]) {
+    @LINE {(-1, 0) (1, 0)};
+    (0, 0) @CIRCLE(radius=2);
+    @LINE {(-4, 4) (0, 4) (0, 2)};
+    @LINE {(-4, -4) (0, -4) (0, -2)};
+    (0, 1) @CIRCLE(radius=0.2);
+    @LINE {(2, 0) (5, 0)};
+    (0, -1) @CIRCLE(radius=0.2);
+    (-4, 4) @PIN(terminal=1, direction="left");
+    (-4, -4) @PIN(terminal=2, direction="left");
+    (5, 0) @PIN(terminal=3, direction="right");
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(3, -2);
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 3.1)
+  };
+
+  /* analog subtractor */
+  $SUBTRACTOR = @DEFINE-SYMBOL(box=[-4, -4, 5, 4]) {
+    @LINE {(-4, 4) (0, 4) (0, 2)};
+    @LINE {(-1.2, -3) (-0.4, -3)};
+    @LINE {(-4, -4) (0, -4) (0, -2)};
+    @LINE {(-1, 0) (1, 0)};
+    (0, 0) @CIRCLE(radius=2);
+    @LINE {(2, 0) (5, 0)};
+    @LINE {(-1.2, 3) (-0.4, 3)};
+    @LINE {(-0.8, 2.6) (-0.8, 3.4)};
+    (-4, 4) @PIN(terminal=1, direction="left");
+    (-4, -4) @PIN(terminal=2, direction="left");
+    (5, 0) @PIN(terminal=3, direction="right");
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(2, -3);
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 3.1)
+  };
+
+  /* analog multiplexer */
+  $MULTIPLEXER = @DEFINE-SYMBOL(box=[-8, -10, 8, 10]) {
+    (-0.8, 0.9) @CIRCLE(radius=0.1);
+    (-0.8, 2.9) @CIRCLE(radius=0.1);
+    @LINE {(-4, -4) (-8, -4)};
+    @LINE {(0.4, 2) (-0.7, 2.8)};
+    @LINE {(0, 10) (0, 6)};
+    @LINE {(8, 0) (4, 0)};
+    @LINE {(0, -6) (0, -10)};
+    (0.5, 1.9) @CIRCLE(radius=0.1);
+    (-0.8, 1.9) @CIRCLE(radius=0.1);
+    @LINE {(-4, 4) (-8, 4)};
+    @LINE {(-4, 0) (-8, 0)};
+    @LINE {(-4, -6) (-4, 6) (4, 6) (4, -6) (-4, -6)};
+    @LINE {(-0.7, 2.8) (-0.6, 2.6)};
+    @LINE {(-0.7, 2.8) (-0.5, 2.8)};
+    @LINE {(-0.2, 1.9) (-0.1, 2.1)};
+    @LINE {(-0.2, 1.9) (-0.3, 2.1)};
+    @LINE {(-0.9, 2.9) (-1.2, 2.9)};
+    @LINE {(-0.9, 1.9) (-1.2, 1.9)};
+    @LINE {(-0.9, 0.9) (-1.2, 0.9)};
+    @LINE {(0.9, 1.9) (0.6, 1.9)};
+    @ARC {(1.2, 1.9) (0.5, 2.6) (-0.2, 1.9)};
+    (-8, 4) @PIN(terminal=1, direction="left");
+    (-8, 0) @PIN(terminal=2, direction="left");
+    (-8, -4) @PIN(terminal=3, direction="left");
+    (0, 10) @PIN(terminal=4, direction="up");
+    (0, -10) @PIN(terminal=5, direction="down");
+    (8, 0) @PIN(terminal=6, direction="right");
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(5, -5);
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(2.8, 6.8)
+  };
+
+  /* voltage-controlled oscillator */
+  $VCO = @DEFINE-SYMBOL(box=[-4, -4, 5, 4]) {
+    (0, 0) @CIRCLE(radius=2);
+    @LINE {(-4, 4) (0, 4) (0, 2)};
+    @LINE {(-4, -4) (0, -4) (0, -2)};
+    @LINE {(2, 0) (5, 0)};
+    (-4, 4) @PIN(terminal=1, direction="left");
+    (-4, -4) @PIN(terminal=2, direction="left");
+    (5, 0) @PIN(terminal=3, direction="right");
+    ? @TEXT("${value}", key="value", halign="start") => @PLACE(3, -2);
+    (0, 0) @TEXT("VCO", halign="middle", valign="middle", size=0.8);
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(0.5, 3.1)
+  };
+
+  /* clocked JK flip-flop */
+  $JK_FF = @DEFINE-SYMBOL(box=[-8, -5, 8, 5]) {
+    @RECTANGLE {(-4, -5) (4, 5)};
+    (4.5, -3) @CIRCLE(radius=0.5);
+    @LINE {(8, 3) (4, 3)};
+    @LINE {(5, -3) (8, -3)};
+    @LINE {(-8, 3) (-4, 3)};
+    @LINE {(-8, 0) (-4, 0)};
+    @LINE {(-8, -3) (-4, -3)};
+    (-8, -3) @PIN(terminal=1, direction="left");
+    (-8, 0) @PIN(terminal=2, direction="left");
+    (-8, 3) @PIN(terminal=3, direction="left");
+    (8, 3) @PIN(terminal=4, direction="right");
+    (8, -3) @PIN(terminal=5, direction="right");
+    (2.8, -3.4) @TEXT("Q-", halign="middle", valign="baseline", size=1);
+    (-3, -3.4) @TEXT("J", halign="middle", valign="baseline", size=1);
+    (-2.8, -0.6) @TEXT("K", halign="middle", valign="baseline", size=1);
+    (2.8, 2.4) @TEXT("Q", halign="middle", valign="baseline", size=1);
+    (-2.2, 2.4) @TEXT("CLK", halign="middle", valign="baseline", size=1);
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(-4, 6);
+    ? @TEXT("${value}", key="value", halign="middle") => @PLACE(0, 2.2)
+  };
+
+  /* 3-port RF mixer */
+  $MIXER = @DEFINE-SYMBOL(box=[-8, -4, 8, 8.2]) {
+    @LINE {(-3, 1.2) (3, 6.8)};
+    @LINE {(-3, 6.8) (3, 1.2)};
+    (0, 4) @CIRCLE(radius=4.2);
+    @LINE {(0, -0.2) (0, -4)};
+    @LINE {(8, 4) (4.2, 4)};
+    @LINE {(-8, 4) (-4.2, 4)};
+    (-8, 4) @PIN(terminal=1, direction="left");
+    (0, -4) @PIN(terminal=2, direction="down");
+    (8, 4) @PIN(terminal=3, direction="right");
+    ? @TEXT("${name}", key="name", halign="end") => @PLACE(7.5, 7.2)
+  };
+
+  /* 1-port RF oscillator */
+  $OSC = @DEFINE-SYMBOL(box=[-4.2, -12.2, 4.2, 0]) {
+    @LINE {(0, -3.8) (0, 0)};
+    (0, -8) @CIRCLE(radius=4.2);
+    @ARC {(0, -8) (-1.5, -5) (-3, -8)};
+    @ARC {(0, -8) (1.5, -11) (3, -8)};
+    (0, 0) @PIN(terminal=1, direction="up");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(-5, -3.3)
+  };
+
+  /* 4-port 90-degree quadrature hybrid */
+  $QUADRATURE = @DEFINE-SYMBOL(box=[-4.2, -8, 4.2, 8]) {
+    @LINE {(0, 4.2) (0, 8)};
+    @LINE {(0, -4.2) (0, -8)};
+    (0, 0) @CIRCLE(radius=4.2);
+    @LINE {(-2.7, -2.9) (-2.4, -2.7) (-2.2, -2.4) (-2, -2) (-1.8, -1.5) (-1.6, -0.5) (-1.6, 0)};
+    @LINE {(2.9, -3) (2.5, -2.9) (2.2, -2.6) (1.9, -2.2) (1.7, -1.7) (1.5, -1.1) (1.4, -0.4) (1.4, 0.1)};
+    @ARC {(0, 0) (-1.5, 3) (-3, 0)};
+    @ARC {(1.4, 0) (-0.1, 3) (-1.6, 0)};
+    @ARC {(0, 0) (1.5, -3) (3, 0)};
+    (0, 8) @PIN(terminal=1, direction="up");
+    (0, -8) @PIN(terminal=2, direction="down");
+    ? @TEXT("${name}", key="name", halign="start") => @PLACE(-5, 4.7)
+  };
+
+  /* 2-port low-pass filter */
+  $LOWPASS_FILTER = @DEFINE-SYMBOL(box=[-7, -2.7, 7, 2.4]) {
+    @LINE {(-0.2, 2.2) (0.4, 0.8)};
+    @LINE {(-0.2, 0.7) (0.4, -0.7)};
+    @LINE {(-3.7, 0) (-7, 0)};
+    @RECTANGLE {(-3.7, -2.7) (3.8, 2.4)};
+    @LINE {(7, 0) (3.8, 0)};
+    @ARC {(0.1, 1.5) (1.3, 1) (2.5, 1.5)};
+    @ARC {(0.1, 0) (1.3, -0.5) (2.5, 0)};
+    @ARC {(0.1, 0) (-1.1, 0.5) (-2.3, 0)};
+    @ARC {(0.1, 1.5) (-1.1, 2) (-2.3, 1.5)};
+    @ARC {(0.1, -1.5) (-1.1, -1) (-2.3, -1.5)};
+    @ARC {(0.1, -1.5) (1.3, -2) (2.5, -1.5)};
+    (-7, 0) @PIN(terminal=1, direction="left");
+    (7, 0) @PIN(terminal=2, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0.1, 3.2)
+  };
+
+  /* 2-port high-pass filter */
+  $HIGHPASS_FILTER = @DEFINE-SYMBOL(box=[-7, -2.7, 7, 2.4]) {
+    @LINE {(-0.3, 0.7) (0.3, -0.7)};
+    @LINE {(-0.3, -0.8) (0.3, -2.2)};
+    @LINE {(-3.7, 0) (-7, 0)};
+    @RECTANGLE {(-3.7, -2.7) (3.8, 2.4)};
+    @LINE {(7, 0) (3.8, 0)};
+    @ARC {(0, 1.5) (1.2, 1) (2.4, 1.5)};
+    @ARC {(0, 0) (1.2, -0.5) (2.4, 0)};
+    @ARC {(0, 0) (-1.2, 0.5) (-2.4, 0)};
+    @ARC {(0, 1.5) (-1.2, 2) (-2.4, 1.5)};
+    @ARC {(0, -1.5) (-1.2, -1) (-2.4, -1.5)};
+    @ARC {(0, -1.5) (1.2, -2) (2.4, -1.5)};
+    (-7, 0) @PIN(terminal=1, direction="left");
+    (7, 0) @PIN(terminal=2, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.2)
+  };
+
+  /* 2-port band-pass filter */
+  $BANDPASS_FILTER = @DEFINE-SYMBOL(box=[-7, -2.7, 7, 2.4]) {
+    @LINE {(-0.3, -0.8) (0.3, -2.2)};
+    @LINE {(-3.7, 0) (-7, 0)};
+    @LINE {(-0.3, 2.2) (0.3, 0.8)};
+    @RECTANGLE {(-3.7, -2.7) (3.8, 2.4)};
+    @LINE {(7, 0) (3.8, 0)};
+    @ARC {(0, 0) (-1.2, 0.5) (-2.4, 0)};
+    @ARC {(0, 0) (1.2, -0.5) (2.4, 0)};
+    @ARC {(0, -1.5) (-1.2, -1) (-2.4, -1.5)};
+    @ARC {(0, -1.5) (1.2, -2) (2.4, -1.5)};
+    @ARC {(0, 1.5) (1.2, 1) (2.4, 1.5)};
+    @ARC {(0, 1.5) (-1.2, 2) (-2.4, 1.5)};
+    (-7, 0) @PIN(terminal=1, direction="left");
+    (7, 0) @PIN(terminal=2, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 3.3)
+  };
+
+  /* 2-port band-stop filter */
+  $BANDSTOP_FILTER = @DEFINE-SYMBOL(box=[-7, -2.7, 7, 2.4]) {
+    @LINE {(-3.7, 0) (-7, 0)};
+    @LINE {(-0.3, 0.7) (0.3, -0.7)};
+    @RECTANGLE {(-3.7, -2.7) (3.8, 2.4)};
+    @LINE {(7, 0) (3.8, 0)};
+    @ARC {(0, 1.5) (1.2, 1) (2.4, 1.5)};
+    @ARC {(0, 0) (1.2, -0.5) (2.4, 0)};
+    @ARC {(0, 1.5) (-1.2, 2) (-2.4, 1.5)};
+    @ARC {(0, -1.5) (-1.2, -1) (-2.4, -1.5)};
+    @ARC {(0, -1.5) (1.2, -2) (2.4, -1.5)};
+    @ARC {(0, 0) (-1.2, 0.5) (-2.4, 0)};
+    (-7, 0) @PIN(terminal=1, direction="left");
+    (7, 0) @PIN(terminal=2, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(-0.1, 3.3)
+  };
+
+  /* chassis ground */
+  $CGND = @DEFINE-SYMBOL(box=[-1, -4, 0.7, 0]) {
+    @LINE {(0, 0) (0, -3)};
+    @LINE {(-0.7, -3) (0.7, -3)};
+    @LINE {(-0.7, -3) (-1, -4)};
+    @LINE {(0, -3) (-0.2, -4)};
+    @LINE {(0.7, -3) (0.5, -4)};
+    (0, 0) @PIN(terminal=1, direction="up");
+    ? @TEXT("${name}", key="name", halign="middle", valign="top") => @PLACE(-0.15, -4.5)
+  };
+
+  /* earth ground */
+  $EGND = @DEFINE-SYMBOL(box=[-0.7, -4, 0.7, 0]) {
+    @LINE {(0, 0) (0, -3)};
+    @LINE {(-0.7, -3) (0.7, -3)};
+    @LINE {(-0.5, -3.5) (0.5, -3.5)};
+    @LINE {(-0.2, -4) (0.2, -4)};
+    (0, 0) @PIN(terminal=1, direction="up");
+    ? @TEXT("${name}", key="name", halign="middle", valign="top") => @PLACE(0, -4.5)
+  };
+
+  /* negative supply bar */
+  $VSS_SYMBOL = @DEFINE-SYMBOL(box=[-2.5, -5, 2.5, 0]) {
+    @LINE {(-2.5, -4) (2.5, -4)};
+    @LINE {(0, 0) (0, -4)};
+    (0, 0) @PIN(terminal=1, direction="up");
+    ? @TEXT("${name}", key="name", halign="middle", valign="top") => @PLACE(0, -5.5);
+    (1, -3) @TEXT("vss", halign="start", valign="baseline", size=0.7)
+  };
+
+  /* power arrow */
+  $PWR = @DEFINE-SYMBOL(box=[-0.5, 0, 0.5, 4.5]) {
+    @LINE {(-0.5, 3) (0.5, 3) (0, 4.5) (-0.5, 3)};
+    @LINE {(0, 0) (0, 3)};
+    (0, 0) @PIN(terminal=1, direction="down");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(0, 5.1)
+  };
+
+  /* schematic input pin */
+  $IPIN = @DEFINE-SYMBOL(box=[-2, -1, 0, 1]) {
+    @LINE(fill="linecolor", linestyle="none") {(-2, -0.9) (-2, 0.9) (-0.9, 0.9) (0, 0) (-0.9, -0.9) (-2, -0.9)};
+    (0, 0) @PIN(terminal=1, direction="right");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(-1, 1.6)
+  };
+
+  /* schematic output pin */
+  $OPIN = @DEFINE-SYMBOL(box=[0, -1, 2, 1]) {
+    @LINE(fill="linecolor", linestyle="none") {(0, -0.9) (0, 0.9) (1.1, 0.9) (2, 0) (1.1, -0.9) (0, -0.9)};
+    (0, 0) @PIN(terminal=1, direction="left");
+    ? @TEXT("${name}", key="name", halign="middle") => @PLACE(1, 1.6)
+  };
+
+  /* on-page connector */
+  $ON_PAGE_CONN = @DEFINE-SYMBOL(box=[-1, -5, 1, 0]) {
+    (0, -4) @CIRCLE(radius=1);
+    @LINE {(0, 0) (0, -3)};
+    (0, 0) @PIN(terminal=1, direction="up");
+    ? @TEXT("${name}", key="name", halign="middle", valign="top") => @PLACE(0, -5.5)
+  };
+}
+
+/* ---------------------------------------------------------------- Usage rules and instance selection rules */
+@RNL {
+  /* Virtual element and mark usage rules */
+  # @SELECT-USAGE $GROUND => @SET-SYMBOL $GROUND_SYMBOL;
+  # @SELECT-USAGE $SUPPLY => @SET-SYMBOL $SUPPLY_SYMBOL;
+  # @SELECT-USAGE $IO_PORT => @SET-SYMBOL $IO_PORT_SYMBOL;
+  # @SELECT-USAGE $NO_CONNECT => @SET-SYMBOL $NO_CONNECT_SYMBOL;
+  # @SELECT-USAGE $JUNCTION => @SET-SYMBOL $JUNCTION_SYMBOL;
+  # @SELECT-USAGE $CURRENT_ARROW => @SET-SYMBOL $CURRENT_ARROW_SYMBOL;
+  # @SELECT-USAGE $ARROW => @SET-SYMBOL $ARROW_SYMBOL;
+  # @SELECT-USAGE $SPDT_SWITCH => @SET-SYMBOL $SPDT_SWITCH_SYMBOL;
+  $NAMED_GROUND_NET_SET @SELECT-ANCESTOR-USAGE $GROUND => @SET-SYMBOL $NAMED_GROUND_SYMBOL;
+
+  /* SPICE element letter rules */
+  # @SELECT-INSTANCE(name="R*") => @SET-SYMBOL $RESISTOR;
+  # @SELECT-INSTANCE(name="C*") => @SET-SYMBOL $CAPACITOR;
+  # @SELECT-INSTANCE(name="L*") => @SET-SYMBOL $INDUCTOR;
+  # @SELECT-INSTANCE(name="V*") => @SET-SYMBOL $VOLTAGE_SOURCE;
+  # @SELECT-INSTANCE(name="I*") => @SET-SYMBOL $CURRENT_SOURCE;
+  # @SELECT-INSTANCE(name="D*") => @SET-SYMBOL $DIODE;
+  # @SELECT-INSTANCE(name="E*") => @SET-SYMBOL $VCVS_4TERM;
+  # @SELECT-INSTANCE(name="G*") => @SET-SYMBOL $VCCS_4TERM;
+  # @SELECT-INSTANCE(name="F*") => @SET-SYMBOL $CCCS;
+  # @SELECT-INSTANCE(name="H*") => @SET-SYMBOL $CCVS;
+  # @SELECT-INSTANCE(name="B*") => @SET-SYMBOL $BEHAVIORAL_SOURCE;
+  # @SELECT-INSTANCE(name="S*") => @SET-SYMBOL $VOLTAGE_CONTROLLED_SWITCH;
+  # @SELECT-INSTANCE(name="W*") => @SET-SYMBOL $SWITCH;
+  # @SELECT-INSTANCE(name="T*") => @SET-SYMBOL $TRANSMISSION_LINE;
+  # @SELECT-INSTANCE(name="O*") => @SET-SYMBOL $TRANSMISSION_LINE;
+  # @SELECT-INSTANCE(name="U*") => @SET-SYMBOL $RC_LINE;
+
+  /* Spectre & Virtuoso analogLib/ahdlLib/rfLib master rules (consolidating label-only and alias models) */
+  # @SELECT-INSTANCE(model="resistor") => @SET-SYMBOL $RESISTOR;
+  # @SELECT-INSTANCE(model="res") => @SET-SYMBOL $RESISTOR;
+  # @SELECT-INSTANCE(model="phyres") => @SET-SYMBOL $RC_LINE;
+  # @SELECT-INSTANCE(model="vcres") => @SET-SYMBOL $VCRES;
+  # @SELECT-INSTANCE(model="capacitor") => @SET-SYMBOL $CAPACITOR;
+  # @SELECT-INSTANCE(model="cap") => @SET-SYMBOL $CAPACITOR;
+  # @SELECT-INSTANCE(model="capq") => @SET-SYMBOL $CAPACITOR;
+  # @SELECT-INSTANCE(model="dcblock") => @SET-SYMBOL $CAPACITOR;
+  # @SELECT-INSTANCE(model="vccap") => @SET-SYMBOL $VCCAP;
+  # @SELECT-INSTANCE(model="inductor") => @SET-SYMBOL $INDUCTOR;
+  # @SELECT-INSTANCE(model="ind") => @SET-SYMBOL $INDUCTOR;
+  # @SELECT-INSTANCE(model="indq") => @SET-SYMBOL $INDUCTOR;
+  # @SELECT-INSTANCE(model="dcfeed") => @SET-SYMBOL $INDUCTOR;
+  # @SELECT-INSTANCE(model="winding") => @SET-SYMBOL $INDUCTOR;
+  # @SELECT-INSTANCE(model="transformer") => @SET-SYMBOL $TRANSFORMER;
+  # @SELECT-INSTANCE(model="xfmr") => @SET-SYMBOL $TRANSFORMER;
+  # @SELECT-INSTANCE(model="ixfmr") => @SET-SYMBOL $TRANSFORMER;
+  # @SELECT-INSTANCE(model="ideal_balun") => @SET-SYMBOL $IDEAL_BALUN;
+  # @SELECT-INSTANCE(model="balun") => @SET-SYMBOL $IDEAL_BALUN;
+  # @SELECT-INSTANCE(model="vsource") => @SET-SYMBOL $VOLTAGE_SOURCE;
+  # @SELECT-INSTANCE(model="vdc") => @SET-SYMBOL $VOLTAGE_SOURCE;
+  # @SELECT-INSTANCE(model="isource") => @SET-SYMBOL $CURRENT_SOURCE;
+  # @SELECT-INSTANCE(model="idc") => @SET-SYMBOL $CURRENT_SOURCE;
+  # @SELECT-INSTANCE(model="vsin") => @SET-SYMBOL $VSIN;
+  # @SELECT-INSTANCE(model="vsffm") => @SET-SYMBOL $VSIN;
+  # @SELECT-INSTANCE(model="vam") => @SET-SYMBOL $VSIN;
+  # @SELECT-INSTANCE(model="isin") => @SET-SYMBOL $ISIN;
+  # @SELECT-INSTANCE(model="isffm") => @SET-SYMBOL $ISIN;
+  # @SELECT-INSTANCE(model="iam") => @SET-SYMBOL $ISIN;
+  # @SELECT-INSTANCE(model="vpulse") => @SET-SYMBOL $VPULSE;
+  # @SELECT-INSTANCE(model="vbit") => @SET-SYMBOL $VPULSE;
+  # @SELECT-INSTANCE(model="vprbs") => @SET-SYMBOL $VPULSE;
+  # @SELECT-INSTANCE(model="ipulse") => @SET-SYMBOL $IPULSE;
+  # @SELECT-INSTANCE(model="ibit") => @SET-SYMBOL $IPULSE;
+  # @SELECT-INSTANCE(model="iprbs") => @SET-SYMBOL $IPULSE;
+  # @SELECT-INSTANCE(model="vpwl") => @SET-SYMBOL $VPWL;
+  # @SELECT-INSTANCE(model="vpwlf") => @SET-SYMBOL $VPWL;
+  # @SELECT-INSTANCE(model="vexp") => @SET-SYMBOL $VPWL;
+  # @SELECT-INSTANCE(model="ipwl") => @SET-SYMBOL $IPWL;
+  # @SELECT-INSTANCE(model="ipwlf") => @SET-SYMBOL $IPWL;
+  # @SELECT-INSTANCE(model="iexp") => @SET-SYMBOL $IPWL;
+  # @SELECT-INSTANCE(model="diode") => @SET-SYMBOL $DIODE;
+  # @SELECT-INSTANCE(model="zener") => @SET-SYMBOL $ZENER_DIODE;
+  # @SELECT-INSTANCE(model="schottky") => @SET-SYMBOL $SCHOTTKY;
+  # @SELECT-INSTANCE(model="nmos") => @SET-SYMBOL $NMOS;
+  # @SELECT-INSTANCE(model="ntft") => @SET-SYMBOL $NMOS;
+  # @SELECT-INSTANCE(model="nmos4") => @SET-SYMBOL $NMOS_4TERM;
+  # @SELECT-INSTANCE(model="mos_level1") => @SET-SYMBOL $NMOS_4TERM;
+  # @SELECT-INSTANCE(model="pmos") => @SET-SYMBOL $PMOS;
+  # @SELECT-INSTANCE(model="ptft") => @SET-SYMBOL $PMOS;
+  # @SELECT-INSTANCE(model="pmos4") => @SET-SYMBOL $PMOS_4TERM;
+  # @SELECT-INSTANCE(model="npn") => @SET-SYMBOL $NPN;
+  # @SELECT-INSTANCE(model="pnp") => @SET-SYMBOL $PNP;
+  # @SELECT-INSTANCE(model="njfet") => @SET-SYMBOL $NJFET;
+  # @SELECT-INSTANCE(model="pjfet") => @SET-SYMBOL $PJFET;
+  # @SELECT-INSTANCE(model="vcvs") => @SET-SYMBOL $VCVS_4TERM;
+  # @SELECT-INSTANCE(model="vccs") => @SET-SYMBOL $VCCS_4TERM;
+  # @SELECT-INSTANCE(model="vcvsp") => @SET-SYMBOL $VCVSP;
+  # @SELECT-INSTANCE(model="vccsp") => @SET-SYMBOL $VCCSP;
+  # @SELECT-INSTANCE(model="cccs") => @SET-SYMBOL $CCCS;
+  # @SELECT-INSTANCE(model="ccvs") => @SET-SYMBOL $CCVS;
+  # @SELECT-INSTANCE(model="bsource") => @SET-SYMBOL $BEHAVIORAL_SOURCE;
+  # @SELECT-INSTANCE(model="bvs") => @SET-SYMBOL $BEHAVIORAL_SOURCE;
+  # @SELECT-INSTANCE(model="bcs") => @SET-SYMBOL $BEHAVIORAL_SOURCE;
+  # @SELECT-INSTANCE(model="relay") => @SET-SYMBOL $VOLTAGE_CONTROLLED_SWITCH;
+  # @SELECT-INSTANCE(model="switch") => @SET-SYMBOL $SWITCH;
+  # @SELECT-INSTANCE(model="sp1tswitch") => @SET-SYMBOL $SWITCH;
+  # @SELECT-INSTANCE(model="sp2tswitch") => @SET-SYMBOL $SPDT_SWITCH_SYMBOL;
+  # @SELECT-INSTANCE(model="sp3tswitch") => @SET-SYMBOL $SP3TSWITCH;
+  # @SELECT-INSTANCE(model="sp4tswitch") => @SET-SYMBOL $SP4TSWITCH;
+  # @SELECT-INSTANCE(model="port") => @SET-SYMBOL $RF_PORT;
+  # @SELECT-INSTANCE(model="iprobe") => @SET-SYMBOL $IPROBE;
+  # @SELECT-INSTANCE(model="tline") => @SET-SYMBOL $TRANSMISSION_LINE;
+  # @SELECT-INSTANCE(model="rcwireload") => @SET-SYMBOL $RC_LINE;
+  # @SELECT-INSTANCE(model="delayline") => @SET-SYMBOL $DELAY_CELL_SYMBOL;
+  # @SELECT-INSTANCE(model="mixer") => @SET-SYMBOL $MIXER;
+  # @SELECT-INSTANCE(model="osc") => @SET-SYMBOL $OSC;
+  # @SELECT-INSTANCE(model="quadrature") => @SET-SYMBOL $QUADRATURE;
+  # @SELECT-INSTANCE(model="butterworth_lp") => @SET-SYMBOL $LOWPASS_FILTER;
+  # @SELECT-INSTANCE(model="butterworth_hp") => @SET-SYMBOL $HIGHPASS_FILTER;
+  # @SELECT-INSTANCE(model="butterworth_bp") => @SET-SYMBOL $BANDPASS_FILTER;
+  # @SELECT-INSTANCE(model="butterworth_bs") => @SET-SYMBOL $BANDSTOP_FILTER;
+  # @SELECT-INSTANCE(model="gnd") => @SET-SYMBOL $GROUND_SYMBOL;
+  # @SELECT-INSTANCE(model="gnda") => @SET-SYMBOL $GROUND_SYMBOL;
+  # @SELECT-INSTANCE(model="gndd") => @SET-SYMBOL $GROUND_SYMBOL;
+  # @SELECT-INSTANCE(model="vdd") => @SET-SYMBOL $SUPPLY_SYMBOL;
+  # @SELECT-INSTANCE(model="vdda") => @SET-SYMBOL $SUPPLY_SYMBOL;
+  # @SELECT-INSTANCE(model="vddd") => @SET-SYMBOL $SUPPLY_SYMBOL;
+  # @SELECT-INSTANCE(model="vcc") => @SET-SYMBOL $SUPPLY_SYMBOL;
+  # @SELECT-INSTANCE(model="vcca") => @SET-SYMBOL $SUPPLY_SYMBOL;
+  # @SELECT-INSTANCE(model="vccd") => @SET-SYMBOL $SUPPLY_SYMBOL;
+  # @SELECT-INSTANCE(model="vss") => @SET-SYMBOL $VSS_SYMBOL;
+  # @SELECT-INSTANCE(model="vssa") => @SET-SYMBOL $VSS_SYMBOL;
+  # @SELECT-INSTANCE(model="vssd") => @SET-SYMBOL $VSS_SYMBOL;
+  # @SELECT-INSTANCE(model="vee") => @SET-SYMBOL $VSS_SYMBOL;
+  # @SELECT-INSTANCE(model="veea") => @SET-SYMBOL $VSS_SYMBOL;
+  # @SELECT-INSTANCE(model="veed") => @SET-SYMBOL $VSS_SYMBOL;
+
+  /* Model card type rules (SPICE and Spectre) */
+  # @SELECT-INSTANCE(type="d") => @SET-SYMBOL $DIODE;
+  # @SELECT-INSTANCE(type="r") => @SET-SYMBOL $RESISTOR;
+  # @SELECT-INSTANCE(type="c") => @SET-SYMBOL $CAPACITOR;
+  # @SELECT-INSTANCE(type="l") => @SET-SYMBOL $INDUCTOR;
+  # @SELECT-INSTANCE(type="sw") => @SET-SYMBOL $VOLTAGE_CONTROLLED_SWITCH;
+  # @SELECT-INSTANCE(type="nmos") => @SET-SYMBOL $NMOS_4TERM;
+  # @SELECT-INSTANCE(type="npn") => @SET-SYMBOL $NPN;
+  # @SELECT-INSTANCE(type="njf") => @SET-SYMBOL $NJFET;
+  # @SELECT-INSTANCE(type="nmf") => @SET-SYMBOL $NJFET;
+  # @SELECT-INSTANCE(type="pmos") => @SET-SYMBOL $PMOS_4TERM;
+  # @SELECT-INSTANCE(type="pnp") => @SET-SYMBOL $PNP;
+  # @SELECT-INSTANCE(type="lpnp") => @SET-SYMBOL $PNP;
+  # @SELECT-INSTANCE(type="pjf") => @SET-SYMBOL $PJFET;
+  # @SELECT-INSTANCE(type="pmf") => @SET-SYMBOL $PJFET;
+  # @SELECT-INSTANCE(type="tline") => @SET-SYMBOL $TRANSMISSION_LINE
+}
