@@ -22,7 +22,7 @@ then extract it on the Virtuoso host:
 
 ```sh
 mkdir -p ~/tools
-tar -xzf rnl-virtuoso-0.6.0-linux-amd64.tar.gz -C ~/tools
+tar -xzf rnl-virtuoso-0.6.1-linux-amd64.tar.gz -C ~/tools
 ```
 
 In the CIW, load the entry point once:
@@ -50,6 +50,8 @@ The library output shares `netlists/`, `symbols.rnl` and the two presentation
 packages; open a `<cell>.scs` / `.sp` entry. The report lists entries, native
 definitions and exported symbols. The external-cell option preserves interfaces
 and symbols when off, and includes referenced schematic definitions when on.
+Failed cells are skipped and reported with their reasons and logs; `complete`
+is false when any cell failed, and the completion notice gives the failure count.
 
 See [export details](docs/export.md) for options, conversion rules and limitations.
 
@@ -58,7 +60,7 @@ See [export details](docs/export.md) for options, conversion rules and limitatio
 Building requires Go 1.22+ and Python 3.8+ on the development machine only:
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.6.0-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.6.1-linux-amd64.tar.gz
 python scripts/test.py
 ```
 

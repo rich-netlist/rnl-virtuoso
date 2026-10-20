@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const version = "0.6.0"
+const version = "0.6.1"
 
 func resource(dir, name string) string { return readText(filepath.Join(dir, name)) }
 func writeText(path, text string) {
@@ -127,7 +127,7 @@ func runJob(request, resourceDir string) map[string]any {
 	fields := parse(readText(request), true).list
 	if len(fields) > 0 {
 		switch fields[0].atom {
-		case "rnl-library-merge-v1":
+		case "rnl-library-merge-v1", "rnl-library-merge-v2":
 			return runLibraryMerge(request, fields, resourceDir)
 		case "rnl-symbol-job-v1":
 			return runSymbolJob(request, fields)

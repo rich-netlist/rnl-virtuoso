@@ -18,7 +18,7 @@ SKILL 前端调用原生 Spectre/CDL 和 EDIF 导出器，Go 后端组合网表�
 
 ```sh
 mkdir -p ~/tools
-tar -xzf rnl-virtuoso-0.6.0-linux-amd64.tar.gz -C ~/tools
+tar -xzf rnl-virtuoso-0.6.1-linux-amd64.tar.gz -C ~/tools
 ```
 
 在 CIW 中执行一行即可，也可加入项目的 `.cdsinit`：
@@ -43,6 +43,8 @@ Linux x86-64 上测试。
 重复子电路与符号只保留一份；打开 `<cell>.scs` / `.sp` 入口使用。
 关闭外部 cell 导出时保留外部调用和符号，开启后连带导出原生网表中的外部子电路定义。
 `library-report.json` 列出入口、定义、符号及跳过的无 schematic/symbol 的 cell。
+导出失败的 cell 会跳过并继续处理其余 cell；报告的 `failed_cells` 保存失败原因与日志路径，
+只要有失败项就会标记 `complete: false`，完成提示也会显示失败数量。
 
 更多选项与边界见 [导出说明](docs/export.md)。
 
@@ -51,7 +53,7 @@ Linux x86-64 上测试。
 仅开发机需要 Go 1.22+ 和 Python 3.8+：
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.6.0-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.6.1-linux-amd64.tar.gz
 python scripts/test.py --rnl /path/to/rnl
 ```
 

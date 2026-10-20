@@ -12,6 +12,11 @@ files reference both packages explicitly. Replace the `eda-style` reference to
 apply another presentation without editing exported symbol geometry. Pin marks
 are supplied by the style package, not by the converter's custom symbols.
 
+The source snapshot includes SPICE instance-letter rules (`I*`, `V*`, etc.).
+Exported **Spectre** copies omit that section and keep model/type rules:
+Spectre instance names do not identify device types. CDL copies keep the SPICE
+rules. This adaptation applies to both cell and shared-library exports.
+
 `symbol-orientations.json` describes the 18 changed symbol interfaces. Its
 `package_to_source` is the compensation applied to the **new package's local
 coordinates** before the instance's Virtuoso/EDIF orientation. For example,

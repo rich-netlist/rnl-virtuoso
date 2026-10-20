@@ -122,7 +122,7 @@ procedure(rnlStartLibraryExport(lib destination hierarchy split scale @optional 
     unless(createDir(work) error("Cannot create library work directory.\n"))
     rnlActiveBatch = list(nil 'library lib 'destination destination
       'hierarchy hierarchy 'split split 'scale scale 'format format 'external external
-      'tasks tasks 'parts nil 'skipped skipped 'directory work 'phase "cells" 'count 0 'total length(tasks))
+      'tasks tasks 'parts nil 'failures nil 'skipped skipped 'directory work 'phase "cells" 'count 0 'total length(tasks))
     rnlLastBatch = rnlActiveBatch
     printf("RNL: library %s: %d cells; work: %s\n" lib length(tasks) work)
     rnlBatchNext()
@@ -135,7 +135,7 @@ procedure(rnlStartSymbolJob(lib cell scale format)
     cv = dbOpenCellViewByType(lib cell "symbol" nil "r")
     unless(cv error("Cannot open %s/%s/symbol.\n" lib cell))
     unwindProtect(
-      when(cv->modifiedButNotSaved error("Save %s/%s/symbol before exporting.\n" lib cell))
+      rnlCheckSavedSymbol(cv)
       dbClose(cv))
     cds = ddGetForcedLib()
     when(!cds || cds == "" cds = ddGetStartup("cds.lib"))
@@ -153,15 +153,29 @@ procedure(rnlStartSymbolJob(lib cell scale format)
   )
 )
 
+procedure(rnlBatchRecordFailure(task stage reason logs)
+  let((batch port)
+    batch = rnlActiveBatch
+    when(stage == "preflight"
+      logs = strcat(batch->directory "/preflight_" sprintf(nil "%d" batch->count) ".log")
+      port = outfile(logs)
+      when(port fprintf(port "%s/%s/%s\n%s\n" batch->library car(task) cadr(task) reason) close(port)))
+    batch->failures = cons(list(car(task) cadr(task) stage reason logs) batch->failures)
+    printf("RNL: skipped failed cell %s/%s: %s\n" batch->library car(task) reason)
+  )
+)
+
 procedure(rnlBatchNext()
   let((batch task result destination port command)
     batch = rnlActiveBatch
-    if(batch->tasks then
+    while(batch->tasks && !rnlActiveJob
       task = car(batch->tasks)
+      batch->currentTask = task
       batch->tasks = cdr(batch->tasks)
       batch->count = batch->count + 1
       printf("RNL: library cell %d/%d: %s/%s (%s)\n" batch->count batch->total batch->library car(task) cadr(task))
       batch->starting = t
+      rnlPreflightError = nil
       result = errset(
         if(cadr(task) == "schematic" then
           destination = strcat(batch->directory "/cell_" sprintf(nil "%d" batch->count))
@@ -170,14 +184,13 @@ procedure(rnlBatchNext()
         else rnlStartSymbolJob(batch->library car(task) batch->scale batch->format)) t)
       batch->starting = nil
       unless(result
-        batch->status = 1
-        rnlActiveBatch = nil
-        rnlNotice(strcat("Library export could not start a cell. See CIW.\nWork: " batch->directory)))
-    else
+        rnlBatchRecordFailure(task "preflight" if(rnlPreflightError then rnlPreflightError else sprintf(nil "%L" errset.errset)) batch->directory))
+    )
+    unless(rnlActiveJob
       batch->phase = "merge"
       port = outfile(strcat(batch->directory "/request.sx"))
-      fprintf(port "%L\n" list("rnl-library-merge-v1" rnlInstallDirectory batch->library
-        batch->destination batch->format batch->split reverse(batch->parts) batch->external batch->hierarchy batch->skipped))
+      fprintf(port "%L\n" list("rnl-library-merge-v2" rnlInstallDirectory batch->library
+        batch->destination batch->format batch->split reverse(batch->parts) batch->external batch->hierarchy batch->skipped reverse(batch->failures)))
       close(port)
       command = strcat(rnlShellQuote(strcat(rnlInstallDirectory "/bin/rnl-virtuoso")) " "
         rnlShellQuote(strcat(batch->directory "/request.sx")))
@@ -191,18 +204,28 @@ procedure(rnlBatchNext()
 procedure(rnlBatchProcessDone(job status)
   let((batch port line message)
     batch = rnlActiveBatch
-    if(status != 0 || batch->phase == "merge" then
+    if(batch->phase == "merge" then
       batch->status = status
       rnlActiveBatch = nil
       if(status == 0 then
-        message = strcat("Library export complete: " batch->destination "/library-report.json")
+        message = strcat("Library export finished: " batch->destination "/library-report.json"
+          sprintf(nil "\nFailed cells: %d (details in report)." length(batch->failures)))
       else
         message = "Library export failed."
         port = infile(strcat(job->directory "/error.txt"))
         when(port when(gets(line port) message = strcat(message "\n" line)) close(port)))
       rnlNotice(strcat(message "\nWork: " batch->directory "\nLast cell logs: " job->directory))
     else
-      batch->parts = cons(strcat(job->directory "/library-parts.json") batch->parts)
+      if(status == 0 then
+        batch->parts = cons(strcat(job->directory "/library-parts.json") batch->parts)
+      else
+        message = "Native export or conversion failed."
+        port = infile(strcat(job->directory "/error.txt"))
+        when(port
+          message = ""
+          while(gets(line port) message = strcat(message line))
+          close(port))
+        rnlBatchRecordFailure(batch->currentTask "export" message job->directory))
       rnlBatchNext())
   )
 )

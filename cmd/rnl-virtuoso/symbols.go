@@ -7,6 +7,24 @@ import (
 	"strings"
 )
 
+// Instance letters describe device types only in SPICE. Spectre permits any
+// instance name, including I0 for a subcircuit. Keep the pinned geometry and
+// model/type rules, but omit the snapshot's SPICE-only section for Spectre.
+func symbolPackage(text, dialect string) string {
+	if dialect != "spectre" {
+		return text
+	}
+	start := strings.Index(text, "  /* SPICE element letter rules */")
+	if start < 0 {
+		return text
+	}
+	end := strings.Index(text[start:], "  /* Spectre & Virtuoso")
+	if end < 0 {
+		fail("Cannot locate the end of the SPICE symbol rules")
+	}
+	return text[:start] + "  /* SPICE instance-letter rules omitted for this Spectre export. */\n" + text[start+end:]
+}
+
 func strconvI(i int) string { return strconv.Itoa(i) }
 func quote(s string) string {
 	return `"` + strings.NewReplacer("\n", " ", "\r", " ", `"`, `""`).Replace(s) + `"`

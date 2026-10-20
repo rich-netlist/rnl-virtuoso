@@ -66,9 +66,11 @@ func captureConversion(out *libraryCapture, keys []string, selected stringSet, b
 	}
 }
 
-// Compare native statements, never the incidental formatting/order of RNL
-// annotations. Different electrical definitions are never silently deduplicated.
-func electricalSignature(body, dialect string) string {
+var signatureTokens = rx(`"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|(?:\\.|[^\s"'\\])+`)
+
+// Compare native statements, never incidental indentation/line wrapping or RNL
+// annotations. Preserve whitespace inside quoted strings and escaped names.
+func electricalSignature(body, dialect string, sortedPorts bool) string {
 	values := []string{}
 	for _, stmt := range statements(splitLines(body), dialect) {
 		text := strings.TrimSpace(stmt.Text)
@@ -77,11 +79,15 @@ func electricalSignature(body, dialect string) string {
 		}
 		words := strings.Fields(text)
 		if strings.EqualFold(words[0], "subckt") || strings.EqualFold(words[0], ".subckt") {
-			values = append(values, strings.Join(nativeNames(text), " "))
+			header := nativeNames(text)
+			if sortedPorts && len(header) > 2 {
+				sort.Strings(header[2:])
+			}
+			values = append(values, strings.Join(header, " "))
 		} else if strings.EqualFold(words[0], "ends") || strings.EqualFold(words[0], ".ends") {
 			values = append(values, strings.ToLower(words[0]))
 		} else {
-			values = append(values, text)
+			values = append(values, strings.Join(signatureTokens.FindAllString(text, -1), " "))
 		}
 	}
 	return strings.Join(values, "\n")
@@ -105,10 +111,15 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split bool
 			filename := netlistFilename(def.Name, extension)
 			key := strings.ToLower(filename)
 			if old, ok := definitions[key]; ok {
-				if old.Name != def.Name || old.Library != def.Library || old.Cell != def.Cell || electricalSignature(old.Body, dialect) != electricalSignature(def.Body, dialect) {
+				// Spectre emits no top-level subckt header: that wrapper is ours.
+				// It may order its named ports differently from a native child.
+				// Compare their port sets, then retain the native child's ordering
+				// and body so every existing native call keeps its pin meaning.
+				sortedPorts := dialect == "spectre" && old.Root != def.Root
+				if old.Name != def.Name || old.Library != def.Library || old.Cell != def.Cell || electricalSignature(old.Body, dialect, sortedPorts) != electricalSignature(def.Body, dialect, sortedPorts) {
 					fail("Conflicting native subcircuit %s (%s/%s and %s/%s); cannot deduplicate without changing the netlist", def.Name, old.Library, old.Cell, def.Library, def.Cell)
 				}
-				if !def.Root {
+				if dialect == "spectre" && !old.Root || dialect != "spectre" && !def.Root {
 					continue
 				}
 			}
@@ -130,7 +141,7 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split bool
 		notes = append(notes, part.Notes...)
 		modelReferences = append(modelReferences, part.ModelReferences...)
 	}
-	files := map[string]string{"eda-symbol.rnl": resource(resourceDir, "eda-symbol.rnl"), "eda-style.rnl": resource(resourceDir, "eda-style.rnl")}
+	files := map[string]string{"eda-symbol.rnl": symbolPackage(resource(resourceDir, "eda-symbol.rnl"), dialect), "eda-style.rnl": resource(resourceDir, "eda-style.rnl")}
 	names := []string{}
 	for key := range definitions {
 		names = append(names, key)
@@ -198,7 +209,7 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split bool
 }
 
 func runLibraryMerge(request string, fields []node, resourceDir string) map[string]any {
-	if len(fields) != 9 && len(fields) != 10 {
+	if len(fields) != 9 && len(fields) != 10 && len(fields) != 11 {
 		fail("Invalid library merge request")
 	}
 	library, output, dialect, split := fields[2].atom, fields[3].atom, fields[4].atom, fields[5].atom == "t"
@@ -222,13 +233,24 @@ func runLibraryMerge(request string, fields []node, resourceDir string) map[stri
 	files, report := assembleLibrary(parts, library, dialect, split, resourceDir)
 	report["include_external_cells"], report["include_hierarchy"] = fields[7].atom == "t", fields[8].atom == "t"
 	skipped := []string{}
-	if len(fields) == 10 {
+	if len(fields) >= 10 {
 		for _, cell := range fields[9].list {
 			skipped = append(skipped, cell.atom)
 		}
 	}
 	sort.Strings(skipped)
 	report["skipped_cells_without_schematic_or_symbol"] = skipped
+	failed := []map[string]string{}
+	if len(fields) == 11 {
+		for _, entry := range fields[10].list {
+			if !entry.group || len(entry.list) != 5 {
+				fail("Invalid failed library cell record")
+			}
+			failed = append(failed, map[string]string{"library": library, "cell": entry.at(0).atom, "view": entry.at(1).atom, "stage": entry.at(2).atom, "reason": entry.at(3).atom, "logs": entry.at(4).atom})
+		}
+	}
+	sort.Slice(failed, func(i, j int) bool { return failed[i]["cell"] < failed[j]["cell"] })
+	report["failed_cells"], report["complete"], report["successful_cells"] = failed, len(failed) == 0, len(parts)
 	report["output_directory"], report["work_directory"] = output, filepath.Dir(request)
 	staging, err := os.MkdirTemp(filepath.Dir(output), ".rnl-library-stage-")
 	if err != nil {

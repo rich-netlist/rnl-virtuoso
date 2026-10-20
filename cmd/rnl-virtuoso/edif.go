@@ -14,9 +14,10 @@ func (e exportError) Error() string   { return string(e) }
 func fail(format string, args ...any) { panic(exportError(fmt.Sprintf(format, args...))) }
 
 type node struct {
-	atom  string
-	list  []node
-	group bool
+	atom   string
+	list   []node
+	group  bool
+	quoted bool
 }
 
 func atom(s string) node { return node{atom: s} }
@@ -97,7 +98,7 @@ func parse(text string, skill bool) node {
 				c := text[pos]
 				pos++
 				if c == '"' {
-					return atom(b.String())
+					return node{atom: b.String(), quoted: true}
 				}
 				if c == '\\' {
 					if pos >= len(text) {
@@ -182,7 +183,14 @@ func ident(n node) string {
 }
 func name(n node) string {
 	if !n.group {
-		return decoded(n.atom)
+		value := n.atom
+		// EDIF prefixes escaped identifiers (for example &_experiment) with
+		// &, which is syntax rather than part of the database/display name.
+		// Quoted rename strings may contain a literal leading &.
+		if !n.quoted {
+			value = strings.TrimPrefix(value, "&")
+		}
+		return decoded(value)
 	}
 	switch tag(n) {
 	case "rename":
@@ -332,6 +340,7 @@ type instance struct {
 	Master                     cellKey
 	XY                         point
 	Orient, Bundle, BundleName string
+	Action                     string
 }
 type net struct {
 	Name      string
@@ -434,13 +443,19 @@ func readEDIF(text string) (map[cellKey]*cell, []*cell) {
 								fail("Scaled EDIF instances are not supported")
 							}
 							group := []*instance{}
+							action := ""
+							for _, property := range children(ins, "property") {
+								if strings.EqualFold(name(property.at(1)), "nlAction") {
+									action = first(property, "string").at(1).atom
+								}
+							}
 							iids, labels := memberIDs(ins.at(1)), scalarNames(ins.at(1))
 							for i, id := range iids {
 								bundle := ""
 								if tag(ins.at(1)) == "array" {
 									bundle = strings.ToLower(ident(ins.at(1)))
 								}
-								item := &instance{id, labels[i], cellKey{strings.ToLower(libID), strings.ToLower(cr.at(1).atom)}, origin(tr), orientationOf(tr), bundle, name(ins.at(1))}
+								item := &instance{id, labels[i], cellKey{strings.ToLower(libID), strings.ToLower(cr.at(1).atom)}, origin(tr), orientationOf(tr), bundle, name(ins.at(1)), action}
 								c.Instances = append(c.Instances, item)
 								pending = append(pending, item)
 								group = append(group, item)

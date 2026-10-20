@@ -3,6 +3,7 @@
 unless(boundp('rnlActiveJob) rnlActiveJob = nil)
 unless(boundp('rnlMenu) rnlMenu = nil)
 unless(boundp('rnlExportForm) rnlExportForm = nil)
+unless(boundp('rnlPreflightError) rnlPreflightError = nil)
 
 procedure(rnlNotice(message)
   printf("RNL: %s\n" message)
@@ -20,10 +21,27 @@ procedure(rnlShellQuote(value)
   )
 )
 
+; dbClose in unwindProtect can clear errset.errset. Keep source diagnostics
+; explicitly so the library report retains the original failure reason.
+procedure(rnlSourceError(message)
+  rnlPreflightError = message
+  error("%s\n" message)
+)
+
 procedure(rnlCheckSaved(cv)
   when(cv->modifiedButNotSaved || !dbIsConnCurrent(cv)
-    error("Check and Save %s/%s/%s before exporting.\n"
-      cv->libName cv->cellName cv->viewName))
+    rnlSourceError(sprintf(nil "Check and Save %s/%s/%s before exporting."
+      cv->libName cv->cellName cv->viewName)))
+)
+
+procedure(rnlCheckSavedSymbol(cv)
+  let((source)
+    ; Generated PCell submasters are transient and cannot be saved by users.
+    source = if(cv->superMaster then cv->superMaster else cv)
+    when(source->modifiedButNotSaved
+      rnlSourceError(sprintf(nil "Save symbol %s/%s/%s before exporting."
+        source->libName source->cellName source->viewName)))
+  )
 )
 
 procedure(rnlCollectOrders(cv seen orders @optional (simulator "spectre") (scope ""))
@@ -40,8 +58,10 @@ procedure(rnlCollectOrders(cv seen orders @optional (simulator "spectre") (scope
           if(stringp(terminal) then terminal else get_pname(terminal)))))
       foreach(inst cv->instances
         master = inst->master
-        when(master->modifiedButNotSaved
-          error("Save symbol %s/%s/%s before exporting.\n" master->libName master->cellName master->viewName))
+        unless(master
+          rnlSourceError(sprintf(nil "Missing placed master for %s/%s/%s instance %s: %s/%s/%s. Check the reference library in cds.lib."
+            cv->libName cv->cellName cv->viewName inst->name inst->libName inst->cellName inst->viewName)))
+        rnlCheckSavedSymbol(master)
         key = list(master->libName master->cellName)
         unless(orders[key]
           cdf = cdfGetBaseCellCDF(ddGetObj(master->libName master->cellName))
@@ -53,7 +73,7 @@ procedure(rnlCollectOrders(cv seen orders @optional (simulator "spectre") (scope
         ; Native netlisting also stops at nlAction, including markers such as
         ; analogLib/gnd and basic/noConn. Their schematic is not a child circuit.
         unless(member(master->nlAction list("ignore" "stop")) ||
-          ddGetObj(master->libName master->cellName simulator)
+          (simulator != "spectre" && ddGetObj(master->libName master->cellName simulator))
           when((scope == "" || master->libName == scope) && ddGetObj(master->libName master->cellName "schematic")
             child = dbOpenCellViewByType(master->libName master->cellName "schematic" nil "r")
             when(child
@@ -70,6 +90,7 @@ procedure(rnlCollectOrders(cv seen orders @optional (simulator "spectre") (scope
 
 procedure(rnlStartExport(lib cell view destination hierarchy split scale @optional (format "spectre") (scope "") (capture nil))
   let((cv rows work port cds command simulator hasSymbol symbol)
+    rnlPreflightError = nil
     when(rnlActiveJob error("An RNL export is already running.\n"))
     when(boundp('rnlActiveBatch) && rnlActiveBatch && !rnlActiveBatch->starting
       error("An RNL library export is already running.\n"))
@@ -87,7 +108,7 @@ procedure(rnlStartExport(lib cell view destination hierarchy split scale @option
       symbol = dbOpenCellViewByType(lib cell "symbol" nil "r")
       unless(symbol error("Cannot open the current cell's symbol view.\n"))
       unwindProtect(
-        when(symbol->modifiedButNotSaved error("Save %s/%s/symbol before exporting.\n" lib cell))
+        rnlCheckSavedSymbol(symbol)
         dbClose(symbol)))
     cds = ddGetForcedLib()
     when(!cds || cds == "" cds = ddGetStartup("cds.lib"))
@@ -101,7 +122,9 @@ procedure(rnlStartExport(lib cell view destination hierarchy split scale @option
     fprintf(port "\nsimNotIncremental = 't\nsimReNetlistAll = 't\n")
     fprintf(port "simNetlistHier = 't\n")
     if(format == "spectre" then
-      fprintf(port "simViewList = '(\"spectre\" \"schematic\" \"veriloga\" \"veriloga_ans\")\nsimStopList = '(\"spectre\" \"veriloga\" \"veriloga_ans\")\n")
+      ; Export the schematic hierarchy even when a cell also has a stop view.
+      ; Primitives and behavioral cells without a schematic retain their models.
+      fprintf(port "simViewList = '(\"schematic\" \"spectre\" \"veriloga\" \"veriloga_ans\")\nsimStopList = '(\"spectre\" \"veriloga\" \"veriloga_ans\")\n")
     else
       ; Same preservation options as File > Export > CDL, Analog mode.
       fprintf(port "simViewList = '(\"auCdl\" \"schematic\")\nsimStopList = '(\"auCdl\")\n")

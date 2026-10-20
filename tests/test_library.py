@@ -89,6 +89,22 @@ class LibraryTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaisesRegex(ExportError, 'Conflicting native subcircuit'):
                 call(op='library', library='work', dialect='spectre', split=True, captures=bad)
 
+    def test_spectre_root_wrapper_does_not_change_native_child_port_order(self):
+        captures = self.fixtures('spectre')[:2]
+        child = next(d for d in captures[0]['Definitions'] if d['Cell'] == 'leaf')
+        root = next(d for d in captures[1]['Definitions'] if d['Cell'] == 'leaf')
+        root['Body'] = root['Body'].replace('subckt leaf A B', 'subckt leaf B A')
+        root['Body'] = root['Body'].replace('resistor r=', 'resistor  \\\n    r=')
+        for parts in (captures, list(reversed(captures))):
+            result = call(op='library', library='work', dialect='spectre', split=True, captures=parts)
+            self.assertIn('subckt leaf A B\n', result['files']['netlists/leaf.scs'])
+            self.assertIn(child['Body'], result['files']['netlists/leaf.scs'])
+            self.check(result['files'], ['top.scs', 'leaf.scs'])
+        # Two native definitions with different positional interfaces are unsafe.
+        captures[1]['Definitions'][0]['Root'] = False
+        with self.assertRaisesRegex(ExportError, 'Conflicting native subcircuit'):
+            call(op='library', library='work', dialect='spectre', split=True, captures=captures)
+
     def test_external_scope_keeps_the_symbol_but_omits_the_definition(self):
         tree = edif.parse(drawing())
         work = next(n for n in tree if edif.tag(n) == 'library' and n[1] == 'work')

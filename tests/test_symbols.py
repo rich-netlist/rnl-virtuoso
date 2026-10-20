@@ -15,7 +15,7 @@ from rnl_export import ExportError, edif, orientation, resources
 from rnl_export.convert import convert
 from rnl_export.symbols import package_pins, symbol_definition
 from rnl_export.symbols import STANDARD
-from fixtures import drawing, netlist, primitive_drawing
+from fixtures import drawing, netlist, spectre_netlist, primitive_drawing
 
 if os.environ.get('RNL_EXPORT_BACKEND', 'go') == 'go':
     from go_backend import convert, symbol_definition, orientation_api as orientation
@@ -25,7 +25,7 @@ BINARY = Path(os.environ.get('RNL_BIN', str(ROOT/'target'/('rnl.exe' if os.name 
 
 
 class SymbolTests(unittest.TestCase):
-    def dump(self, files):
+    def dump(self, files, title=None):
         if not BINARY.is_file():
             self.skipTest('Build rnl-cli or set RNL_BIN')
         with tempfile.TemporaryDirectory() as directory:
@@ -35,7 +35,24 @@ class SymbolTests(unittest.TestCase):
             self.assertEqual(process.returncode, 0, process.stdout+process.stderr)
             result = json.loads(process.stdout)
             self.assertFalse([d for d in result['diagnostics'] if d['severity'] in ('error', 'warning')], result['diagnostics'])
-            return result['levels'][0]
+            return next(level for level in result['levels'] if level['title'] == title) if title else result['levels'][0]
+
+    @unittest.skipIf(os.environ.get('RNL_EXPORT_BACKEND') == 'python', 'Dialect-specific packages are a Go backend extension')
+    def test_spectre_instance_letters_do_not_override_cell_symbols(self):
+        files, _ = convert(spectre_netlist(), drawing(), {('analogLib', 'res'): ['PLUS', 'MINUS']}, PACKAGE, 'top', dialect='spectre')
+        level = self.dump(files, 'top')
+        item = next(i for i in level['items'] if i['id'] == '#I0')
+        symbol = level['symbols'][item['symbol']]
+        self.assertNotEqual(symbol['name'], '$CURRENT_SOURCE')
+        self.assertEqual(len(symbol['pins']), 2)
+        self.assertNotIn('@SELECT-INSTANCE(name="I*")', files['eda-symbol.rnl'])
+        source, _ = primitive_drawing('idc', [(0, 3), (0, -3)], 'R0')
+        source = source.replace('X0', 'I0')
+        native = '// Library name: work\n// Cell name: top\nI0 (N1 N2) isource dc=1u\n'
+        files, _ = convert(native, source, {('analogLib', 'idc'): ['P1', 'P2']}, PACKAGE, 'top', dialect='spectre')
+        level = self.dump(files)
+        item = next(i for i in level['items'] if i['id'] == '#I0')
+        self.assertEqual(level['symbols'][item['symbol']]['name'], '$CURRENT_SOURCE')
 
     def test_custom_symbols_have_pins_without_pin_artwork_or_style(self):
         cell = edif.read(drawing())['work', 'leaf']

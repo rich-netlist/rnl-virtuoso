@@ -3,7 +3,7 @@ import os
 import re
 import unittest
 
-from fixtures import primitive_drawing
+from fixtures import primitive_drawing, drawing, spectre_netlist
 from rnl_export import ExportError, edif, resources
 from go_backend import convert
 import test_symbols
@@ -11,6 +11,26 @@ import test_symbols
 
 @unittest.skipIf(os.environ.get('RNL_EXPORT_BACKEND') == 'python', 'Native PDK expansions are a Go backend extension')
 class PDKTests(unittest.TestCase):
+    def test_explicitly_ignored_instance_is_not_a_missing_native_device(self):
+        source = drawing().replace('(instance R0 ', '(instance R0 (property nlAction (string "ignore")) ')
+        native = spectre_netlist().replace('R0 (A B) resistor r=(Rbase + 1k)\n', '')
+        files, report = convert(native, source, {}, resources.read('eda-symbol.rnl'), 'top', dialect='spectre')
+        self.assertEqual(report['statistics']['instances'], 1)
+        self.assertTrue(any('nlAction=ignore: work/leaf/R0' in n for n in report['notes']))
+        self.assertNotIn('#"R0"', files['top.scs'])
+        # Suppression requires an explicit source property, never a name guess.
+        with self.assertRaisesRegex(ExportError, 'No Spectre instance'):
+            convert(native, drawing(), {}, resources.read('eda-symbol.rnl'), 'top', dialect='spectre')
+
+    def test_edif_escaped_cell_and_instance_names_match_spectre(self):
+        drawing, _ = primitive_drawing('res', [(0, 3), (0, -3)], 'R0')
+        drawing = drawing.replace('(cell top ', '(cell &_experiment ').replace('X0', '&_R0')
+        native = '// Library name: work\n// Cell name: _experiment\n_R0 (N1 N2) resistor r=1k\n'
+        files, report = convert(native, drawing, {('analogLib', 'res'): ['P1', 'P2']}, resources.read('eda-symbol.rnl'), '_experiment', dialect='spectre')
+        self.assertEqual(report['entry'], '_experiment.scs')
+        self.assertIn('#"_R0"', files['_experiment.scs'])
+        self.assertNotIn('#"&_R0"', files['_experiment.scs'])
+
     def fixture(self, frame='R0', kind='Series'):
         drawing, expected = primitive_drawing('segmented', [(0, 3), (0, -3), (2, 0)], frame)
         drawing = drawing.replace('analogLib', 'demoPDK')

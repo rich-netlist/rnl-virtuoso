@@ -67,13 +67,20 @@ The common output directory contains:
   and records model references, notes and skipped cells.
 
 The queue runs one native job at a time. Results are published together only
-after every cell and the merge succeed. Existing output directories are refused;
-a failed cell leaves its native files in the reported work directory. A library
+after all cells have been attempted and the merge succeeds. Existing output
+directories are refused. Failed cells are skipped; `failed_cells` records their
+library, cell, view, failure stage, reason and log path. `complete` is false when
+any cell failed, and the completion notice gives the failure count. A failed
+cell leaves its native files in the reported work directory. A library
 containing only symbols is supported, with no schematic entry files.
 
 Definitions are deduplicated only when the native name, source library/cell and
 electrical statements agree. Native context variants with distinct names stay
-distinct. Conflicting native names or symbol geometry stop the export with a
+distinct. A generated Spectre root wrapper may order its named ports differently
+from a native child definition. If the port sets and device statements agree,
+the shared definition keeps the native child's positional port order and body.
+Differences in indentation and continuation wrapping are ignored during comparison;
+quoted strings retain their exact content. Conflicting native names or symbol geometry stop the export with a
 diagnostic; the exporter does not rewrite device calls to invent global aliases.
 Large libraries can therefore require a native netlister naming policy that is
 consistent across roots. CIW menu installation and reload preserve existing site
@@ -121,10 +128,12 @@ report errors about drawing hidden bundle members.
 ## Conversion contract
 
 - Electrical statements come from native `si`: Spectre uses switch views
-  `spectre schematic veriloga veriloga_ans`, stop views
+  `schematic spectre veriloga veriloga_ans`, stop views
   `spectre veriloga veriloga_ans`, hierarchical mode and command `nl`;
   CDL uses `auCdl schematic`, stop view `auCdl`, command `netlist` and the native
   CDL preservation options. Spectre retains child `subckt` definitions and the native header/footer.
+  A cell with both `schematic` and `spectre` views expands its schematic;
+  a primitive or behavioral cell without a schematic keeps its native stop view.
   The current circuit gets a `subckt` wrapper if its EDIF interface has ports;
   a portless CDL root has its native wrapper removed. Device statements stay
   intact, and global declarations/model references stay outside the wrapper.
@@ -138,6 +147,10 @@ report errors about drawing hidden bundle members.
   (including bus names and ground aliases); CDL uses native prefix/spelling
   candidates. Terminal-to-net correspondence is checked, and ambiguous or
   missing mappings fail. Spectre names retain their case sensitivity.
+  Name maps decode both the SKILL string escapes and the enclosed Spectre
+  identifier escapes, including names containing hyphens.
+  EDIF's leading `&` escape is removed from display/database names such as
+  `&_experiment`; EDIF references and literal strings retain their identity.
 - Blank separator entries in CDF `termOrder` are ignored; real terminal names
   retain their spelling and order. Native scalar PDK series/parallel expansions
   are recognized only through the netlister's explicit `//Series configuration
@@ -154,6 +167,10 @@ report errors about drawing hidden bundle members.
   markers such as ground and no-connect instead of requiring their schematic
   views to be checked and saved. A no-connect at a wire end is retained as a
   figure on that wire point; a marker on a device pin uses `$NO_CONNECT`.
+  For a parameterized symbol, preflight checks its saved supermaster rather
+  than rejecting the transient generated submaster as an unsaved user edit.
+  Instances explicitly marked `nlAction=ignore` are omitted as in the native
+  netlist, with an export note. Other missing native devices remain errors.
 - Spectre behavioral leaves use the selected Verilog-A module's declared port
   order, checked against EDIF, instead of guessing from a missing CDF. Native
   `ahdl_include` lines are preserved, with their original model file references
@@ -165,6 +182,9 @@ report errors about drawing hidden bundle members.
   adjusted to align the pins. Wire ends reference the current terminal directly;
   interior EDIF route vertices are retained. Other primitives use their EDIF symbol,
   with CDF terminal order.
+  The exported Spectre copy of `eda-symbol` omits SPICE instance-letter rules:
+  an instance named `I0` keeps its cell symbol, while `isource` still selects a
+  current source by model. CDL copies keep the SPICE letter rules.
 - Exported custom symbols contain geometry, layout/text size and `@PIN`s with
   unknown direction omitted. They contain no generated pin squares or fixed
   colors, line widths or style assignments. Presentation and optional pin marks

@@ -157,6 +157,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 	if dialect != "cdl" && dialect != "spectre" {
 		fail("Unsupported native netlist format: %s", dialect)
 	}
+	in.Package = symbolPackage(in.Package, dialect)
 	hierarchy := in.Hierarchy == nil || *in.Hierarchy
 	style := resource(resourceDir, "eda-style.rnl")
 	if in.StylePackage != nil {
@@ -337,6 +338,9 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 			master := cells[ins.Master]
 			words := bindings[strings.ToLower(ins.ID)]
 			if words == nil {
+				if ins.Action == "ignore" {
+					notes = append(notes, "Omitted instance with explicit nlAction=ignore: "+c.Library+"/"+c.Name+"/"+ins.Name)
+				}
 				continue
 			}
 			group := expansionFor(b, ins.Name, words[0])
@@ -541,7 +545,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 			}
 		}
 		for index, ins := range c.Instances {
-			if bindings[strings.ToLower(ins.ID)] != nil {
+			if bindings[strings.ToLower(ins.ID)] != nil || ins.Action == "ignore" {
 				continue
 			}
 			master := cells[ins.Master]

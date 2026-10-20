@@ -271,6 +271,9 @@ func matchInstances(b *block, c *cell, dialect string, mapping nameMap) map[stri
 	out := map[string][]string{}
 	used := map[string]bool{}
 	for _, source := range c.Instances {
+		if source.Action == "ignore" {
+			continue
+		}
 		actual := source.Name
 		var words []string
 		var group *nativeExpansion
@@ -385,7 +388,10 @@ func loadNameMaps(dir string) map[string]nameMap {
 					if len(pair.list) != 2 {
 						fail("Invalid native name mapping")
 					}
-					pairs[pair.at(0).atom] = pair.at(1).atom
+					// The map is a SKILL string containing a Spectre identifier.
+					// parse decoded the string layer; decode the identifier layer too,
+					// exactly as readNative does for device and node names.
+					pairs[pair.at(0).atom] = escaped.ReplaceAllString(pair.at(1).atom, "$1")
 				}
 				m[section.at(0).atom] = pairs
 			}

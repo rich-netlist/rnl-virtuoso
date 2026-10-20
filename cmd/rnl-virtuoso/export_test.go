@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -43,6 +44,21 @@ func TestRepeatedBusOrderAndBounds(t *testing.T) {
 	}
 }
 
+func TestEdifEscapedIdentifiersAreNotDisplayNames(t *testing.T) {
+	for text, want := range map[string]string{
+		`&_experiment`: "_experiment", `&123`: "123",
+		`(rename &_experiment "&literal")`:       "&literal",
+		`(rename id (stringDisplay "&literal"))`: "&literal",
+	} {
+		if got := name(parse(text, false)); got != want {
+			t.Fatalf("%s: %q != %q", text, got, want)
+		}
+	}
+	if ident(parse(`&_experiment`, false)) != "&_experiment" {
+		t.Fatal("EDIF reference identity lost")
+	}
+}
+
 func TestNativeTextAndCasePreserved(t *testing.T) {
 	native := "// Library name: work\n// Cell name: top\nV0 (P 0) vsource type=pulse val0=0 \\\n val1=VDD\nv0 (p 0) vsource type=sine ampl=A\nW0 (P p C 0) relay ropen=1T rclosed=10\n"
 	lines, blocks, _ := readNative(native, "top", "spectre")
@@ -73,6 +89,69 @@ func TestIdentityNameMapsAndPathContainment(t *testing.T) {
 	}
 	writeText(filepath.Join(dir, "map", "current"), `(("top" "../outside"))`)
 	rejects(t, "leaves the job", func() { loadNameMaps(dir) })
+}
+
+func TestSpectreMapDecodesIdentifierEscapesAfterSkillStrings(t *testing.T) {
+	dir := t.TempDir()
+	mkdir(filepath.Join(dir, "map"))
+	writeText(filepath.Join(dir, "map", "current"), `(("top" "names"))`)
+	writeText(filepath.Join(dir, "names"), `((inst ("M0-part" "M0\\-part")) (net ("A<0>" "A\\<0\\>")))`)
+	maps := loadNameMaps(dir)
+	if maps["top"]["inst"]["M0-part"] != "M0-part" || maps["top"]["net"]["A<0>"] != "A<0>" {
+		t.Fatal(maps)
+	}
+	_, blocks, _ := readNative("M0\\-part (A\\<0\\> 0) resistor r=1k\n", "top", "spectre")
+	source := &cell{Instances: []*instance{{ID: "m", Name: "M0-part"}}}
+	got := matchInstances(blocks["top"], source, "spectre", maps["top"])
+	if !reflect.DeepEqual(got["m"], []string{"M0-part", "A<0>", "0", "resistor"}) {
+		t.Fatal(got)
+	}
+}
+
+func TestSymbolPackageIsDialectSpecific(t *testing.T) {
+	text := readText(filepath.Join("..", "..", "resources", "eda-symbol.rnl"))
+	if symbolPackage(text, "cdl") != text {
+		t.Fatal("SPICE rules lost")
+	}
+	spectre := symbolPackage(text, "spectre")
+	if strings.Contains(spectre, `@SELECT-INSTANCE(name="I*")`) || !strings.Contains(spectre, `@SELECT-INSTANCE(model="isource")`) {
+		t.Fatal("Spectre symbol rules depend on instance letters or lost primitive matching")
+	}
+	if symbolPackage(spectre, "spectre") != spectre {
+		t.Fatal("not idempotent")
+	}
+}
+
+func TestLibrarySignatureIgnoresWrappingButPreservesQuotedSpaces(t *testing.T) {
+	a := "subckt x A B\n R0 (A B) resistor r=1k \\\n    label=\"a  b\"\nends x\n"
+	b := "subckt x B A\nR0 (A B) resistor   r=1k label=\"a  b\"\nends x\n"
+	if electricalSignature(a, "spectre", true) != electricalSignature(b, "spectre", true) {
+		t.Fatal("generated wrapper or line wrapping not normalized")
+	}
+	if electricalSignature(a, "spectre", false) == electricalSignature(b, "spectre", false) {
+		t.Fatal("native positional port ordering ignored")
+	}
+	if electricalSignature(a, "spectre", true) == electricalSignature(strings.ReplaceAll(b, "a  b", "a b"), "spectre", true) {
+		t.Fatal("quoted string changed")
+	}
+}
+
+func TestLibraryMergeReportsFailedCellsEvenWhenNoneSucceeded(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("atomic publication requires Linux")
+	}
+	dir := t.TempDir()
+	output := filepath.Join(dir, "export")
+	fields := []node{atom("rnl-library-merge-v2"), atom(""), atom("work"), atom(output), atom("spectre"), atom("t"), {group: true}, atom("nil"), atom("t"), {group: true}, parse(`(("broken" "schematic" "preflight" "Missing reference library" "logs"))`, true)}
+	resources := filepath.Join("..", "..", "resources")
+	report := runLibraryMerge(filepath.Join(dir, "request.sx"), fields, resources)
+	failed := report["failed_cells"].([]map[string]string)
+	if report["complete"] != false || report["successful_cells"] != 0 || len(failed) != 1 || failed[0]["reason"] != "Missing reference library" {
+		t.Fatal(report)
+	}
+	if !strings.Contains(readText(filepath.Join(output, "library-report.json")), `"broken"`) {
+		t.Fatal("failure report was not published")
+	}
 }
 
 func TestVerilogAInterfaceValidation(t *testing.T) {
