@@ -16,9 +16,14 @@ captured when the form opens.
 
 Export runs in the background. The CIW reports progress; a modeless message
 shows the output location or error. Output contains `top.scs` (Spectre) or `top.sp` (CDL), optional
-`subckt_0000.scs`/`.sp` files, `eda-symbol.rnl` and `eda-style.rnl` (both package version 0.1), and
+`<native-subcircuit-name>.scs`/`.sp` files, `eda-symbol.rnl` and `eda-style.rnl` (both package version 0.1), and
 `export-report.json`. Their RNL language version is 0.3; both packages are
 referenced explicitly in every netlist file header.
+Separate files use the exact subcircuit names from the native netlist, including
+case and any names Cadence assigns to distinguish cells from different libraries.
+Their include paths use the same names. Unsafe filenames or case-insensitive
+collisions with another subcircuit or the entry file stop the export rather than
+overwrite a file or invent a different name.
 When the current cell has a saved `symbol` view, its native EDIF is also
 converted. The symbol is embedded in the current subcircuit (when it has ports)
 and exported as `cell-symbol.rnl`, with the public symbol `$"library/cell"` in

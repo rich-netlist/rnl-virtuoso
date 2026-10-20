@@ -292,12 +292,18 @@ def convert(netlist, drawing, orders, package, top, hierarchy=True, split=False,
         body_start = next(end for start, end, _ in cdl.statements(lines) if start == root.start)
         rendered[topkey] = ''.join(lines[body_start:root.close])+records[topkey]
     files = {}
-    # Safe, portable filenames, independent of design names and path separators.
     entry = "top." + extension
     if split and hierarchy:
         includes = []
-        for i, key in enumerate(k for k in blocks if k != topkey):
-            filename = "subckt_%04d.%s" % (i, extension)
+        filenames = {entry.lower()}
+        for key in (k for k in blocks if k != topkey):
+            name = blocks[key].name
+            if any(c in '/\\\":<>|?*' or ord(c) < 32 or ord(c) == 127 for c in name):
+                raise ExportError('Unsafe subcircuit filename for '+name)
+            filename = name+'.'+extension
+            if filename.lower() in filenames:
+                raise ExportError('Subcircuit filename '+filename+' conflicts with the entry file or another subcircuit')
+            filenames.add(filename.lower())
             files[filename] = carrier+" RNL subcircuit " + blocks[key].name + "\n" + _header(carrier) + rendered[key]
             includes.append(('%sinclude "%s"\n' % ('' if dialect == 'spectre' else '.', filename)))
         replacement = {key: rendered[key] if key == topkey else "" for key in blocks}

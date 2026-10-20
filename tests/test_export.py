@@ -30,14 +30,42 @@ class ExportTests(unittest.TestCase):
         electrical = spectre_netlist(array) if options.get('dialect') == 'spectre' else netlist(array)
         return convert(electrical, drawing(array), ORDERS, PACKAGE, 'top', **options)
 
+    def native_leaf(self, name, dialect):
+        # Cell metadata and EDIF still say work/leaf; only the native netlist
+        # chooses a different subcircuit identifier, as library disambiguation can.
+        if dialect == 'spectre':
+            escaped = re.sub(r'[^a-zA-Z0-9_]', lambda m: '\\'+m[0], name)
+            return (spectre_netlist().replace('subckt leaf ', 'subckt '+escaped+' ')
+                    .replace('ends leaf\n', 'ends '+escaped+'\n')
+                    .replace(') leaf\n', ') '+escaped+'\n'))
+        return (netlist().replace('.SUBCKT leaf ', '.SUBCKT '+name+' ')
+                .replace('/ leaf\n', '/ '+name+'\n'))
+
+    def test_split_filenames_follow_native_subcircuit_name_and_case(self):
+        for dialect, extension, prefix in [('cdl', 'sp', '.'), ('spectre', 'scs', '')]:
+            with self.subTest(dialect=dialect):
+                name = 'Leaf__otherLib_2'
+                files, report = convert(self.native_leaf(name, dialect), drawing(), ORDERS, PACKAGE, 'top', dialect=dialect, split=True)
+                filename = name+'.'+extension
+                self.assertIn(filename, files)
+                self.assertNotIn('leaf.'+extension, files)
+                self.assertIn(prefix+'include "'+filename+'"\n', files[report['entry']])
+                self.assertIn(('subckt ' if dialect == 'spectre' else '.SUBCKT ')+name+' A B\n', files[filename])
+                self.assertIn((') ' if dialect == 'spectre' else '/ ')+name+'\n', files[report['entry']])
+
+    def test_split_rejects_unsafe_names_and_entry_filename_collision(self):
+        for name, error in [('../outside', 'Unsafe subcircuit filename'), ('TOP', 'conflicts with the entry file')]:
+            with self.subTest(name=name), self.assertRaisesRegex(ExportError, error):
+                convert(self.native_leaf(name, 'spectre'), drawing(), ORDERS, PACKAGE, 'top', dialect='spectre', split=True)
+
     def test_spectre_preserves_electrical_text_and_native_hierarchy(self):
         files, _ = self.export(dialect='spectre')
         plain = re.sub(r'// @RNL\b.*?^// }\n', '', files['top.scs'], flags=re.S | re.M)
         self.assertEqual(plain.replace('subckt top A B\n', '').replace('ends top\n', ''), spectre_netlist())
         self.assertIn('subckt top A B\n', plain)
         split, _ = self.export(dialect='spectre', split=True)
-        self.assertIn('include "subckt_0000.scs"', split['top.scs'])
-        self.assertIn('# @SET-SYMBOL %block_symbol', split['subckt_0000.scs'])
+        self.assertIn('include "leaf.scs"', split['top.scs'])
+        self.assertIn('# @SET-SYMBOL %block_symbol', split['leaf.scs'])
         current, _ = self.export(dialect='spectre', hierarchy=False)
         self.assertNotIn('subckt leaf', current['top.scs'])
         self.assertIn('#"I0" @SET-SYMBOL %symbol_0', current['top.scs'])
@@ -161,8 +189,8 @@ class ExportTests(unittest.TestCase):
 
     def test_separate_and_current_level_keep_child_symbol(self):
         split, _ = self.export(split=True)
-        self.assertIn('.include "subckt_0000.sp"', split['top.sp'])
-        self.assertIn('# @SET-SYMBOL %block_symbol', split['subckt_0000.sp'])
+        self.assertIn('.include "leaf.sp"', split['top.sp'])
+        self.assertIn('# @SET-SYMBOL %block_symbol', split['leaf.sp'])
         current, _ = self.export(hierarchy=False)
         self.assertNotIn('.SUBCKT leaf', current['top.sp'])
         self.assertIn('#"XI0" @SET-SYMBOL %symbol_0', current['top.sp'])

@@ -17,7 +17,7 @@ SKILL 前端调用原生 Spectre/CDL 和 EDIF 导出器，Go 后端组合网表�
 
 ```sh
 mkdir -p ~/tools
-tar -xzf rnl-virtuoso-0.5.2-linux-amd64.tar.gz -C ~/tools
+tar -xzf rnl-virtuoso-0.5.3-linux-amd64.tar.gz -C ~/tools
 ```
 
 在 CIW 中执行一行即可，也可加入项目的 `.cdsinit`：
@@ -43,7 +43,7 @@ Linux x86-64 上测试。
 仅开发机需要 Go 1.22+ 和 Python 3.8+：
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.5.2-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.5.3-linux-amd64.tar.gz
 python scripts/test.py --rnl /path/to/rnl
 ```
 

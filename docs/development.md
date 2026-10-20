@@ -50,7 +50,7 @@ cover atomic publication and refusal of existing files, directories and symlinks
 ## Packaging
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.5.2-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.5.3-linux-amd64.tar.gz
 ```
 
 Use `--go /path/to/go` or `--backend /path/to/prebuilt-linux-executable` if needed.

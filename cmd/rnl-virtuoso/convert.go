@@ -662,13 +662,20 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 	entry := "top." + extension
 	includes := []string{}
 	if in.Split && hierarchy {
-		i := 0
+		filenames := stringSet{strings.ToLower(entry): true}
 		for _, key := range keys {
 			if key == topkey {
 				continue
 			}
-			filename := "subckt_" + leftPad(strconvI(i), 4) + "." + extension
-			i++
+			name := blocks[key].Name
+			if strings.ContainsAny(name, "/\\\":<>|?*") || strings.IndexFunc(name, func(r rune) bool { return r < 32 || r == 127 }) >= 0 {
+				fail("Unsafe subcircuit filename for %s", name)
+			}
+			filename := name + "." + extension
+			if filenames[strings.ToLower(filename)] {
+				fail("Subcircuit filename %s conflicts with the entry file or another subcircuit", filename)
+			}
+			filenames[strings.ToLower(filename)] = true
 			files[filename] = carrier + " RNL subcircuit " + blocks[key].Name + "\n" + header(carrier) + rendered[key]
 			prefix := ""
 			if dialect == "cdl" {
@@ -710,10 +717,4 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 		kind = "subcircuit"
 	}
 	return files, map[string]any{"entry": entry, "top": root.Name, "root_kind": kind, "symbol_file": symbolFile, "statistics": stats, "notes": notes}
-}
-func leftPad(s string, width int) string {
-	for len(s) < width {
-		s = "0" + s
-	}
-	return s
 }
