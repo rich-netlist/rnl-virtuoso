@@ -361,12 +361,13 @@ type cell struct {
 	Nets, Routes          []*net
 	Positions             map[string]point
 	Orientations          map[string]string
+	Directions            map[string]string
 	PositionOrder         []string
 	Annotations           []node
 }
 
 func newCell(lib, n, id string) *cell {
-	return &cell{Library: lib, Name: n, ID: id, Ports: map[string]string{}, Groups: map[string][]string{}, Labels: map[string]string{}, Pins: map[string]point{}, Positions: map[string]point{}, Orientations: map[string]string{}}
+	return &cell{Library: lib, Name: n, ID: id, Ports: map[string]string{}, Groups: map[string][]string{}, Labels: map[string]string{}, Pins: map[string]point{}, Positions: map[string]point{}, Orientations: map[string]string{}, Directions: map[string]string{}}
 }
 func readEDIF(text string) (map[cellKey]*cell, []*cell) {
 	tree := parse(text, false)
@@ -407,6 +408,9 @@ func readEDIF(text string) (map[cellKey]*cell, []*cell) {
 					}
 					c.Groups[key] = members
 					c.Labels[key] = name(p.at(1))
+					if direction := first(p, "direction"); direction.group {
+						c.Directions[key] = strings.ToUpper(direction.at(1).atom)
+					}
 				}
 				symbol := first(intf, "symbol")
 				if symbol.group {

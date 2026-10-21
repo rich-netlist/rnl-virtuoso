@@ -22,7 +22,7 @@ then extract it on the Virtuoso host:
 
 ```sh
 mkdir -p ~/tools
-tar -xzf rnl-virtuoso-0.6.2-linux-amd64.tar.gz -C ~/tools
+tar -xzf rnl-virtuoso-0.6.3-linux-amd64.tar.gz -C ~/tools
 ```
 
 In the CIW, load the entry point once:
@@ -60,7 +60,7 @@ See [export details](docs/export.md) for options, conversion rules and limitatio
 Building requires Go 1.22+ and Python 3.8+ on the development machine only:
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.6.2-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.6.3-linux-amd64.tar.gz
 python scripts/test.py
 ```
 

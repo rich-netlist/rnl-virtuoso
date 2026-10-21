@@ -74,6 +74,45 @@ func packagePins(text string) map[string]map[string]point {
 	}
 	return out
 }
+
+// Directional ports have no separate symbol in rnl-std 0.3. Copy the two
+// self-contained EDA glyphs locally so removing eda-symbol later is still valid.
+func packageSymbolDefinition(text, name, id string) string {
+	m := rx(`\$` + name + `\s*=\s*(@DEFINE-SYMBOL\b)`).FindStringSubmatchIndex(text)
+	if m == nil {
+		fail("Missing port symbol %s in the EDA package", name)
+	}
+	start, depth, quoted, comment := m[2], 0, false, false
+	for i := start; i < len(text); i++ {
+		if comment {
+			if i > 0 && text[i-1:i+1] == "*/" {
+				comment = false
+			}
+			continue
+		}
+		if text[i] == '"' {
+			if quoted && i+1 < len(text) && text[i+1] == '"' {
+				i++
+			} else {
+				quoted = !quoted
+			}
+		} else if !quoted {
+			if strings.HasPrefix(text[i:], "/*") {
+				comment = true
+			} else if text[i] == '{' {
+				depth++
+			} else if text[i] == '}' {
+				depth--
+				if depth == 0 {
+					return id + " = " + text[start:i+1]
+				}
+			}
+		}
+	}
+	fail("Incomplete port symbol %s in the EDA package", name)
+	return ""
+}
+
 func textStatement(value string, display node, scale float64, owner, key string, markup bool) string {
 	at := scaled(origin(display), scale)
 	justify := "LOWERLEFT"

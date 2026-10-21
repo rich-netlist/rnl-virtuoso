@@ -616,6 +616,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 			ss = append(ss, sid+" = $"+kind+" @ATTACH "+ref("&", netmap[original])+" => @PLACE"+pt(at)+" => @ORIENT("+quote(ins.Orient)+")")
 			endpoints = append(endpoints, endpoint{[]string{original}, at, sid + ":p"})
 		}
+		portSymbols := stringSet{}
 		for index, p := range c.PositionOrder {
 			pos := c.Positions[p]
 			bits := []string{}
@@ -632,6 +633,19 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 			}
 			at := scaled(pos, scale)
 			sid := "%port_" + strconvI(index)
+			marker := sid
+			symbol := ""
+			glyph := ""
+			switch c.Directions[p] {
+			case "INPUT":
+				glyph, symbol = "IPIN", "%input_port_symbol"
+			case "OUTPUT":
+				glyph, symbol = "OPIN", "%output_port_symbol"
+			}
+			if symbol != "" && !portSymbols[symbol] {
+				ss = append(ss, packageSymbolDefinition(in.Package, glyph, symbol))
+				portSymbols[symbol] = true
+			}
 			definition, args, term := "$IO_PORT", netsRef(bits, netmap), ":p"
 			if len(bits) > 1 {
 				definition = "%bus_port_type_" + strconvI(index)
@@ -645,12 +659,26 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 					terms = append(terms, strconvI(i+1))
 					names = append(names, ref("&", netmap[n]))
 				}
-				ss = append(ss, definition+" = @DEFINE(roles=["+strings.Join(roles, ", ")+"]) {}", definition+"_symbol = @DEFINE-SYMBOL {$IO_PORT_SYMBOL; (0, 0) @PIN(terminal=["+strings.Join(terms, ", ")+"])}", netsRef(bits, netmap)+" @REMOVE-FROM $PORT_FILL_SET")
+				// A multi-net anchor supplies the electrical bus pin. A separate
+				// IO_PORT supplies the visible marker, so any theme's IO_PORT
+				// style rules apply without copying colors into the drawing.
+				ss = append(ss, definition+" = @DEFINE(roles=["+strings.Join(roles, ", ")+"]) {}", definition+"_symbol = @DEFINE-SYMBOL {(0, 0) @PIN(terminal=["+strings.Join(terms, ", ")+"])}", netsRef(bits, netmap)+" @REMOVE-FROM $PORT_FILL_SET")
 				args, term = strings.Join(names, " "), ":1"
 			}
 			ss = append(ss, sid+" = "+definition+" @ATTACH "+args+" => @PLACE"+pt(at)+" => @ORIENT("+quote(c.Orientations[p])+")")
 			if len(bits) > 1 {
-				ss = append(ss, sid+" @SET-SYMBOL "+definition+"_symbol", sid+" @TEXT("+quote(literal(c.Labels[p]))+`, key="name")`)
+				marker = sid + "_marker"
+				ss = append(ss, sid+" @SET-SYMBOL "+definition+"_symbol", marker+" = $IO_PORT @ATTACH "+ref("&", netmap[bits[0]])+" => @PLACE"+pt(at)+" => @ORIENT("+quote(c.Orientations[p])+")")
+			}
+			if symbol != "" {
+				ss = append(ss, marker+" @SET-SYMBOL "+symbol)
+			}
+			if symbol != "" || len(bits) > 1 {
+				label := c.Labels[p]
+				if len(bits) == 1 {
+					label = netmap[bits[0]]
+				}
+				ss = append(ss, marker+" @TEXT("+quote(literal(label))+`, key="name")`)
 			}
 			endpoints = append(endpoints, endpoint{bits, at, sid + term})
 		}

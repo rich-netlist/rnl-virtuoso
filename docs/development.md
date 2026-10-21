@@ -41,6 +41,9 @@ symbol-only cells, portless entries, both formats/file modes and external-cell s
 Annotation fixtures check wire/net ownership, nearest-segment selection, repeated
 paths, bus range labels, text placement and note geometry from EDIF and the
 read-only `annotations.sx` snapshot. Ownership is checked through `rnl problem`.
+Port fixtures check input/output/inout and unknown directions, scalar and bus
+ports in all eight orientations, both native formats and replacement theme colors.
+Note fixtures also check dashed strokes and compatibility with older snapshots.
 
 To run the shared assertions separately after building:
 
@@ -56,7 +59,7 @@ cover atomic publication and refusal of existing files, directories and symlinks
 ## Packaging
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.6.2-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.6.3-linux-amd64.tar.gz
 ```
 
 Use `--go /path/to/go` or `--backend /path/to/prebuilt-linux-executable` if needed.

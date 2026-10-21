@@ -25,13 +25,13 @@ BINARY = Path(os.environ.get('RNL_BIN', str(ROOT/'target'/('rnl.exe' if os.name 
 
 
 class SymbolTests(unittest.TestCase):
-    def dump(self, files, title=None):
+    def dump(self, files, title=None, entry='top.scs'):
         if not BINARY.is_file():
             self.skipTest('Build rnl-cli or set RNL_BIN')
         with tempfile.TemporaryDirectory() as directory:
             for name, text in files.items():
                 (Path(directory)/name).write_text(text, encoding='utf-8')
-            process = subprocess.run([str(BINARY), 'dump', str(Path(directory)/'top.scs')], text=True, encoding='utf-8', capture_output=True)
+            process = subprocess.run([str(BINARY), 'dump', str(Path(directory)/entry)], text=True, encoding='utf-8', capture_output=True)
             self.assertEqual(process.returncode, 0, process.stdout+process.stderr)
             result = json.loads(process.stdout)
             self.assertFalse([d for d in result['diagnostics'] if d['severity'] in ('error', 'warning')], result['diagnostics'])

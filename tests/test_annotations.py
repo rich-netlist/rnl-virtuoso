@@ -133,3 +133,18 @@ class AnnotationTests(unittest.TestCase):
         self.assertNotIn([[-20, -20], [20, 20]], [s['points'] for s in top['shapes']])
         self.assertIn([[-20, -20], [20, 20]], [s['points'] for s in leaf['shapes']])
         self.assertNotIn([[-16, -16], [16, 16]], [s['points'] for s in leaf['shapes']])
+
+    def test_dashed_note_shapes_preserve_strokes_and_legacy_snapshots(self):
+        figures = [
+            '("line" ((0 0) (1 1)) nil)', '("path" ((1 0) (2 1)) nil)',
+            '("polygon" ((2 0) (3 1) (4 0)) nil)', '("rect" ((0 2) (1 3)) nil)',
+            '("ellipse" ((2 2) (4 3)) nil)', '("arc" ((0 0) (2 2)) (0 3.141592653589793))',
+            '("arc" ((0 0) (4 2)) (0 3.141592653589793))']
+        for style in ('dashed', 'solid', None):
+            with self.subTest(style=style):
+                shapes = ' '.join(f[:-1]+' "'+style+'")' if style else f for f in figures)
+                files = self.export(annotations='(("work" "top" 160 ('+shapes+')))')
+                level = test_symbols.SymbolTests().dump(files)
+                notes = [s for s in level['shapes'] if s['layer'] == 'middle']
+                self.assertEqual(len(notes), len(figures))
+                self.assertTrue(all(s['style'].get('linestyle', 'solid') == (style or 'solid') for s in notes))

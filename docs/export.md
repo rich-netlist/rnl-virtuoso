@@ -59,6 +59,8 @@ The common output directory contains:
   `netlists/library.scs` / `.sp` in Combined file mode. Native definitions are
   shared once. Portless roots stay at file level in their own entries, so
   independent testbenches are never combined electrically.
+  This is the shared definition directory, not a second set of cell entries;
+  open the outer `<cell>.scs` / `.sp` files and keep `netlists/` beside them.
 - `symbols.rnl`: package `virtuoso-library/<library>` version `0.1`, with reusable
   symbols named `$"library/cell"`, including symbol-only cells and referenced
   interfaces. For example: `@USE-PACKAGE(name="virtuoso-library/myLib", version="0.1", path="symbols.rnl")`.
@@ -216,7 +218,17 @@ report errors about drawing hidden bundle members.
   `text` layer that Cadence EDIF Out omits. Lines, paths, rectangles, polygons,
   ellipses and arcs retain their geometry and each cell's coordinate scale;
   elliptical arcs use cubic Bezier approximations. Colors and line widths are
-  left to the presentation package. Notes add no electrical wires or connections.
+  left to the presentation package. The native `text/drawing1` note purpose
+  becomes `linestyle="dashed"`; solid and legacy notes keep the default stroke.
+  Notes add no electrical wires or connections.
+- EDIF input/output ports use local copies of the EDA `$IPIN`/`$OPIN` glyphs,
+  so replacing `eda-symbol` with the standard symbols remains valid;
+  inout or unspecified
+  directions retain `$IO_PORT_SYMBOL`. All keep their original pin coordinates
+  and orientation. A bus has a pin-only multi-net anchor for wire connectivity
+  and a visible `$IO_PORT` marker for its shape and range label. This lets the
+  style package's port rules apply to buses as well, without fixed colors in
+  exported symbols or extra electrical wires.
 - One-dimensional bus ports become RNL bus pins, multiple nets share one bus
   wire, and iterated instances become `BUNDLE`s. Their scalar native statements
   remain intact. Range labels retain the source spelling and bit order. Repeated connections

@@ -56,6 +56,11 @@ func loadAnnotations(text string, scale float64) map[cellKey][]string {
 			default:
 				fail("Unsupported schematic annotation %s in %s/%s", kind, key.Library, key.Cell)
 			}
+			// Older snapshots have only the geometry and optional arc angles.
+			// Schematic note purposes distinguish solid from dashed strokes.
+			if len(fig.list) > 3 && fig.at(3).atom == "dashed" {
+				statement = strings.Replace(statement, " {", `(linestyle="dashed") {`, 1)
+			}
 			out[key] = append(out[key], statement)
 		}
 	}
