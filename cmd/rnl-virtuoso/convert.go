@@ -511,7 +511,9 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 				xy, outputOrient = place(symbol, src, destination, ins.Orient, xy, rules)
 				ss = append(ss, host+" @SET-SYMBOL $"+symbol)
 				stats["standard_symbols"]++
-			} else if in.Split || group != nil || child == nil || !selected[normalize(child.Name, dialect)] {
+				// Exported children supply their own block symbols in every file mode.
+				// Only leaves and omitted child definitions need a local interface.
+			} else if group != nil || child == nil || !selected[normalize(child.Name, dialect)] {
 				signature := ins.Master.Library + "\x00" + ins.Master.Cell + "\x00" + strings.Join(order, "\x00")
 				if group != nil {
 					signature += "\x00expanded"

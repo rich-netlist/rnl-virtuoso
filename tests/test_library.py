@@ -3,6 +3,7 @@ import copy
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -12,6 +13,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parent/'reference'))
 from fixtures import drawing, spectre_netlist, netlist, marker_drawing
 from go_backend import call, cell_json
 from rnl_export import ExportError, edif, resources
+
+
+def with_dependencies(files, entry):
+    """Load ported fragments through a caller without changing exported includes."""
+    ported = re.compile(r'^\s*(?:subckt|\.subckt)\s+', re.I | re.M)
+    if not ported.search(files[entry]):
+        return files, entry
+    extension = Path(entry).suffix
+    spectre = extension == '.scs'
+    caller = '__test_caller'+extension
+    text = '// Fixture caller\nsimulator lang=spectre\n' if spectre else '* Fixture caller\n'
+    for name in sorted(files):
+        if name.endswith(extension) and ported.search(files[name]):
+            text += ('include ' if spectre else '.include ')+json.dumps(name)+'\n'
+    return dict(files, **{caller: text}), caller
 
 
 @unittest.skipIf(os.environ.get('RNL_EXPORT_BACKEND') == 'python', 'Shared-library export is a Go backend extension')
@@ -54,7 +70,10 @@ class LibraryTests(unittest.TestCase):
                 (root/name).parent.mkdir(parents=True, exist_ok=True)
                 (root/name).write_text(text, encoding='utf-8')
             for entry in entries:
-                result = subprocess.run([binary, 'check', str(root/entry)], capture_output=True, text=True, encoding='utf-8')
+                context, actual = with_dependencies(files, entry)
+                if actual != entry:
+                    (root/actual).write_text(context[actual], encoding='utf-8')
+                result = subprocess.run([binary, 'check', str(root/actual)], capture_output=True, text=True, encoding='utf-8')
                 self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
                 self.assertIn('0 errors, 0 warnings', result.stdout+result.stderr)
 
@@ -160,6 +179,9 @@ class LibraryTests(unittest.TestCase):
                     self.assertFalse([n for n in files if n.startswith('netlists/')])
                     self.assertEqual(files['symbols.rnl'].count('$"work/OnlySymbol" ='), 1)
                     extension = 'scs' if dialect == 'spectre' else 'sp'
+                    host = '#"I0"' if dialect == 'spectre' else '#"XI0"'
+                    self.assertNotIn(host+' @SET-SYMBOL', files['top.'+extension])
+                    self.assertIn('# @SET-SYMBOL %block_symbol', files['leaf.'+extension])
                     self.assertNotIn(('subckt ' if dialect == 'spectre' else '.SUBCKT ')+'bench', files['bench.'+extension])
                     self.check(files, [e['file'] for e in report['entries']]+['symbols.rnl'])
             only = call(op='library', library='work', dialect=dialect, split=False, captures=[captures[-1]])

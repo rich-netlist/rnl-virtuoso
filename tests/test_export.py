@@ -93,7 +93,7 @@ class ExportTests(unittest.TestCase):
             self.assertIn('include "leaf.scs"', split['top.scs'])
         else:
             self.assertNotIn('include ', split['top.scs'])
-            self.assertIn('#"I0" @SET-SYMBOL', split['top.scs'])
+            self.assertNotIn('#"I0" @SET-SYMBOL', split['top.scs'])
         self.assertIn('# @SET-SYMBOL %block_symbol', split['leaf.scs'])
         current, _ = self.export(dialect='spectre', hierarchy=False)
         self.assertNotIn('subckt leaf', current['top.scs'])
@@ -222,7 +222,7 @@ class ExportTests(unittest.TestCase):
             self.assertIn('.include "leaf.sp"', split['top.sp'])
         else:
             self.assertNotIn('.include ', split['top.sp'])
-            self.assertIn('#"XI0" @SET-SYMBOL', split['top.sp'])
+            self.assertNotIn('#"XI0" @SET-SYMBOL', split['top.sp'])
         self.assertIn('# @SET-SYMBOL %block_symbol', split['leaf.sp'])
         current, _ = self.export(hierarchy=False)
         self.assertNotIn('.SUBCKT leaf', current['top.sp'])

@@ -41,9 +41,11 @@ not include each other, avoiding duplicate definitions through shared children.
 Native model/Verilog-A include statements remain in portless top entries; model
 files are not copied. A standalone subcircuit is a definition fragment and needs
 its dependencies and model references supplied by its caller.
-Its child symbols remain visible without loading child definitions. Open the
-corresponding child file to inspect its internals, or open a portless top to browse
-the loaded hierarchy. Combined single-cell exports retain the original combined
+Exported child symbols live inside their own subcircuit definitions; parents
+inherit them without local copies or per-instance symbol overrides. Load those
+definitions through a caller, or open a portless top to browse the complete
+hierarchy. Only children whose definitions are omitted retain local interface
+symbols in the parent. Combined single-cell exports retain the original combined
 native hierarchy and model references.
 Unsafe filenames or case-insensitive file/directory collisions stop the export
 rather than overwrite a file or invent a different name.
@@ -219,7 +221,9 @@ report errors about drawing hidden bundle members.
   RNL/EDIF matrix conventions, including `MY` for negating x. The configuration
   and pinned package snapshots are described in [resource notes](../resources/README.md).
 - A child symbol is embedded in its own subcircuit definition with `# @SET-SYMBOL`.
-  In current-level mode it is embedded and assigned within the parent.
+  This also applies to separate files and library exports: the parent uses the
+  child's default symbol. In current-level mode, or when an external child is
+  excluded, its interface symbol is embedded and assigned within the parent.
   EDIF paths, polygons, rectangles, circles and arcs are converted to RNL
   primitives. Dynamic `cdsName()` becomes the instance name; other unevaluated
   Cadence label expressions are listed in the report instead of evaluated.

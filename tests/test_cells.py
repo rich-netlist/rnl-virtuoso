@@ -4,6 +4,7 @@ import os
 import unittest
 
 import test_library
+import test_symbols
 from go_backend import call
 from rnl_export import ExportError
 from rnl_export import resources
@@ -115,17 +116,42 @@ class PerCellTests(unittest.TestCase):
                         self.assertEqual('other/leaf.'+extension in files, external)
                         includes = 'include "other/leaf.'+extension+'"'
                         self.assertEqual(includes in files['top.'+extension], portless and external)
-                        self.assertIn('#"I0" @SET-SYMBOL' if dialect == 'spectre' else '#"XI0" @SET-SYMBOL', files['top.'+extension])
+                        assignment = '#"I0" @SET-SYMBOL' if dialect == 'spectre' else '#"XI0" @SET-SYMBOL'
+                        self.assertEqual(assignment in files['top.'+extension], not external)
                         self.check(files, [name for name in files if name.endswith('.'+extension)])
 
-    def test_separate_bus_and_array_cells_keep_standalone_child_symbols(self):
+    def test_separate_bus_and_array_cells_inherit_the_exported_child_symbol(self):
         for dialect, native, extension in [('spectre', spectre_netlist(True), 'scs'), ('cdl', netlist(True), 'sp')]:
             result = call(op='convert', netlist=native, drawing=drawing(True), top='top',
                 orders=[dict(library='analogLib', cell='res', ports=['PLUS', 'MINUS'])],
                 package=resources.read('eda-symbol.rnl'), hierarchy=True, split=True, dialect=dialect)
             files = result['files']
-            self.assertIn('I0" @SET-SYMBOL %symbol_', files['top.'+extension])
-            self.assertIn('@PIN(terminal=[1, 2])', files['top.'+extension])
+            self.assertNotIn('I0" @SET-SYMBOL', files['top.'+extension])
+            self.assertNotIn('%symbol_0 =', files['top.'+extension])
+            self.assertIn('@PIN(terminal=["A<1>", "A<0>"])', files['leaf.'+extension])
+            self.assertIn('# @SET-SYMBOL %block_symbol', files['leaf.'+extension])
             self.assertIn('@BUNDLE', files['leaf.'+extension])
             self.assertNotIn('include ', files['top.'+extension])
             self.check(files, ['top.'+extension, 'leaf.'+extension])
+
+    def test_changing_only_the_exported_child_symbol_updates_the_parent(self):
+        for dialect, native, extension in [('spectre', spectre_netlist(), 'scs'), ('cdl', netlist(), 'sp')]:
+            with self.subTest(dialect=dialect):
+                result = call(op='convert', netlist=native, drawing=drawing(), top='top',
+                    orders=[dict(library='analogLib', cell='res', ports=['PLUS', 'MINUS'])],
+                    package=resources.read('eda-symbol.rnl'), hierarchy=True, split=True, dialect=dialect)
+                files = result['files']
+                context, entry = test_library.with_dependencies(files, 'top.'+extension)
+                original = test_symbols.SymbolTests().dump(context, 'top', entry)
+                host = '#I0' if dialect == 'spectre' else '#XI0'
+                item = next(i for i in original['items'] if i['id'] == host)
+                self.assertEqual(original['symbols'][item['symbol']]['pins'][0]['pos'], [0, 0])
+                child = 'leaf.'+extension
+                old = '(0, 0) @PIN(terminal="A")'
+                self.assertEqual(files[child].count(old), 1)
+                files[child] = files[child].replace(old, '(-1, 0) @PIN(terminal="A")')
+                context, entry = test_library.with_dependencies(files, 'top.'+extension)
+                changed = test_symbols.SymbolTests().dump(context, 'top', entry)
+                item = next(i for i in changed['items'] if i['id'] == host)
+                self.assertEqual(changed['symbols'][item['symbol']]['pins'][0]['pos'], [-1, 0])
+                self.assertFalse(changed['flylines'])
