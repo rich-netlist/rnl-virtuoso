@@ -93,6 +93,45 @@ func electricalSignature(body, dialect string, sortedPorts bool) string {
 	return strings.Join(values, "\n")
 }
 
+// Capture templates use netlists/ paths internally. Remap only known generated
+// includes, preserving native model includes and the entry's electrical body.
+func libraryEntry(template, prefix string, paths map[string]string, combined []string) string {
+	replacements := map[string]string{}
+	for old, destination := range paths {
+		replacements[prefix+"include "+quote(old)] = prefix + "include " + quote(destination) + "\n"
+	}
+	lines := []string{}
+	for _, line := range splitLines(template) {
+		if replacement, ok := replacements[strings.TrimSpace(line)]; ok {
+			if combined == nil {
+				lines = append(lines, replacement)
+			}
+		} else {
+			lines = append(lines, line)
+		}
+	}
+	text := strings.Join(lines, "")
+	if len(combined) > 0 {
+		includes := ""
+		for _, filename := range combined {
+			includes += prefix + "include " + quote(filename) + "\n"
+		}
+		first, rest, _ := strings.Cut(text, "\n")
+		text = first + "\n" + includes + rest
+	}
+	return text
+}
+
+func libraryDirectory(name string) string {
+	// Directory components need the same portable characters as netlist names,
+	// and must never mean the current/parent directory or a Windows-trimmed alias.
+	if name == "." || name == ".." || strings.TrimRight(name, ". ") != name {
+		fail("Unsafe library directory %s", name)
+	}
+	netlistFilename(name, "scs")
+	return name
+}
+
 func assembleLibrary(parts []libraryCapture, library, dialect string, split bool, resourceDir string) (map[string]string, map[string]any) {
 	carrier, extension, prefix := "*", "sp", "."
 	if dialect == "spectre" {
@@ -147,44 +186,55 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split bool
 		names = append(names, key)
 	}
 	sort.Strings(names)
-	combined := ""
+	combined := map[string]string{}
+	paths := map[string]string{}
+	directories := map[string]string{"netlists": library}
+	reserved := stringSet{"eda-symbol.rnl": true, "eda-style.rnl": true, "symbols.rnl": true, "library-report.json": true}
+	for key := range entries {
+		reserved[key] = true
+	}
 	index := []map[string]string{}
 	for _, key := range names {
 		def := definitions[key]
 		filename := netlistFilename(def.Name, extension)
+		directory := "netlists"
+		if def.Library != library {
+			directory = libraryDirectory(def.Library)
+		}
+		folderKey := strings.ToLower(directory)
+		if old, ok := directories[folderKey]; ok && old != def.Library {
+			fail("Conflicting library directory %s (%s and %s)", directory, old, def.Library)
+		}
+		if reserved[folderKey] {
+			fail("Library directory %s conflicts with an output file", directory)
+		}
+		directories[folderKey] = def.Library
+		destination := directory + "/" + filename
 		text := carrier + " RNL subcircuit " + def.Name + "\n" + def.Body
 		if split {
-			files["netlists/"+filename] = text
+			files[destination] = text
 		} else {
-			combined += text
+			destination = directory + "/library." + extension
+			combined[destination] += text
 		}
-		index = append(index, map[string]string{"library": def.Library, "cell": def.Cell, "subcircuit": def.Name, "file": func() string {
-			if split {
-				return "netlists/" + filename
-			}
-			return "netlists/library." + extension
-		}()})
+		paths["netlists/"+filename] = destination
+		index = append(index, map[string]string{"library": def.Library, "cell": def.Cell, "subcircuit": def.Name, "file": destination})
 	}
-	if !split && len(names) > 0 {
-		files["netlists/library."+extension] = combined
+	var combinedIncludes []string
+	if !split {
+		combinedIncludes = []string{}
+		for filename, text := range combined {
+			files[filename] = text
+			combinedIncludes = append(combinedIncludes, filename)
+		}
+		sort.Strings(combinedIncludes)
 	}
 	entryIndex := []map[string]string{}
 	for _, part := range parts {
 		if part.Entry == "" {
 			continue
 		}
-		text := part.Template
-		if !split && len(names) > 0 {
-			lines := []string{}
-			for _, line := range splitLines(text) {
-				if strings.HasPrefix(strings.TrimSpace(line), prefix+`include "netlists/`) {
-					continue
-				}
-				lines = append(lines, line)
-			}
-			first, rest, _ := strings.Cut(strings.Join(lines, ""), "\n")
-			text = first + "\n" + prefix + "include " + quote("netlists/library."+extension) + "\n" + rest
-		}
+		text := libraryEntry(part.Template, prefix, paths, combinedIncludes)
 		if _, ok := files[part.Entry]; ok {
 			fail("Reserved library output filename %s", part.Entry)
 		}

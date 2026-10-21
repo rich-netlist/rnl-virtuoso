@@ -18,6 +18,25 @@ func rejects(t *testing.T, contains string, fn func()) {
 	}
 }
 
+func TestLibraryLayoutPreservesUnrelatedNativeIncludes(t *testing.T) {
+	for _, prefix := range []string{"", "."} {
+		model := prefix + "include \"netlists/models.scs\" section=tt\n"
+		body := "R0 (A B) resistor r=1k\n"
+		template := "// entry\n" + model + prefix + "include \"netlists/child.scs\"\n" + body
+		paths := map[string]string{"netlists/child.scs": "foreign/child.scs"}
+		separate := libraryEntry(template, prefix, paths, nil)
+		combined := libraryEntry(template, prefix, paths, []string{"foreign/library.scs", "netlists/library.scs"})
+		for _, text := range []string{separate, combined} {
+			if !strings.Contains(text, model) || !strings.HasSuffix(text, body) {
+				t.Fatalf("native model include or electrical body changed: %s", text)
+			}
+			if strings.Contains(text, "\"netlists/child.scs\"") {
+				t.Fatalf("stale generated include: %s", text)
+			}
+		}
+	}
+}
+
 func TestSExpressionsAreInertAndDecodeNativeEscapes(t *testing.T) {
 	n := parse(`("a\"b" "c\\d" "\101\n")`, true)
 	want := []string{"a\"b", `c\d`, "A\n"}

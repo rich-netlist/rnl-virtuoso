@@ -55,12 +55,20 @@ The common output directory contains:
 
 - `<cell>.scs` / `.sp`: an entry for each schematic cell, with its original native
   header/footer and the required includes. Open these entries to view a cell.
-- `netlists/<native-subcircuit-name>.scs` / `.sp` in Separate files mode, or
-  `netlists/library.scs` / `.sp` in Combined file mode. Native definitions are
-  shared once. Portless roots stay at file level in their own entries, so
-  independent testbenches are never combined electrically.
-  This is the shared definition directory, not a second set of cell entries;
-  open the outer `<cell>.scs` / `.sp` files and keep `netlists/` beside them.
+- `netlists/<native-subcircuit-name>.scs` / `.sp` contains the selected library's
+  shared definitions in Separate files mode; Combined file mode uses
+  `netlists/library.scs` / `.sp`. This existing directory contains deduplicated
+  definitions, not another set of cell entries. No directory named after the
+  selected library is added.
+- `<external-library>/<native-subcircuit-name>.scs` / `.sp` contains each
+  referenced external library's definitions, deduplicated across all entries.
+  Combined file mode uses `<external-library>/library.scs` / `.sp` per library.
+  Directory names come from the source Virtuoso library; filenames retain the
+  native subcircuit names and case. Entry includes and report paths use these
+  locations. Keep all these directories beside the root cell entries.
+  Portless roots stay at file level in their own entries, so independent
+  testbenches are never combined electrically. Combined entries include every
+  library's combined file once to satisfy dependencies between shared definitions.
 - `symbols.rnl`: package `virtuoso-library/<library>` version `0.1`, with reusable
   symbols named `$"library/cell"`, including symbol-only cells and referenced
   interfaces. For example: `@USE-PACKAGE(name="virtuoso-library/myLib", version="0.1", path="symbols.rnl")`.
@@ -84,6 +92,9 @@ the shared definition keeps the native child's positional port order and body.
 Differences in indentation and continuation wrapping are ignored during comparison;
 quoted strings retain their exact content. Conflicting native names or symbol geometry stop the export with a
 diagnostic; the exporter does not rewrite device calls to invent global aliases.
+Library directories do not create electrical namespaces: conflicting native
+subcircuit names still stop the merge. Unsafe library directory names, names
+that differ only by case, or collisions with root output files are also refused.
 Large libraries can therefore require a native netlister naming policy that is
 consistent across roots. CIW menu installation and reload preserve existing site
 menu entries and never add a second RNL item.

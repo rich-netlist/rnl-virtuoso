@@ -58,6 +58,83 @@ class LibraryTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
                 self.assertIn('0 errors, 0 warnings', result.stdout+result.stderr)
 
+    def external_fixture(self, dialect, library='other', native_name='Leaf_native_2', top='top'):
+        tree = edif.parse(drawing())
+        work = next(n for n in tree if edif.tag(n) == 'library' and n[1] == 'work')
+        leaf = next(n for n in work if edif.tag(n) == 'cell' and n[1] == 'leaf')
+        work.remove(leaf)
+        tree.append(['library', library, leaf])
+        def update(n):
+            if isinstance(n, list):
+                if edif.tag(n) == 'cellref' and n[1] == 'leaf':
+                    n.append(['libraryRef', library])
+                if edif.tag(n) == 'cell' and n[1] == 'top':
+                    n[1] = top
+                for child in n:
+                    update(child)
+        update(tree)
+        def emit(n):
+            return '('+' '.join(emit(x) for x in n)+')' if isinstance(n, list) else json.dumps(n)
+        if dialect == 'spectre':
+            native = spectre_netlist().replace('// Library name: work\n// Cell name: leaf',
+                                                '// Library name: '+library+'\n// Cell name: leaf')
+            native = native.replace('subckt leaf ', 'subckt '+native_name+' ').replace('ends leaf', 'ends '+native_name)
+            native = native.replace(') leaf\n', ') '+native_name+'\n').replace('// Cell name: top', '// Cell name: '+top)
+        else:
+            native = netlist().replace('* Library Name: work\n* Cell Name: leaf',
+                                       '* Library Name: '+library+'\n* Cell Name: leaf')
+            native = native.replace('.SUBCKT leaf ', '.SUBCKT '+native_name+' ').replace('/ leaf\n', '/ '+native_name+'\n')
+            native = native.replace('* Cell Name: top', '* Cell Name: '+top).replace('.SUBCKT top ', '.SUBCKT '+top+' ')
+        return self.capture(native, emit(tree), top, dialect)
+
+    def test_external_definitions_are_grouped_by_source_library_and_deduplicated(self):
+        for dialect in ('spectre', 'cdl'):
+            captures = [self.external_fixture(dialect), self.external_fixture(dialect, top='second'),
+                        self.external_fixture(dialect, 'ThirdLib', 'Leaf_native_3', 'third')]+self.fixtures(dialect)[2:]
+            extension = 'scs' if dialect == 'spectre' else 'sp'
+            prefix = '' if dialect == 'spectre' else '.'
+            for split in (False, True):
+                with self.subTest(dialect=dialect, split=split):
+                    result = call(op='library', library='work', dialect=dialect, split=split, captures=captures)
+                    files, report = result['files'], result['report']
+                    self.assertEqual(len(report['definitions']), 5)
+                    self.assertEqual(len(report['entries']), 4)
+                    self.assertEqual({n.split('/')[0] for n in files if '/' in n}, {'netlists', 'other', 'ThirdLib'})
+                    for definition in report['definitions']:
+                        directory = 'netlists' if definition['library'] == 'work' else definition['library']
+                        name = definition['subcircuit'] if split else 'library'
+                        expected = directory+'/'+name+'.'+extension
+                        self.assertEqual(definition['file'], expected)
+                        self.assertIn(expected, files)
+                    foreign = 'other/'+('Leaf_native_2' if split else 'library')+'.'+extension
+                    body = next(d['Body'] for d in captures[0]['Definitions'] if d['Library'] == 'other')
+                    self.assertEqual(files[foreign].count(body), 1)
+                    self.assertNotIn('netlists/Leaf_native_2.'+extension, files)
+                    for entry in report['entries']:
+                        text = files[entry['file']]
+                        if split:
+                            required = [d['file'] for d in report['definitions'] if d['subcircuit'] in ('top', 'Leaf_native_2')]
+                            if entry['cell'] != 'top':
+                                continue
+                        else:
+                            # Every entry needs the complete combined groups: a main-library
+                            # group can contain another root's foreign dependencies.
+                            required = ['netlists/library.'+extension, 'other/library.'+extension, 'ThirdLib/library.'+extension]
+                        for path in required:
+                            self.assertEqual(text.count(prefix+'include '+json.dumps(path)+'\n'), 1)
+                    self.check(files, [e['file'] for e in report['entries']]+['symbols.rnl'])
+
+    def test_unsafe_or_colliding_library_directories_are_rejected(self):
+        capture = self.external_fixture('spectre')
+        for directory in ('..', '.', '../escape', 'bad\\dir', 'trailing.', 'trailing ', 'netlists', 'symbols.rnl', 'top.scs'):
+            bad = copy.deepcopy(capture)
+            next(d for d in bad['Definitions'] if d['Library'] == 'other')['Library'] = directory
+            with self.subTest(directory=directory), self.assertRaisesRegex(ExportError, 'Unsafe|conflicts|Conflicting'):
+                call(op='library', library='work', dialect='spectre', split=True, captures=[bad])
+        other = self.external_fixture('spectre', 'OTHER', 'Leaf_native_3', 'second')
+        with self.assertRaisesRegex(ExportError, 'Conflicting library directory'):
+            call(op='library', library='work', dialect='spectre', split=True, captures=[capture, other])
+
     def test_shared_definitions_symbols_and_portless_entries_in_both_formats_and_modes(self):
         for dialect in ('spectre', 'cdl'):
             captures = self.fixtures(dialect)

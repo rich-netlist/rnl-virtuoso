@@ -22,7 +22,7 @@ then extract it on the Virtuoso host:
 
 ```sh
 mkdir -p ~/tools
-tar -xzf rnl-virtuoso-0.6.3-linux-amd64.tar.gz -C ~/tools
+tar -xzf rnl-virtuoso-0.6.4-linux-amd64.tar.gz -C ~/tools
 ```
 
 In the CIW, load the entry point once:
@@ -46,8 +46,9 @@ External model references remain external; this does not package a runnable simu
 
 From **CIW → File → Export → RNL...**, choose **Cell** and a library/cell without
 opening its editor, or **Library** to export all schematic and symbol-only cells.
-The library output shares `netlists/`, `symbols.rnl` and the two presentation
-packages; open a `<cell>.scs` / `.sp` entry. The report lists entries, native
+Open a root `<cell>.scs` / `.sp` entry. The library output shares its own
+definitions in `netlists/`, external definitions in `<external-library>/`,
+`symbols.rnl` and the two presentation packages. The report lists entries, native
 definitions and exported symbols. The external-cell option preserves interfaces
 and symbols when off, and includes referenced schematic definitions when on.
 Failed cells are skipped and reported with their reasons and logs; `complete`
@@ -60,7 +61,7 @@ See [export details](docs/export.md) for options, conversion rules and limitatio
 Building requires Go 1.22+ and Python 3.8+ on the development machine only:
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.6.3-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.6.4-linux-amd64.tar.gz
 python scripts/test.py
 ```
 

@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const version = "0.6.3"
+const version = "0.6.4"
 
 func resource(dir, name string) string { return readText(filepath.Join(dir, name)) }
 func writeText(path, text string) {
