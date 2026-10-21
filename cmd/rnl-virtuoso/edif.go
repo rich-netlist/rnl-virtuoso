@@ -349,6 +349,14 @@ type net struct {
 	Labels    []node
 	Bits      []string
 }
+
+// A terminal may have several physical port markers in a schematic. Keep
+// their placement and orientation separately from the logical port interface.
+type portPlacement struct {
+	Port   string
+	XY     point
+	Orient string
+}
 type cell struct {
 	Library, Name, ID     string
 	Ports                 map[string]string
@@ -359,15 +367,13 @@ type cell struct {
 	Symbol                node
 	Instances             []*instance
 	Nets, Routes          []*net
-	Positions             map[string]point
-	Orientations          map[string]string
 	Directions            map[string]string
-	PositionOrder         []string
+	PortPlacements        []portPlacement
 	Annotations           []node
 }
 
 func newCell(lib, n, id string) *cell {
-	return &cell{Library: lib, Name: n, ID: id, Ports: map[string]string{}, Groups: map[string][]string{}, Labels: map[string]string{}, Pins: map[string]point{}, Positions: map[string]point{}, Orientations: map[string]string{}, Directions: map[string]string{}}
+	return &cell{Library: lib, Name: n, ID: id, Ports: map[string]string{}, Groups: map[string][]string{}, Labels: map[string]string{}, Pins: map[string]point{}, Directions: map[string]string{}}
 }
 func readEDIF(text string) (map[cellKey]*cell, []*cell) {
 	tree := parse(text, false)
@@ -471,14 +477,11 @@ func readEDIF(text string) (map[cellKey]*cell, []*cell) {
 							if len(ps) > 0 {
 								key := strings.ToLower(ident(pi.at(1)))
 								tr := first(first(pi, "instance"), "transform")
-								if _, ok := c.Positions[key]; !ok {
-									c.PositionOrder = append(c.PositionOrder, key)
-								}
-								c.Positions[key] = ps[0]
+								pos := ps[0]
 								if tr.group {
-									c.Positions[key] = origin(tr)
+									pos = origin(tr)
 								}
-								c.Orientations[key] = orientationOf(tr)
+								c.PortPlacements = append(c.PortPlacements, portPlacement{key, pos, orientationOf(tr)})
 							}
 						}
 						for _, rn := range children(page, "net") {

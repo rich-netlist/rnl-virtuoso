@@ -244,7 +244,9 @@ report errors about drawing hidden bundle members.
   so replacing `eda-symbol` with the standard symbols remains valid;
   inout or unspecified
   directions retain `$IO_PORT_SYMBOL`. All keep their original pin coordinates
-  and orientation. A bus has a pin-only multi-net anchor for wire connectivity
+  and orientation. Repeated schematic port markers on the same logical terminal
+  are exported individually, preserving each placement and wire attachment
+  without adding electrical ports. A bus has a pin-only multi-net anchor for wire connectivity
   and a visible `$IO_PORT` marker for its shape and range label. This lets the
   style package's port rules apply to buses as well, without fixed colors in
   exported symbols or extra electrical wires.
@@ -255,6 +257,11 @@ report errors about drawing hidden bundle members.
   instances stay grouped in the drawing.
 
 ## Current boundaries
+
+Repeated schematic port markers are supported. Multiple physical pins of the
+same terminal in a symbol are not: RNL 0.3 gives each terminal one pin, with
+later definitions overriding earlier ones. Such symbol pins still collapse to
+one connection location.
 
 This version targets saved schematic hierarchies with the fixed view lists
 above. Config views, arbitrary stop/switch view policies, HSPICE output,

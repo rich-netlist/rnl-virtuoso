@@ -9,18 +9,51 @@ from go_backend import convert
 
 @unittest.skipIf(os.environ.get('RNL_EXPORT_BACKEND') == 'python', 'Port directions use the Go backend')
 class PortTests(unittest.TestCase):
-    def export(self, array=False, frame='R0', directions=('INPUT', 'OUTPUT'), dialect='spectre'):
+    def export(self, array=False, frame='R0', directions=('INPUT', 'OUTPUT'), dialect='spectre', repeated=False):
         source = drawing(array)
         for name, direction, x in zip(('A', 'B'), directions, (0, 60)):
             port = '(array (rename %s "%s<1:0>") 2)' % (name, name) if array else name
             if direction:
                 source = source.replace('(port '+port+')', '(port '+port+' (direction '+direction+'))')
-            source = source.replace('(portImplementation %s (connectLocation (figure pin (dot (pt %d 0)))))' % (name, x),
-                '(portImplementation %s (connectLocation (figure pin (dot (pt %d 0)))) (instance pin (transform (orientation %s) (origin (pt %d 0)))))' % (name, x, frame, x))
+            marker = '(portImplementation %s (connectLocation (figure pin (dot (pt %d 0)))) (instance pin (transform (orientation %s) (origin (pt %d 0)))))' % (name, x, frame, x)
+            source = source.replace('(portImplementation %s (connectLocation (figure pin (dot (pt %d 0)))))' % (name, x), marker)
+            if repeated:
+                # Repeat only schematic placements, not the interface symbol.
+                # The transform origin, not the connectLocation, places a port.
+                other = -40 if name == 'A' else 100
+                duplicate = '(portImplementation %s (connectLocation (figure pin (dot (pt %d 0)))) (instance pin (transform (orientation R180) (origin (pt %d 0)))))' % (name, x, other)
+                interface, schematic = source.split('(contents', 1)
+                source = interface+'(contents'+schematic.replace(marker, marker+duplicate)
         native = spectre_netlist(array) if dialect == 'spectre' else netlist(array)
         files, _ = convert(native, source, {('analogLib', 'res'): ['PLUS', 'MINUS']},
                            test_symbols.PACKAGE, 'top', dialect=dialect)
         return files
+
+    def test_repeated_scalar_and_bus_port_markers_keep_each_placement(self):
+        for array in (False, True):
+            for dialect in ('spectre', 'cdl'):
+                for frame in ('R0', 'R90', 'R180', 'R270', 'MX', 'MY', 'MXR90', 'MYR90'):
+                    with self.subTest(array=array, dialect=dialect, frame=frame):
+                        original = self.export(array, frame, dialect=dialect)
+                        files = self.export(array, frame, dialect=dialect, repeated=True)
+                        entry = 'top.scs' if dialect == 'spectre' else 'top.sp'
+                        # Placing a second glyph must not duplicate the native
+                        # port list, add devices, or change native connectivity.
+                        native = lambda text: [line for line in text.splitlines() if line and not line.startswith(('//', '*'))]
+                        self.assertEqual(native(original[entry]), native(files[entry]))
+                        for title in ('top', 'leaf'):
+                            level = test_symbols.SymbolTests().dump(files, title, entry)
+                            self.assertFalse(level['flylines'])
+                            suffix = '_marker' if array else ''
+                            for index, x, orient in ((0, 0, frame), (1, -4, 'R180'), (2, 6, frame), (3, 10, 'R180')):
+                                anchor = next(i for i in level['items'] if i['id'] == '%%port_%d' % index)
+                                marker = next(i for i in level['items'] if i['id'] == '%%port_%d%s' % (index, suffix))
+                                self.assertEqual(marker['at'], [x, 0])
+                                self.assertEqual(marker['orient'], orient)
+                                self.assertEqual(anchor['at'], marker['at'])
+                                expected = 'input_port_symbol' if index < 2 else 'output_port_symbol'
+                                self.assertEqual(level['symbols'][marker['symbol']]['name'], expected)
+                                self.assertTrue(any('%%port_%d:' % index in wire for wire in files[entry].splitlines() if '@WIRE(' in wire))
 
     def assert_ports(self, files, array, frame, symbols=('input_port_symbol', 'output_port_symbol'), color='#ff0000'):
         for title in ('top', 'leaf'):

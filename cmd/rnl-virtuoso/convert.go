@@ -617,8 +617,8 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 			endpoints = append(endpoints, endpoint{[]string{original}, at, sid + ":p"})
 		}
 		portSymbols := stringSet{}
-		for index, p := range c.PositionOrder {
-			pos := c.Positions[p]
+		for index, placement := range c.PortPlacements {
+			p, pos := placement.Port, placement.XY
 			bits := []string{}
 			valid := true
 			for _, k := range c.Groups[p] {
@@ -665,10 +665,10 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 				ss = append(ss, definition+" = @DEFINE(roles=["+strings.Join(roles, ", ")+"]) {}", definition+"_symbol = @DEFINE-SYMBOL {(0, 0) @PIN(terminal=["+strings.Join(terms, ", ")+"])}", netsRef(bits, netmap)+" @REMOVE-FROM $PORT_FILL_SET")
 				args, term = strings.Join(names, " "), ":1"
 			}
-			ss = append(ss, sid+" = "+definition+" @ATTACH "+args+" => @PLACE"+pt(at)+" => @ORIENT("+quote(c.Orientations[p])+")")
+			ss = append(ss, sid+" = "+definition+" @ATTACH "+args+" => @PLACE"+pt(at)+" => @ORIENT("+quote(placement.Orient)+")")
 			if len(bits) > 1 {
 				marker = sid + "_marker"
-				ss = append(ss, sid+" @SET-SYMBOL "+definition+"_symbol", marker+" = $IO_PORT @ATTACH "+ref("&", netmap[bits[0]])+" => @PLACE"+pt(at)+" => @ORIENT("+quote(c.Orientations[p])+")")
+				ss = append(ss, sid+" @SET-SYMBOL "+definition+"_symbol", marker+" = $IO_PORT @ATTACH "+ref("&", netmap[bits[0]])+" => @PLACE"+pt(at)+" => @ORIENT("+quote(placement.Orient)+")")
 			}
 			if symbol != "" {
 				ss = append(ss, marker+" @SET-SYMBOL "+symbol)

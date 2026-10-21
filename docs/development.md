@@ -47,6 +47,8 @@ paths, bus range labels, text placement and note geometry from EDIF and the
 read-only `annotations.sx` snapshot. Ownership is checked through `rnl problem`.
 Port fixtures check input/output/inout and unknown directions, scalar and bus
 ports in all eight orientations, both native formats and replacement theme colors.
+Repeated port markers retain each position, orientation and wire attachment;
+their native electrical statements must remain unchanged.
 Note fixtures also check dashed strokes and compatibility with older snapshots.
 
 To run the shared assertions separately after building:
@@ -63,7 +65,7 @@ cover atomic publication and refusal of existing files, directories and symlinks
 ## Packaging
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.7.0-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.7.1-linux-amd64.tar.gz
 ```
 
 Use `--go /path/to/go` or `--backend /path/to/prebuilt-linux-executable` if needed.
