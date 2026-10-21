@@ -1,0 +1,4 @@
+interface:
+  display_name: "Virtuoso RNL Export"
+  short_description: "Export Virtuoso cells and libraries through RNL"
+  default_prompt: "Use $rnl-virtuoso to export a Virtuoso schematic or library as RNL."

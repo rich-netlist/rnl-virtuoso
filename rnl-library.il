@@ -107,7 +107,7 @@ procedure(rnlShowCIWExport()
   )
 )
 
-procedure(rnlStartLibraryExport(lib destination hierarchy split scale @optional (format "spectre") (external nil))
+procedure(rnlStartLibraryExport(lib destination hierarchy split scale @optional (format "spectre") (external nil) (notify t))
   let((library tasks skipped work)
     when(rnlActiveJob || rnlActiveBatch error("An RNL export is already running.\n"))
     library = ddGetObj(lib)
@@ -127,7 +127,7 @@ procedure(rnlStartLibraryExport(lib destination hierarchy split scale @optional 
     tasks = sort(tasks lambda((a b) alphalessp(car(a) car(b))))
     work = makeTempFileName("/tmp/rnlLibraryXXXX")
     unless(createDir(work) error("Cannot create library work directory.\n"))
-    rnlActiveBatch = list(nil 'library lib 'destination destination
+    rnlActiveBatch = list(nil 'library lib 'destination destination 'notify notify
       'hierarchy hierarchy 'split t 'scale scale 'format format 'external external
       'tasks tasks 'parts nil 'failures nil 'skipped skipped 'directory work 'phase "cells" 'count 0 'total length(tasks))
     rnlLastBatch = rnlActiveBatch
@@ -221,7 +221,8 @@ procedure(rnlBatchProcessDone(job status)
         message = "Library export failed."
         port = infile(strcat(job->directory "/error.txt"))
         when(port when(gets(line port) message = strcat(message "\n" line)) close(port)))
-      rnlNotice(strcat(message "\nWork: " batch->directory "\nLast cell logs: " job->directory))
+      message = strcat(message "\nWork: " batch->directory "\nLast cell logs: " job->directory)
+      if(batch->notify then rnlNotice(message) else printf("RNL: %s\n" message))
     else
       if(status == 0 then
         batch->parts = cons(strcat(job->directory "/library-parts.json") batch->parts)

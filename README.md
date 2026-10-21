@@ -22,7 +22,7 @@ then extract it on the Virtuoso host:
 
 ```sh
 mkdir -p ~/tools
-tar -xzf rnl-virtuoso-0.7.2-linux-amd64.tar.gz -C ~/tools
+tar -xzf rnl-virtuoso-0.8.0-linux-amd64.tar.gz -C ~/tools
 ```
 
 In the CIW, load the entry point once:
@@ -59,12 +59,31 @@ is false when any cell failed, and the completion notice gives the failure count
 
 See [export details](docs/export.md) for options, conversion rules and limitations.
 
+## Scripts and agents
+
+The public SKILL API exports without an editor or completion dialog:
+
+```skill
+job = rnlExportCell("myLib" "myCell" "~/exports/myCell")
+rnlExportStatus(job)
+```
+
+Use `rnlExportLibrary` for a whole library, `rnlExporterInfo` to inspect the
+installation, and keyword options for format/hierarchy/external cells. Jobs are
+asynchronous; see [API documentation](docs/skill-api.md) for completion states.
+
+Copy [skills/rnl-virtuoso](skills/rnl-virtuoso) to your agent's skill directory
+(Codex: `~/.codex/skills/rnl-virtuoso`). It builds on the existing `virtuoso`
+bridge skill, reuses a remote installation, and asks before installing a missing
+exporter in the user's home. The skill contains no exporter or bridge assets;
+new installations fetch the latest release from this repository.
+
 ## Build and test
 
 Building requires Go 1.22+ and Python 3.8+ on the development machine only:
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.7.2-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.8.0-linux-amd64.tar.gz
 python scripts/test.py
 ```
 

@@ -18,7 +18,7 @@ SKILL 前端调用原生 Spectre/CDL 和 EDIF 导出器，Go 后端组合网表�
 
 ```sh
 mkdir -p ~/tools
-tar -xzf rnl-virtuoso-0.7.2-linux-amd64.tar.gz -C ~/tools
+tar -xzf rnl-virtuoso-0.8.0-linux-amd64.tar.gz -C ~/tools
 ```
 
 在 CIW 中执行一行即可，也可加入项目的 `.cdsinit`：
@@ -51,12 +51,31 @@ Linux x86-64 上测试。
 
 更多选项与边界见 [导出说明](docs/export.md)。
 
+## 脚本与 agent
+
+公开 SKILL API 无需打开编辑器，也不会弹出完成窗口：
+
+```skill
+job = rnlExportCell("myLib" "myCell" "~/exports/myCell")
+rnlExportStatus(job)
+```
+
+整库使用 `rnlExportLibrary`；`rnlExporterInfo` 查询安装信息。
+可通过关键字参数设置格式、层次、外部 cell 等。导出异步执行，启动返回任务 ID，
+之后查询成功、部分失败或失败状态。完整用法见 [API 文档](docs/skill-api.md)。
+
+将 [skills/rnl-virtuoso](skills/rnl-virtuoso) 复制到 agent 的技能目录
+（Codex 为 `~/.codex/skills/rnl-virtuoso`）即可使用。
+该技能依赖已有的 `virtuoso` bridge 技能，先检查远端安装；已有兼容版本直接使用，
+未安装时征得同意后从本仓库获取最新发布版，安装到用户目录。
+技能不附带导出工具或 bridge 资产。
+
 ## 开发
 
 仅开发机需要 Go 1.22+ 和 Python 3.8+：
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.7.2-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.8.0-linux-amd64.tar.gz
 python scripts/test.py --rnl /path/to/rnl
 ```
 

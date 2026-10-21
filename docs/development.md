@@ -6,6 +6,8 @@
 | --- | --- |
 | `rnl-virtuoso.il` | Menu, form, preflight and asynchronous native-export launcher |
 | `rnl-library.il` | CIW selection form and sequential library export queue |
+| `rnl-api.il` | Public keyword API, quiet asynchronous jobs and status history |
+| `skills/rnl-virtuoso/` | Agent instructions; exporter/bridge are not bundled |
 | `cmd/rnl-virtuoso/` | Pure Go backend, parsers, geometry, routing and native job tests |
 | `resources/` | Editable package snapshots and orientation corrections |
 | `scripts/` | Archive builder and test driver; development tools only |
@@ -67,8 +69,20 @@ cover atomic publication and refusal of existing files, directories and symlinks
 
 ## Packaging
 
+For the SKILL API, load `tests/skill-api.il` in an idle test Virtuoso and call
+`rnlTestPublicAPI()`. It checks rejected inputs, concurrency and synthetic status
+transitions without accessing source libraries. Also run real cell and library
+exports through the bridge, polling in separate calls: check native completion,
+partial-library failures, retained earlier job IDs and absence of API dialogs.
+The API regression was exercised on IC6.1.8 at `thu-sui:65038` with a hierarchical
+cell and its library. Private source names and outputs are not shipped as fixtures.
+
+Validate `skills/rnl-virtuoso` with the skill-creator validator. Its installation
+branch must require prior consent; compatible existing installs must be reused.
+The runtime archive ships `rnl-api.il` and its docs, not agent skills or a bridge.
+
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.7.2-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.8.0-linux-amd64.tar.gz
 ```
 
 Use `--go /path/to/go` or `--backend /path/to/prebuilt-linux-executable` if needed.

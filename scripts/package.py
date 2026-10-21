@@ -15,7 +15,8 @@ def main():
     parser.add_argument('--go', default=os.environ.get('GO', 'go'), help='Go compiler executable (build machines only)')
     args = parser.parse_args()
     here = Path(__file__).resolve().parents[1]
-    files = [(here/'rnl-virtuoso.il', 'rnl-virtuoso.il'), (here/'rnl-library.il', 'rnl-library.il'), (here/'README.md', 'README.md'),
+    files = [(here/'rnl-virtuoso.il', 'rnl-virtuoso.il'), (here/'rnl-library.il', 'rnl-library.il'),
+             (here/'rnl-api.il', 'rnl-api.il'), (here/'README.md', 'README.md'),
              (here/'README.zh.md', 'README.zh.md'), (here/'LICENSE', 'LICENSE'),
              (here/'Go-LICENSE.txt', 'Go-LICENSE.txt')]
     files.extend((p, p.relative_to(here).as_posix()) for p in (here/'docs').glob('*.md'))

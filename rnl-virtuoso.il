@@ -104,7 +104,7 @@ procedure(rnlCollectOrders(cv seen orders @optional (simulator "spectre") (scope
   )
 )
 
-procedure(rnlStartExport(lib cell view destination hierarchy split scale @optional (format "spectre") (scope "") (capture nil))
+procedure(rnlStartExport(lib cell view destination hierarchy split scale @optional (format "spectre") (scope "") (capture nil) (notify t))
   let((cv rows work port cds command simulator hasSymbol symbol annotations annotationRows)
     rnlPreflightError = nil
     when(rnlActiveJob error("An RNL export is already running.\n"))
@@ -168,7 +168,7 @@ procedure(rnlStartExport(lib cell view destination hierarchy split scale @option
     close(port)
     command = strcat(rnlShellQuote(strcat(rnlInstallDirectory "/bin/rnl-virtuoso")) " "
       rnlShellQuote(strcat(work "/request.sx")))
-    rnlActiveJob = list(nil 'directory work 'destination destination
+    rnlActiveJob = list(nil 'directory work 'destination destination 'notify notify
       'entry strcat(cell if(format == "spectre" then ".scs" else ".sp")))
     rnlLastJob = rnlActiveJob
     rnlActiveJob->process = ipcBeginProcess(command "" 'rnlProcessOutput 'rnlProcessOutput 'rnlProcessDone)
@@ -200,7 +200,7 @@ procedure(rnlProcessDone(process status)
           close(port))
         message = strcat(message "\nLogs: " job->directory)
       )
-      rnlNotice(message)
+      if(job->notify then rnlNotice(message) else printf("RNL: %s\n" message))
       )
     )
   )
@@ -280,5 +280,6 @@ let((file directory)
   file = simplifyFilename(get_filename(piport))
   directory = substring(file 1 strlen(file)-strlen(car(reverse(parseString(file "/")))))
   load(strcat(directory "/rnl-library.il"))
+  load(strcat(directory "/rnl-api.il"))
   rnlInstall(directory)
 )
