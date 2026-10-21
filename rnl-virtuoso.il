@@ -211,7 +211,8 @@ procedure(rnlExportCallback(form)
     result = errset(rnlStartExport(car(form->rnlSource) cadr(form->rnlSource) caddr(form->rnlSource)
       form->outputDirectory->value form->includeHierarchy->value
       form->fileMode->value == "Separate files" form->drawingScale->value
-      if(form->netlistFormat->value == "Spectre (simulation)" then "spectre" else "cdl")) t)
+      if(form->netlistFormat->value == "Spectre (simulation)" then "spectre" else "cdl")
+      if(!form->includeExternal || form->includeExternal->value then "" else car(form->rnlSource))) t)
     hiSetCallbackStatus(form if(result then t else nil))
     unless(result rnlNotice("Export could not start. See the CIW error message."))
   )
@@ -222,8 +223,8 @@ procedure(rnlShowExport()
     cv = geGetEditCellView()
     unless(cv && cv->cellViewType == "schematic"
       error("Open a schematic editor before choosing Export RNL.\n"))
-    unless(rnlExportForm
-      rnlExportForm = hiCreateAppForm(?name 'rnlExportForm ?formTitle "Export RNL"
+    unless(rnlExportForm && rnlExportForm->includeExternal
+      rnlExportForm = hiCreateAppForm(?name 'rnlExportFormV070 ?formTitle "Export RNL"
         ?callback 'rnlExportCallback ?buttonLayout 'OKCancel ?unmapAfterCB t ?dontBlock t
         ?fields list(
           hiCreateStringField(?name 'sourceDesign ?prompt "Source" ?editable nil)
@@ -231,8 +232,9 @@ procedure(rnlShowExport()
           hiCreateCyclicField(?name 'netlistFormat ?prompt "Netlist format"
             ?choices list("Spectre (simulation)" "SPICE / CDL (LVS)") ?value "Spectre (simulation)")
           hiCreateBooleanButton(?name 'includeHierarchy ?buttonText "Include subcircuits" ?value t)
+          hiCreateBooleanButton(?name 'includeExternal ?buttonText "Include referenced external cells" ?value t)
           hiCreateCyclicField(?name 'fileMode ?prompt "Subcircuits"
-            ?choices list("Combined file" "Separate files") ?value "Combined file")
+            ?choices list("Combined file" "Separate files") ?value "Separate files")
           hiCreateFloatField(?name 'drawingScale ?prompt "EDIF units per RNL unit" ?value 10.0)
         )))
     ; Upgrade a form kept alive by a previously loaded version of this plugin.

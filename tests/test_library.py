@@ -42,7 +42,7 @@ class LibraryTests(unittest.TestCase):
         definition = call(op='symbol', cell=cell_json(cell), symbol_id='$"work/OnlySymbol"', terminals={'a': '"A"', 'b': '"B"'})['text']
         only_symbol = dict(Library='work', Cell='OnlySymbol', Dialect=dialect,
                            Symbols=[dict(Library='work', Cell='OnlySymbol', Definition=definition)])
-        return [top, leaf, bench, only_symbol]
+        return [top, leaf, bench, self.external_fixture(dialect, None, 'leaf', 'bench_top', portless=True), only_symbol]
 
     def check(self, files, entries):
         binary = os.environ.get('RNL_BIN')
@@ -58,34 +58,53 @@ class LibraryTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
                 self.assertIn('0 errors, 0 warnings', result.stdout+result.stderr)
 
-    def external_fixture(self, dialect, library='other', native_name='Leaf_native_2', top='top'):
+    def external_inputs(self, dialect, library='other', native_name='Leaf_native_2', top='top', portless=False):
         tree = edif.parse(drawing())
         work = next(n for n in tree if edif.tag(n) == 'library' and n[1] == 'work')
         leaf = next(n for n in work if edif.tag(n) == 'cell' and n[1] == 'leaf')
-        work.remove(leaf)
-        tree.append(['library', library, leaf])
+        if library:
+            work.remove(leaf)
+            tree.append(['library', library, leaf])
         def update(n):
             if isinstance(n, list):
-                if edif.tag(n) == 'cellref' and n[1] == 'leaf':
+                if library and edif.tag(n) == 'cellref' and n[1] == 'leaf':
                     n.append(['libraryRef', library])
                 if edif.tag(n) == 'cell' and n[1] == 'top':
                     n[1] = top
                 for child in n:
                     update(child)
         update(tree)
+        if portless:
+            root = next(n for n in work if edif.tag(n) == 'cell' and n[1] == top)
+            view = next(n for n in root if edif.tag(n) == 'view')
+            interface = next(n for n in view if edif.tag(n) == 'interface')
+            interface[:] = ['interface']
+            def remove_ports(n):
+                if isinstance(n, list):
+                    n[:] = [child for child in n if not (isinstance(child, list) and
+                        (edif.tag(child) == 'portimplementation' or edif.tag(child) == 'portref' and len(child) == 2))]
+                    for child in n:
+                        remove_ports(child)
+            remove_ports(view)
         def emit(n):
             return '('+' '.join(emit(x) for x in n)+')' if isinstance(n, list) else json.dumps(n)
         if dialect == 'spectre':
             native = spectre_netlist().replace('// Library name: work\n// Cell name: leaf',
-                                                '// Library name: '+library+'\n// Cell name: leaf')
+                                                '// Library name: '+(library or 'work')+'\n// Cell name: leaf')
             native = native.replace('subckt leaf ', 'subckt '+native_name+' ').replace('ends leaf', 'ends '+native_name)
             native = native.replace(') leaf\n', ') '+native_name+'\n').replace('// Cell name: top', '// Cell name: '+top)
         else:
             native = netlist().replace('* Library Name: work\n* Cell Name: leaf',
-                                       '* Library Name: '+library+'\n* Cell Name: leaf')
+                                       '* Library Name: '+(library or 'work')+'\n* Cell Name: leaf')
             native = native.replace('.SUBCKT leaf ', '.SUBCKT '+native_name+' ').replace('/ leaf\n', '/ '+native_name+'\n')
             native = native.replace('* Cell Name: top', '* Cell Name: '+top).replace('.SUBCKT top ', '.SUBCKT '+top+' ')
-        return self.capture(native, emit(tree), top, dialect)
+            if portless:
+                native = native.replace('.SUBCKT '+top+' A B\n', '.SUBCKT '+top+'\n')
+        return native, emit(tree)
+
+    def external_fixture(self, dialect, library='other', native_name='Leaf_native_2', top='top', portless=False):
+        native, source = self.external_inputs(dialect, library, native_name, top, portless)
+        return self.capture(native, source, top, dialect)
 
     def test_external_definitions_are_grouped_by_source_library_and_deduplicated(self):
         for dialect in ('spectre', 'cdl'):
@@ -97,36 +116,30 @@ class LibraryTests(unittest.TestCase):
                 with self.subTest(dialect=dialect, split=split):
                     result = call(op='library', library='work', dialect=dialect, split=split, captures=captures)
                     files, report = result['files'], result['report']
-                    self.assertEqual(len(report['definitions']), 5)
-                    self.assertEqual(len(report['entries']), 4)
-                    self.assertEqual({n.split('/')[0] for n in files if '/' in n}, {'netlists', 'other', 'ThirdLib'})
+                    self.assertEqual(len(report['definitions']), 6)
+                    self.assertEqual(len(report['entries']), 5)
+                    self.assertEqual({n.split('/')[0] for n in files if '/' in n}, {'other', 'ThirdLib'})
                     for definition in report['definitions']:
-                        directory = 'netlists' if definition['library'] == 'work' else definition['library']
-                        name = definition['subcircuit'] if split else 'library'
-                        expected = directory+'/'+name+'.'+extension
+                        directory = '' if definition['library'] == 'work' else definition['library']+'/'
+                        expected = directory+definition['cell']+'.'+extension
                         self.assertEqual(definition['file'], expected)
                         self.assertIn(expected, files)
-                    foreign = 'other/'+('Leaf_native_2' if split else 'library')+'.'+extension
+                    foreign = 'other/leaf.'+extension
                     body = next(d['Body'] for d in captures[0]['Definitions'] if d['Library'] == 'other')
                     self.assertEqual(files[foreign].count(body), 1)
                     self.assertNotIn('netlists/Leaf_native_2.'+extension, files)
                     for entry in report['entries']:
                         text = files[entry['file']]
-                        if split:
-                            required = [d['file'] for d in report['definitions'] if d['subcircuit'] in ('top', 'Leaf_native_2')]
-                            if entry['cell'] != 'top':
-                                continue
-                        else:
-                            # Every entry needs the complete combined groups: a main-library
-                            # group can contain another root's foreign dependencies.
-                            required = ['netlists/library.'+extension, 'other/library.'+extension, 'ThirdLib/library.'+extension]
+                        required = ['leaf.'+extension] if entry['cell'] == 'bench_top' else []
                         for path in required:
                             self.assertEqual(text.count(prefix+'include '+json.dumps(path)+'\n'), 1)
+                        if entry['cell'] in ('top', 'second', 'third'):
+                            self.assertNotIn(prefix+'include ', text)
                     self.check(files, [e['file'] for e in report['entries']]+['symbols.rnl'])
 
     def test_unsafe_or_colliding_library_directories_are_rejected(self):
         capture = self.external_fixture('spectre')
-        for directory in ('..', '.', '../escape', 'bad\\dir', 'trailing.', 'trailing ', 'netlists', 'symbols.rnl', 'top.scs'):
+        for directory in ('..', '.', '../escape', 'bad\\dir', 'trailing.', 'trailing ', 'symbols.rnl', 'top.scs'):
             bad = copy.deepcopy(capture)
             next(d for d in bad['Definitions'] if d['Library'] == 'other')['Library'] = directory
             with self.subTest(directory=directory), self.assertRaisesRegex(ExportError, 'Unsafe|conflicts|Conflicting'):
@@ -143,8 +156,8 @@ class LibraryTests(unittest.TestCase):
                     result = call(op='library', library='work', dialect=dialect, split=split, captures=captures)
                     files, report = result['files'], result['report']
                     self.assertEqual(len(report['definitions']), 2)
-                    self.assertEqual(len(report['entries']), 3)
-                    self.assertEqual(len([n for n in files if n.startswith('netlists/')]), 2 if split else 1)
+                    self.assertEqual(len(report['entries']), 4)
+                    self.assertFalse([n for n in files if n.startswith('netlists/')])
                     self.assertEqual(files['symbols.rnl'].count('$"work/OnlySymbol" ='), 1)
                     extension = 'scs' if dialect == 'spectre' else 'sp'
                     self.assertNotIn(('subckt ' if dialect == 'spectre' else '.SUBCKT ')+'bench', files['bench.'+extension])
@@ -174,8 +187,8 @@ class LibraryTests(unittest.TestCase):
         root['Body'] = root['Body'].replace('resistor r=', 'resistor  \\\n    r=')
         for parts in (captures, list(reversed(captures))):
             result = call(op='library', library='work', dialect='spectre', split=True, captures=parts)
-            self.assertIn('subckt leaf A B\n', result['files']['netlists/leaf.scs'])
-            self.assertIn(child['Body'], result['files']['netlists/leaf.scs'])
+            self.assertIn('subckt leaf A B\n', result['files']['leaf.scs'])
+            self.assertIn(child['Body'], result['files']['leaf.scs'])
             self.check(result['files'], ['top.scs', 'leaf.scs'])
         # Two native definitions with different positional interfaces are unsafe.
         captures[1]['Definitions'][0]['Root'] = False
@@ -203,5 +216,5 @@ class LibraryTests(unittest.TestCase):
         self.assertIn('other/leaf', [s['Library']+'/'+s['Cell'] for s in capture['Symbols']])
         result = call(op='library', library='work', dialect='spectre', split=True, captures=[capture])
         self.assertNotIn('netlists/leaf.scs', result['files'])
-        self.assertIn('#"I0" @SET-SYMBOL', result['files']['netlists/top.scs'])
+        self.assertIn('#"I0" @SET-SYMBOL', result['files']['top.scs'])
         self.check(result['files'], ['top.scs'])

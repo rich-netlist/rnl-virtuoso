@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const version = "0.6.4"
+const version = "0.7.0"
 
 func resource(dir, name string) string { return readText(filepath.Join(dir, name)) }
 func writeText(path, text string) {
@@ -254,10 +254,15 @@ func runJob(request, resourceDir string) map[string]any {
 	}
 	defer os.RemoveAll(staging) // Only this freshly allocated private staging directory.
 	for filename, content := range files {
-		if filepath.Base(filename) != filename {
+		clean := filepath.Clean(filepath.FromSlash(filename))
+		if filepath.IsAbs(filename) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) || strings.Contains(filename, `\`) {
 			fail("Invalid output filename")
 		}
-		writeText(filepath.Join(staging, filename), content)
+		path := filepath.Join(staging, clean)
+		if e := os.MkdirAll(filepath.Dir(path), 0755); e != nil {
+			fail("%s", e)
+		}
+		writeText(path, content)
 	}
 	writeText(filepath.Join(staging, "export-report.json"), jsonText(report))
 	if e = publish(staging, output); e != nil {

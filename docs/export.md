@@ -15,22 +15,38 @@ the schematic-editor entry. No editor window is required.
 | Netlist format | Spectre (simulation), the default, or SPICE / CDL (LVS). |
 | Root circuit | A schematic with ports becomes a subcircuit; one without ports remains the file-level circuit. |
 | Include subcircuits | Keep native netlist hierarchy; never flatten. When off, only the current block remains. |
-| Subcircuits | One combined file, or an entry file with native include statements. |
+| Include referenced external cells | Export foreign schematic definitions when enabled; otherwise retain their calls and interface symbols. Available for both cell and library exports. |
+| Subcircuits | Single-cell exports can use one combined file or one file per cell. Libraries always use one file per cell. |
 | EDIF units per RNL unit | Defaults to 10, matching the tested native export and `eda-symbol` dimensions. |
 
 Export runs in the background. The CIW reports progress; a modeless message
 shows the output location or error. Output contains `<schematic-cell-name>.scs` (Spectre)
 or `<schematic-cell-name>.sp` (CDL), optional
-`<native-subcircuit-name>.scs`/`.sp` files, `eda-symbol.rnl` and `eda-style.rnl` (both package version 0.1), and
+`<cell-name>.scs`/`.sp` files, external-library directories, `eda-symbol.rnl` and `eda-style.rnl` (both package version 0.1), and
 `export-report.json`. Their RNL language version is 0.3; both packages are
 referenced explicitly in every netlist file header.
 The entry filename uses the exported schematic cell's name and case in every
 mode, including portless schematics; the report and completion message give that path.
-Separate files use the exact subcircuit names from the native netlist, including
-case and any names Cadence assigns to distinguish cells from different libraries.
-Their include paths use the same names. Unsafe filenames or case-insensitive
-collisions with another subcircuit or the entry file stop the export rather than
-overwrite a file or invent a different name.
+Separate files use source cell names and case: cells in the selected library
+are saved as `<cell>.scs` / `.sp` at the export root, and foreign cells as
+`<external-library>/<cell>.scs` / `.sp`. A foreign cell referenced multiple times
+is saved once. The declarations and device calls inside each file retain the
+native subcircuit names. Native context variants of the same source cell share
+that cell's file; their distinct native declarations are retained.
+
+A cell with ports contains its own subcircuit definitions and RNL, with no native
+include statements. A portless top includes all required descendant cell files,
+including enabled external cells, once each in a flat list. Descendant files do
+not include each other, avoiding duplicate definitions through shared children.
+Native model/Verilog-A include statements remain in portless top entries; model
+files are not copied. A standalone subcircuit is a definition fragment and needs
+its dependencies and model references supplied by its caller.
+Its child symbols remain visible without loading child definitions. Open the
+corresponding child file to inspect its internals, or open a portless top to browse
+the loaded hierarchy. Combined single-cell exports retain the original combined
+native hierarchy and model references.
+Unsafe filenames or case-insensitive file/directory collisions stop the export
+rather than overwrite a file or invent a different name.
 When the current cell has a saved `symbol` view, its native EDIF is also
 converted. The symbol is embedded in the current subcircuit (when it has ports)
 and exported as `cell-symbol.rnl`, with the public symbol `$"library/cell"` in
@@ -45,7 +61,8 @@ cells with only `symbol` are exported as reusable symbols. Cells with neither
 view are skipped and listed in `library-report.json`. The exporter reads saved
 views and does not check/save, create or edit source cells.
 
-Library mode always includes the library's own cells. **Include referenced
+Library mode always exports all of the library's own cells, one file per cell;
+the Combined file option applies only to single-cell export. **Include referenced
 external cells** controls foreign schematic definitions: when off, their instance
 calls and symbols remain as external interfaces. When on, schematic definitions
 emitted by the native hierarchy exporter are included. Native stop views, PDK
@@ -53,22 +70,13 @@ primitives and Verilog-A leaves remain leaves; model references stay external.
 
 The common output directory contains:
 
-- `<cell>.scs` / `.sp`: an entry for each schematic cell, with its original native
-  header/footer and the required includes. Open these entries to view a cell.
-- `netlists/<native-subcircuit-name>.scs` / `.sp` contains the selected library's
-  shared definitions in Separate files mode; Combined file mode uses
-  `netlists/library.scs` / `.sp`. This existing directory contains deduplicated
-  definitions, not another set of cell entries. No directory named after the
-  selected library is added.
-- `<external-library>/<native-subcircuit-name>.scs` / `.sp` contains each
-  referenced external library's definitions, deduplicated across all entries.
-  Combined file mode uses `<external-library>/library.scs` / `.sp` per library.
-  Directory names come from the source Virtuoso library; filenames retain the
-  native subcircuit names and case. Entry includes and report paths use these
-  locations. Keep all these directories beside the root cell entries.
-  Portless roots stay at file level in their own entries, so independent
-  testbenches are never combined electrically. Combined entries include every
-  library's combined file once to satisfy dependencies between shared definitions.
+- `<cell>.scs` / `.sp`: the cell's actual subcircuit or portless circuit, with its
+  RNL drawing. There is no separate entry wrapper or `netlists/` directory.
+- `<external-library>/<cell>.scs` / `.sp`: referenced foreign cells, saved once
+  per source library/cell across the library export. Symbol/style package paths
+  are relative to each file, including files inside these directories.
+  Portless entries include their required descendants only; unrelated cells and
+  other portless testbenches are never included.
 - `symbols.rnl`: package `virtuoso-library/<library>` version `0.1`, with reusable
   symbols named `$"library/cell"`, including symbol-only cells and referenced
   interfaces. For example: `@USE-PACKAGE(name="virtuoso-library/myLib", version="0.1", path="symbols.rnl")`.
@@ -84,11 +92,11 @@ any cell failed, and the completion notice gives the failure count. A failed
 cell leaves its native files in the reported work directory. A library
 containing only symbols is supported, with no schematic entry files.
 
-Definitions are deduplicated only when the native name, source library/cell and
+Repeated native declarations are merged only when the native name, source library/cell and
 electrical statements agree. Native context variants with distinct names stay
 distinct. A generated Spectre root wrapper may order its named ports differently
 from a native child definition. If the port sets and device statements agree,
-the shared definition keeps the native child's positional port order and body.
+the cell file keeps the native child's positional port order and body.
 Differences in indentation and continuation wrapping are ignored during comparison;
 quoted strings retain their exact content. Conflicting native names or symbol geometry stop the export with a
 diagnostic; the exporter does not rewrite device calls to invent global aliases.

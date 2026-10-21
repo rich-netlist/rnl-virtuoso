@@ -41,22 +41,25 @@ class ExportTests(unittest.TestCase):
         return (netlist().replace('.SUBCKT leaf ', '.SUBCKT '+name+' ')
                 .replace('/ leaf\n', '/ '+name+'\n'))
 
-    def test_split_filenames_follow_native_subcircuit_name_and_case(self):
+    @unittest.skipIf(os.environ.get('RNL_EXPORT_BACKEND') == 'python', 'Per-cell layout is a Go backend extension')
+    def test_split_filenames_follow_source_cell_and_keep_native_subcircuit_name(self):
         for dialect, extension, prefix in [('cdl', 'sp', '.'), ('spectre', 'scs', '')]:
             with self.subTest(dialect=dialect):
                 name = 'Leaf__otherLib_2'
                 files, report = convert(self.native_leaf(name, dialect), drawing(), ORDERS, PACKAGE, 'top', dialect=dialect, split=True)
-                filename = name+'.'+extension
+                filename = 'leaf.'+extension
                 self.assertIn(filename, files)
-                self.assertNotIn('leaf.'+extension, files)
-                self.assertIn(prefix+'include "'+filename+'"\n', files[report['entry']])
+                self.assertNotIn(name+'.'+extension, files)
+                self.assertNotIn(prefix+'include ', files[report['entry']])
                 self.assertIn(('subckt ' if dialect == 'spectre' else '.SUBCKT ')+name+' A B\n', files[filename])
                 self.assertIn((') ' if dialect == 'spectre' else '/ ')+name+'\n', files[report['entry']])
 
-    def test_split_rejects_unsafe_names_and_entry_filename_collision(self):
-        for name, error in [('../outside', 'Unsafe netlist filename'), ('TOP', 'conflicts with the entry file')]:
-            with self.subTest(name=name), self.assertRaisesRegex(ExportError, error):
-                convert(self.native_leaf(name, 'spectre'), drawing(), ORDERS, PACKAGE, 'top', dialect='spectre', split=True)
+    @unittest.skipIf(os.environ.get('RNL_EXPORT_BACKEND') == 'python', 'Per-cell layout is a Go backend extension')
+    def test_split_native_alias_does_not_conflict_with_cell_filename(self):
+        files, _ = convert(self.native_leaf('TOP', 'spectre'), drawing(), ORDERS, PACKAGE, 'top', dialect='spectre', split=True)
+        self.assertIn('leaf.scs', files)
+        self.assertIn('subckt TOP A B', files['leaf.scs'])
+        self.assertIn('subckt top A B', files['top.scs'])
 
     def test_entry_uses_exported_cell_name_in_every_mode(self):
         for dialect, extension in [('cdl', 'sp'), ('spectre', 'scs')]:
@@ -86,7 +89,11 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(plain.replace('subckt top A B\n', '').replace('ends top\n', ''), spectre_netlist())
         self.assertIn('subckt top A B\n', plain)
         split, _ = self.export(dialect='spectre', split=True)
-        self.assertIn('include "leaf.scs"', split['top.scs'])
+        if os.environ.get('RNL_EXPORT_BACKEND') == 'python':
+            self.assertIn('include "leaf.scs"', split['top.scs'])
+        else:
+            self.assertNotIn('include ', split['top.scs'])
+            self.assertIn('#"I0" @SET-SYMBOL', split['top.scs'])
         self.assertIn('# @SET-SYMBOL %block_symbol', split['leaf.scs'])
         current, _ = self.export(dialect='spectre', hierarchy=False)
         self.assertNotIn('subckt leaf', current['top.scs'])
@@ -211,7 +218,11 @@ class ExportTests(unittest.TestCase):
 
     def test_separate_and_current_level_keep_child_symbol(self):
         split, _ = self.export(split=True)
-        self.assertIn('.include "leaf.sp"', split['top.sp'])
+        if os.environ.get('RNL_EXPORT_BACKEND') == 'python':
+            self.assertIn('.include "leaf.sp"', split['top.sp'])
+        else:
+            self.assertNotIn('.include ', split['top.sp'])
+            self.assertIn('#"XI0" @SET-SYMBOL', split['top.sp'])
         self.assertIn('# @SET-SYMBOL %block_symbol', split['leaf.sp'])
         current, _ = self.export(hierarchy=False)
         self.assertNotIn('.SUBCKT leaf', current['top.sp'])

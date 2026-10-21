@@ -26,9 +26,15 @@ procedure(rnlCIWDefaults(form)
 
 procedure(rnlCIWModeChanged(form)
   hiSetFieldEnabled(form->sourceCell form->exportScope->value == "Cell")
-  hiSetFieldEnabled(form->includeExternal form->exportScope->value == "Library")
+  hiSetFieldEnabled(form->includeExternal t)
   hiSetFieldEnabled(form->includeHierarchy form->exportScope->value == "Cell")
-  when(form->exportScope->value == "Library" form->includeHierarchy->value = t)
+  hiSetFieldEnabled(form->fileMode form->exportScope->value == "Cell")
+  unless(form->rnlPreviousScope == form->exportScope->value
+    form->includeExternal->value = form->exportScope->value == "Cell"
+    form->rnlPreviousScope = form->exportScope->value)
+  when(form->exportScope->value == "Library"
+    form->includeHierarchy->value = t
+    form->fileMode->value = "Separate files")
   rnlCIWDefaults(form)
 )
 
@@ -59,7 +65,8 @@ procedure(rnlCIWExportCallback(form)
       else
         rnlStartExport(form->sourceLibrary->value form->sourceCell->value "schematic"
           form->outputDirectory->value form->includeHierarchy->value
-          form->fileMode->value == "Separate files" form->drawingScale->value format)) t)
+          form->fileMode->value == "Separate files" form->drawingScale->value format
+          if(form->includeExternal->value then "" else form->sourceLibrary->value))) t)
     hiSetCallbackStatus(form if(result then t else nil))
     unless(result rnlNotice("Export could not start. See the CIW error message."))
   )
@@ -121,7 +128,7 @@ procedure(rnlStartLibraryExport(lib destination hierarchy split scale @optional 
     work = makeTempFileName("/tmp/rnlLibraryXXXX")
     unless(createDir(work) error("Cannot create library work directory.\n"))
     rnlActiveBatch = list(nil 'library lib 'destination destination
-      'hierarchy hierarchy 'split split 'scale scale 'format format 'external external
+      'hierarchy hierarchy 'split t 'scale scale 'format format 'external external
       'tasks tasks 'parts nil 'failures nil 'skipped skipped 'directory work 'phase "cells" 'count 0 'total length(tasks))
     rnlLastBatch = rnlActiveBatch
     printf("RNL: library %s: %d cells; work: %s\n" lib length(tasks) work)

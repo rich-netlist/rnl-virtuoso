@@ -511,7 +511,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 				xy, outputOrient = place(symbol, src, destination, ins.Orient, xy, rules)
 				ss = append(ss, host+" @SET-SYMBOL $"+symbol)
 				stats["standard_symbols"]++
-			} else if group != nil || child == nil || !selected[normalize(child.Name, dialect)] {
+			} else if in.Split || group != nil || child == nil || !selected[normalize(child.Name, dialect)] {
 				signature := ins.Master.Library + "\x00" + ins.Master.Cell + "\x00" + strings.Join(order, "\x00")
 				if group != nil {
 					signature += "\x00expanded"
@@ -723,58 +723,44 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 	}
 	files := map[string]string{}
 	entry := netlistFilename(in.Top, extension)
-	rootBody := rendered[topkey]
-	if in.Capture != nil {
-		captureConversion(in.Capture, keys, selected, blocks, source, cells, rendered, exported, topkey, rootSub, scale, &notes)
+	parts := in.Capture
+	if in.Split && parts == nil {
+		parts = &libraryCapture{Library: rootCell.Library, Cell: rootCell.Name, Dialect: dialect}
 	}
-	includes := []string{}
-	if in.Split && hierarchy {
-		filenames := stringSet{strings.ToLower(entry): true}
-		for _, key := range keys {
-			if key == topkey || !selected[key] {
-				continue
-			}
-			filename := netlistFilename(blocks[key].Name, extension)
-			if filenames[strings.ToLower(filename)] {
-				fail("Subcircuit filename %s conflicts with the entry file or another subcircuit", filename)
-			}
-			filenames[strings.ToLower(filename)] = true
-			files[filename] = carrier + " RNL subcircuit " + blocks[key].Name + "\n" + header(carrier) + rendered[key]
-			prefix := ""
-			if dialect == "cdl" {
-				prefix = "."
-			}
-			includes = append(includes, prefix+"include "+quote(filename)+"\n")
-			delete(rendered, key)
-		}
+	if parts != nil {
+		captureConversion(parts, keys, selected, blocks, source, cells, rendered, exported, topkey, rootSub, scale, &notes)
 	}
 	sortedKeys := append([]string{}, keys...)
 	sort.SliceStable(sortedKeys, func(i, j int) bool { return blocks[sortedKeys[i]].Start < blocks[sortedKeys[j]].Start })
-	out := []string{}
+	out, template := []string{}, []string{}
 	cursor := 0
+	prefix := ""
+	if dialect == "cdl" {
+		prefix = "."
+	}
 	for _, key := range sortedKeys {
 		b := blocks[key]
 		out = append(out, strings.Join(lines[cursor:b.Start], ""), rendered[key])
+		body := rendered[key]
+		if selected[key] && (key != topkey || rootSub) {
+			body = prefix + "include " + quote(capturePath(b.Name, extension)) + "\n"
+		}
+		template = append(template, strings.Join(lines[cursor:b.Start], ""), body)
 		cursor = b.End
 	}
 	out = append(out, strings.Join(lines[cursor:], ""))
+	template = append(template, strings.Join(lines[cursor:], ""))
 	native := strings.Join(out, "")
 	firstLine, rest, _ := strings.Cut(native, "\n")
-	files[entry] = firstLine + "\n" + header(carrier) + strings.Join(includes, "") + rest
-	if in.Capture != nil {
-		in.Capture.Entry = entry
-		in.Capture.Template = files[entry]
-		prefix := ""
-		if dialect == "cdl" {
-			prefix = "."
-		}
-		for _, part := range in.Capture.Definitions {
-			filename := netlistFilename(part.Name, extension)
-			if part.Root {
-				in.Capture.Template = strings.Replace(in.Capture.Template, rootBody, prefix+"include "+quote("netlists/"+filename)+"\n", 1)
-			} else {
-				in.Capture.Template = strings.Replace(in.Capture.Template, prefix+"include "+quote(filename)+"\n", prefix+"include "+quote("netlists/"+filename)+"\n", 1)
-			}
+	files[entry] = firstLine + "\n" + header(carrier) + rest
+	var cellIndex any
+	if parts != nil {
+		first, rest, _ := strings.Cut(strings.Join(template, ""), "\n")
+		parts.Entry, parts.Template = entry, first+"\n"+header(carrier)+rest
+		if in.Split {
+			var layout map[string]any
+			files, layout = assembleLibrary([]libraryCapture{*parts}, rootCell.Library, dialect, true, resourceDir)
+			cellIndex = layout["definitions"]
 		}
 	}
 	files["eda-symbol.rnl"], files["eda-style.rnl"] = in.Package, style
@@ -795,7 +781,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 	if rootSub {
 		kind = "subcircuit"
 	}
-	return files, map[string]any{"entry": entry, "top": root.Name, "root_kind": kind, "symbol_file": symbolFile, "statistics": stats, "notes": notes}
+	return files, map[string]any{"entry": entry, "top": root.Name, "root_kind": kind, "symbol_file": symbolFile, "statistics": stats, "notes": notes, "definitions": cellIndex}
 }
 
 func netlistFilename(name, extension string) string {

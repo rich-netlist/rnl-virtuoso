@@ -13,6 +13,7 @@ import (
 type libraryDefinition struct {
 	Library, Cell, Name, Body string
 	Root                      bool
+	Calls                     []string
 }
 type librarySymbol struct{ Library, Cell, Definition string }
 type libraryCapture struct {
@@ -39,7 +40,7 @@ func captureConversion(out *libraryCapture, keys []string, selected stringSet, b
 		}
 		c, b := source[key], blocks[key]
 		if key != topkey || rootSub {
-			out.Definitions = append(out.Definitions, libraryDefinition{c.Library, c.Name, b.Name, rendered[key], key == topkey})
+			out.Definitions = append(out.Definitions, libraryDefinition{c.Library, c.Name, b.Name, rendered[key], key == topkey, blockCalls(b, out.Dialect)})
 		}
 		symbols[cellKey{c.Library, c.Name}] = c
 		for _, ins := range c.Instances {
@@ -93,31 +94,101 @@ func electricalSignature(body, dialect string, sortedPorts bool) string {
 	return strings.Join(values, "\n")
 }
 
-// Capture templates use netlists/ paths internally. Remap only known generated
-// includes, preserving native model includes and the entry's electrical body.
-func libraryEntry(template, prefix string, paths map[string]string, combined []string) string {
+// These inert markers identify native blocks inside capture templates. They are
+// never output paths; physical filenames are based on source library/cell names.
+func capturePath(name, extension string) string { return "netlists/" + name + "." + extension }
+
+func blockCalls(b *block, dialect string) []string {
+	calls := []string{}
+	for _, words := range b.Instances {
+		if dialect == "cdl" {
+			if len(words) == 0 || !strings.HasPrefix(strings.ToLower(words[0]), "x") {
+				continue
+			}
+			for i, word := range words {
+				if strings.Contains(word, "=") || strings.EqualFold(word, "params:") || strings.HasPrefix(word, "$") {
+					words = words[:i]
+					break
+				}
+			}
+		}
+		if len(words) > 1 {
+			calls = append(calls, words[len(words)-1])
+		}
+	}
+	sort.Strings(calls)
+	return unique(calls)
+}
+
+func definitionCalls(def libraryDefinition, dialect string) []string {
+	if def.Calls != nil {
+		return def.Calls
+	}
+	// Accept captures written by earlier versions. The native Spectre reader
+	// expects a file-level circuit in addition to its subcircuit declarations.
+	text, name := def.Body, "_rnl_dependency_probe"
+	if dialect == "spectre" {
+		for name == def.Name {
+			name += "_"
+		}
+		text += "\nRNL_DEP_PROBE (0 0) resistor r=1\n"
+	}
+	_, blocks, _ := readNative(text, name, dialect)
+	return blockCalls(blocks[normalize(def.Name, dialect)], dialect)
+}
+
+func libraryEntry(template, prefix string, paths map[string]string) string {
 	replacements := map[string]string{}
 	for old, destination := range paths {
-		replacements[prefix+"include "+quote(old)] = prefix + "include " + quote(destination) + "\n"
+		replacements[prefix+"include "+quote(old)] = destination
 	}
 	lines := []string{}
 	for _, line := range splitLines(template) {
 		if replacement, ok := replacements[strings.TrimSpace(line)]; ok {
-			if combined == nil {
-				lines = append(lines, replacement)
-			}
+			lines = append(lines, replacement)
 		} else {
 			lines = append(lines, line)
 		}
 	}
-	text := strings.Join(lines, "")
-	if len(combined) > 0 {
-		includes := ""
-		for _, filename := range combined {
-			includes += prefix + "include " + quote(filename) + "\n"
+	return strings.Join(lines, "")
+}
+
+func withoutNativeIncludes(text, dialect string) string {
+	lines := splitLines(text)
+	omit := map[int]bool{}
+	for _, stmt := range statements(lines, dialect) {
+		words := strings.Fields(stmt.Text)
+		if len(words) == 0 {
+			continue
 		}
-		first, rest, _ := strings.Cut(text, "\n")
-		text = first + "\n" + includes + rest
+		switch strings.ToLower(words[0]) {
+		case "include", ".include", ".inc", "ahdl_include", "hdl_include", "dspf_include", "pspice_include", "#include":
+			for i := stmt.Start; i < stmt.End; i++ {
+				omit[i] = true
+			}
+		}
+	}
+	out := ""
+	for i, line := range lines {
+		if !omit[i] {
+			out += line
+		}
+	}
+	return out
+}
+
+func relativeNetlistPath(from, to string) string {
+	path, err := filepath.Rel(filepath.Dir(filepath.FromSlash(from)), filepath.FromSlash(to))
+	if err != nil {
+		fail("Cannot reference %s from %s: %s", to, from, err)
+	}
+	return filepath.ToSlash(path)
+}
+
+func cellHeader(carrier, filename string) string {
+	text := header(carrier)
+	for _, name := range []string{"eda-symbol.rnl", "eda-style.rnl"} {
+		text = strings.ReplaceAll(text, quote(name), quote(relativeNetlistPath(filename, name)))
 	}
 	return text
 }
@@ -147,8 +218,7 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split bool
 			fail("Mixed library netlist formats")
 		}
 		for _, def := range part.Definitions {
-			filename := netlistFilename(def.Name, extension)
-			key := strings.ToLower(filename)
+			key := normalize(def.Name, dialect)
 			if old, ok := definitions[key]; ok {
 				// Spectre emits no top-level subckt header: that wrapper is ours.
 				// It may order its named ports differently from a native child.
@@ -186,60 +256,120 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split bool
 		names = append(names, key)
 	}
 	sort.Strings(names)
-	combined := map[string]string{}
-	paths := map[string]string{}
-	directories := map[string]string{"netlists": library}
+	paths := map[cellKey]string{}
+	owners := map[string]cellKey{}
+	directories := map[string]string{}
 	reserved := stringSet{"eda-symbol.rnl": true, "eda-style.rnl": true, "symbols.rnl": true, "library-report.json": true}
-	for key := range entries {
-		reserved[key] = true
+	register := func(source cellKey) string {
+		if filename, ok := paths[source]; ok {
+			return filename
+		}
+		filename := netlistFilename(source.Cell, extension)
+		if source.Library != library {
+			directory := libraryDirectory(source.Library)
+			key := strings.ToLower(directory)
+			if old, ok := directories[key]; ok && old != directory {
+				fail("Conflicting library directory %s and %s", old, directory)
+			}
+			directories[key] = directory
+			filename = directory + "/" + filename
+		}
+		key := strings.ToLower(filename)
+		if old, ok := owners[key]; ok && old != source {
+			fail("Conflicting cell filename %s (%s/%s and %s/%s)", filename, old.Library, old.Cell, source.Library, source.Cell)
+		}
+		if reserved[key] {
+			fail("Reserved library output filename %s", filename)
+		}
+		paths[source], owners[key] = filename, source
+		return filename
 	}
+	groups := map[cellKey]string{}
+	dependencies := map[cellKey]stringSet{}
+	roots := map[cellKey]libraryCapture{}
 	index := []map[string]string{}
 	for _, key := range names {
 		def := definitions[key]
-		filename := netlistFilename(def.Name, extension)
-		directory := "netlists"
-		if def.Library != library {
-			directory = libraryDirectory(def.Library)
+		source := cellKey{def.Library, def.Cell}
+		destination := register(source)
+		groups[source] += def.Body
+		if dependencies[source] == nil {
+			dependencies[source] = stringSet{}
 		}
-		folderKey := strings.ToLower(directory)
-		if old, ok := directories[folderKey]; ok && old != def.Library {
-			fail("Conflicting library directory %s (%s and %s)", directory, old, def.Library)
+		for _, call := range definitionCalls(def, dialect) {
+			if child, ok := definitions[normalize(call, dialect)]; ok {
+				dependencies[source][register(cellKey{child.Library, child.Cell})] = true
+			}
 		}
-		if reserved[folderKey] {
-			fail("Library directory %s conflicts with an output file", directory)
-		}
-		directories[folderKey] = def.Library
-		destination := directory + "/" + filename
-		text := carrier + " RNL subcircuit " + def.Name + "\n" + def.Body
-		if split {
-			files[destination] = text
-		} else {
-			destination = directory + "/library." + extension
-			combined[destination] += text
-		}
-		paths["netlists/"+filename] = destination
 		index = append(index, map[string]string{"library": def.Library, "cell": def.Cell, "subcircuit": def.Name, "file": destination})
-	}
-	var combinedIncludes []string
-	if !split {
-		combinedIncludes = []string{}
-		for filename, text := range combined {
-			files[filename] = text
-			combinedIncludes = append(combinedIncludes, filename)
-		}
-		sort.Strings(combinedIncludes)
 	}
 	entryIndex := []map[string]string{}
 	for _, part := range parts {
 		if part.Entry == "" {
 			continue
 		}
-		text := libraryEntry(part.Template, prefix, paths, combinedIncludes)
-		if _, ok := files[part.Entry]; ok {
-			fail("Reserved library output filename %s", part.Entry)
+		source := cellKey{part.Library, part.Cell}
+		filename := register(source)
+		replacements := map[string]string{}
+		ported := false
+		for _, def := range part.Definitions {
+			replacements[capturePath(def.Name, extension)] = ""
+			if def.Root {
+				ported = true
+				replacements[capturePath(def.Name, extension)] = groups[source]
+			}
 		}
-		files[part.Entry] = text
-		entryIndex = append(entryIndex, map[string]string{"library": part.Library, "cell": part.Cell, "file": part.Entry})
+		text := libraryEntry(part.Template, prefix, replacements)
+		if ported {
+			roots[source] = part
+			files[filename] = withoutNativeIncludes(text, dialect)
+		} else {
+			if _, ok := groups[source]; ok {
+				fail("Cell %s/%s is both a portless top and a referenced subcircuit", source.Library, source.Cell)
+			}
+			required := stringSet{}
+			for _, def := range part.Definitions {
+				required[paths[cellKey{def.Library, def.Cell}]] = true
+			}
+			// A cell file can contain multiple native context variants. Include
+			// dependencies of every stored variant, even if another root supplied it.
+			changed := true
+			for changed {
+				changed = false
+				for child, filename := range paths {
+					if required[filename] {
+						for dependency := range dependencies[child] {
+							if !required[dependency] {
+								required[dependency], changed = true, true
+							}
+						}
+					}
+				}
+			}
+			names := []string{}
+			for dependency := range required {
+				names = append(names, dependency)
+			}
+			sort.Strings(names)
+			includes := ""
+			for _, dependency := range names {
+				includes += prefix + "include " + quote(relativeNetlistPath(filename, dependency)) + "\n"
+			}
+			first, rest, _ := strings.Cut(text, "\n")
+			files[filename] = first + "\n" + includes + rest
+		}
+		entryIndex = append(entryIndex, map[string]string{"library": part.Library, "cell": part.Cell, "file": filename})
+	}
+	for source, body := range groups {
+		filename := paths[source]
+		if _, ok := roots[source]; !ok {
+			files[filename] = carrier + " RNL cell " + source.Library + "/" + source.Cell + "\n" + cellHeader(carrier, filename) + withoutNativeIncludes(body, dialect)
+		}
+	}
+	for key, directory := range directories {
+		if _, ok := owners[key]; ok || reserved[key] {
+			fail("Library directory %s conflicts with an output file", directory)
+		}
 	}
 	symbolNames := []string{}
 	for key := range symbols {
@@ -255,7 +385,7 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split bool
 	sort.Strings(notes)
 	modelReferences = unique(modelReferences)
 	sort.Strings(modelReferences)
-	return files, map[string]any{"version": version, "backend": "go", "kind": "library", "library": library, "format": dialect, "entries": entryIndex, "definitions": index, "symbols": symbolNames, "symbol_file": "symbols.rnl", "notes": notes, "behavior_model_references": modelReferences}
+	return files, map[string]any{"version": version, "backend": "go", "kind": "library", "file_mode": "per-cell", "library": library, "format": dialect, "entries": entryIndex, "definitions": index, "symbols": symbolNames, "symbol_file": "symbols.rnl", "notes": notes, "behavior_model_references": modelReferences}
 }
 
 func runLibraryMerge(request string, fields []node, resourceDir string) map[string]any {

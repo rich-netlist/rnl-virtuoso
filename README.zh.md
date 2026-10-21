@@ -18,7 +18,7 @@ SKILL 前端调用原生 Spectre/CDL 和 EDIF 导出器，Go 后端组合网表�
 
 ```sh
 mkdir -p ~/tools
-tar -xzf rnl-virtuoso-0.6.4-linux-amd64.tar.gz -C ~/tools
+tar -xzf rnl-virtuoso-0.7.0-linux-amd64.tar.gz -C ~/tools
 ```
 
 在 CIW 中执行一行即可，也可加入项目的 `.cdsinit`：
@@ -39,9 +39,11 @@ Linux x86-64 上测试。
 
 在 **CIW → File → Export → RNL...** 中，选择 **Cell** 可直接选择库和 cell，
 无需先打开 schematic editor；选择 **Library** 可遍历整库，包括只有 symbol 的 cell。
-整库导出的 `<cell>.scs` / `.sp` 入口保留在根目录，本库的共用定义保留在 `netlists/`，
-外部库定义按 `<外部库名>/<原生子电路名>.scs` / `.sp` 分目录保存。
-重复子电路与符号只保留一份，共用 `symbols.rnl` 和 symbol/style 包；打开根目录入口使用。
+每个 cell 的实际电路直接保存为根目录的 `<cell>.scs` / `.sp`，
+外部 cell 保存到 `<外部库名>/<cell>.scs` / `.sp`，同一外部 cell 只保存一份。
+不再拆分入口文件和定义文件，也没有 `netlists/` 目录。
+带 port 的 subcircuit 不写原生 include；无 port 的 top 平铺 include 全部所需下级文件，每个文件一次。
+单 cell 导出仍可选合并文件；整库固定每个 cell 一个文件，共用 `symbols.rnl` 和 symbol/style 包。
 关闭外部 cell 导出时保留外部调用和符号，开启后连带导出原生网表中的外部子电路定义。
 `library-report.json` 列出入口、定义、符号及跳过的无 schematic/symbol 的 cell。
 导出失败的 cell 会跳过并继续处理其余 cell；报告的 `failed_cells` 保存失败原因与日志路径，
@@ -54,7 +56,7 @@ Linux x86-64 上测试。
 仅开发机需要 Go 1.22+ 和 Python 3.8+：
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.6.4-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.7.0-linux-amd64.tar.gz
 python scripts/test.py --rnl /path/to/rnl
 ```
 
