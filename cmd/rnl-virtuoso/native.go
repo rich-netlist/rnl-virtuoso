@@ -244,6 +244,13 @@ func readNative(text, top, dialect string) ([]string, map[string]*block, []strin
 			}
 		}
 	}
+	// An interface-only schematic has source identity comments but no device
+	// statements. Keep its empty root so EDIF can supply ports and drawing.
+	if dialect == "spectre" && root == nil && current == nil && cellName == top && blocks[top] == nil {
+		root = &block{Name: top, Library: lib, Cell: top, Start: len(lines), Close: len(lines), End: len(lines), Instances: map[string][]string{}}
+		blocks[top] = root
+		keys = append(keys, top)
+	}
 	if current != nil || len(blocks) == 0 || dialect == "spectre" && root == nil {
 		fail("Incomplete or empty native %s circuit", dialect)
 	}

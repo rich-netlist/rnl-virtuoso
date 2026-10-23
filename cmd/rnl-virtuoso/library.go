@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -14,6 +15,7 @@ type libraryDefinition struct {
 	Library, Cell, Name, Body string
 	Root                      bool
 	Calls                     []string
+	SourcePorts               []string `json:",omitempty"`
 }
 type librarySymbol struct{ Library, Cell, Definition string }
 type libraryCapture struct {
@@ -22,6 +24,7 @@ type libraryCapture struct {
 	Symbols                                 []librarySymbol
 	Notes                                   []string
 	ModelReferences                         []string
+	ExportSelectionBox                      *bool `json:",omitempty"`
 }
 
 func publicSymbol(c *cell, scale float64, notes *[]string) librarySymbol {
@@ -32,7 +35,7 @@ func publicSymbol(c *cell, scale float64, notes *[]string) librarySymbol {
 	return librarySymbol{c.Library, c.Name, symbolDefinition(c, ref("$", c.Library+"/"+c.Name), mapping, scale, notes)}
 }
 
-func captureConversion(out *libraryCapture, keys []string, selected stringSet, blocks map[string]*block, source map[string]*cell, cells map[cellKey]*cell, rendered map[string]string, exported *cell, topkey string, rootSub bool, scale float64, notes *[]string) {
+func captureConversion(out *libraryCapture, keys []string, selected stringSet, blocks map[string]*block, source map[string]*cell, cells map[cellKey]*cell, rendered map[string]string, exported *cell, topkey string, rootSub bool, scale float64, notes *[]string, maps map[string]nameMap) {
 	symbols := map[cellKey]*cell{}
 	for _, key := range keys {
 		if !selected[key] {
@@ -40,7 +43,11 @@ func captureConversion(out *libraryCapture, keys []string, selected stringSet, b
 		}
 		c, b := source[key], blocks[key]
 		if key != topkey || rootSub {
-			out.Definitions = append(out.Definitions, libraryDefinition{c.Library, c.Name, b.Name, rendered[key], key == topkey, blockCalls(b, out.Dialect)})
+			ports := []string{}
+			for _, p := range b.Ports {
+				ports = append(ports, c.Ports[portID(c, p, out.Dialect, maps[b.Name]["net"])])
+			}
+			out.Definitions = append(out.Definitions, libraryDefinition{Library: c.Library, Cell: c.Name, Name: b.Name, Body: rendered[key], Root: key == topkey, Calls: blockCalls(b, out.Dialect), SourcePorts: ports})
 		}
 		symbols[cellKey{c.Library, c.Name}] = c
 		for _, ins := range c.Instances {
@@ -92,6 +99,68 @@ func electricalSignature(body, dialect string, sortedPorts bool) string {
 		}
 	}
 	return strings.Join(values, "\n")
+}
+
+// Older root captures lack native parameter declarations. Accept reconciliation
+// only with the same cell's authoritative child definition, identical body and
+// port set, and no conflicting root defaults. A bare EDIF-derived root parameter
+// may also be absent from the native child when no native statement uses it
+// (for example pPar in a property omitted by native netlisting). Retain the child.
+func compatibleRootParameters(a, b libraryDefinition) bool {
+	if a.Root == b.Root {
+		return false
+	}
+	root, child := a, b
+	if !root.Root {
+		root, child = child, root
+	}
+	strip := func(body string) (string, []string) {
+		bodyLines, params := []string{}, []string{}
+		for _, s := range statements(splitLines(body), "spectre") {
+			if strings.HasPrefix(s.Text, "parameters ") {
+				params = append(params, signatureTokens.FindAllString(strings.TrimSpace(strings.TrimPrefix(s.Text, "parameters")), -1)...)
+			} else {
+				bodyLines = append(bodyLines, s.Text)
+			}
+		}
+		return strings.Join(bodyLines, "\n"), params
+	}
+	rbody, rp := strip(root.Body)
+	cbody, cp := strip(child.Body)
+	if electricalSignature(rbody, "spectre", true) != electricalSignature(cbody, "spectre", true) {
+		return false
+	}
+	childNames := stringSet{}
+	for _, p := range cp {
+		name, _, _ := strings.Cut(p, "=")
+		childNames[name] = true
+	}
+	nativeChild := electricalSignature(child.Body, "spectre", false)
+	for _, p := range rp {
+		if strings.Contains(p, "=") || (!childNames[p] && rx(`(^|[^a-zA-Z0-9_$])`+regexp.QuoteMeta(p)+`([^a-zA-Z0-9_$]|$)`).MatchString(nativeChild)) {
+			return false
+		}
+	}
+	return true
+}
+
+func compatibleEmptyRoot(a, b libraryDefinition) bool {
+	if a.Root == b.Root || len(a.SourcePorts) == 0 || len(a.SourcePorts) != len(b.SourcePorts) || !superset(set(a.SourcePorts), set(b.SourcePorts)) {
+		return false
+	}
+	empty := func(d libraryDefinition) bool {
+		for _, s := range statements(splitLines(d.Body), "spectre") {
+			words := strings.Fields(s.Text)
+			if len(words) == 0 || strings.HasPrefix(words[0], "//") {
+				continue
+			}
+			if words[0] != "subckt" && words[0] != "ends" {
+				return false
+			}
+		}
+		return true
+	}
+	return empty(a) && empty(b)
 }
 
 // These inert markers identify native blocks inside capture templates. They are
@@ -203,7 +272,7 @@ func libraryDirectory(name string) string {
 	return name
 }
 
-func assembleLibrary(parts []libraryCapture, library, dialect string, split bool, resourceDir string) (map[string]string, map[string]any) {
+func assembleLibrary(parts []libraryCapture, library, dialect string, split, exportSymbols bool, resourceDir string) (map[string]string, map[string]any) {
 	carrier, extension, prefix := "*", "sp", "."
 	if dialect == "spectre" {
 		carrier, extension, prefix = "//", "scs", ""
@@ -213,7 +282,14 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split bool
 	entries := map[string]string{}
 	notes := []string{}
 	modelReferences := []string{}
+	var selectionSetting *bool
 	for _, part := range parts {
+		if part.ExportSelectionBox != nil {
+			if selectionSetting != nil && *selectionSetting != *part.ExportSelectionBox {
+				fail("Mixed library selection-box settings")
+			}
+			selectionSetting = part.ExportSelectionBox
+		}
 		if part.Dialect != dialect {
 			fail("Mixed library netlist formats")
 		}
@@ -225,7 +301,11 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split bool
 				// Compare their port sets, then retain the native child's ordering
 				// and body so every existing native call keeps its pin meaning.
 				sortedPorts := dialect == "spectre" && old.Root != def.Root
-				if old.Name != def.Name || old.Library != def.Library || old.Cell != def.Cell || electricalSignature(old.Body, dialect, sortedPorts) != electricalSignature(def.Body, dialect, sortedPorts) {
+				matching := electricalSignature(old.Body, dialect, sortedPorts) == electricalSignature(def.Body, dialect, sortedPorts)
+				if !matching && dialect == "spectre" {
+					matching = compatibleRootParameters(old, def) || compatibleEmptyRoot(old, def)
+				}
+				if old.Name != def.Name || old.Library != def.Library || old.Cell != def.Cell || !matching {
 					fail("Conflicting native subcircuit %s (%s/%s and %s/%s); cannot deduplicate without changing the netlist", def.Name, old.Library, old.Cell, def.Library, def.Cell)
 				}
 				if dialect == "spectre" && !old.Root || dialect != "spectre" && !def.Root {
@@ -260,10 +340,8 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split bool
 	owners := map[string]cellKey{}
 	directories := map[string]string{}
 	reserved := stringSet{"eda-symbol.rnl": true, "eda-style.rnl": true, "symbols.rnl": true, "library-report.json": true}
-	register := func(source cellKey) string {
-		if filename, ok := paths[source]; ok {
-			return filename
-		}
+	// Netlist files and primary symbol-only files share collision checks.
+	registerFile := func(source cellKey, extension string) string {
 		filename := netlistFilename(source.Cell, extension)
 		if source.Library != library {
 			directory := libraryDirectory(source.Library)
@@ -281,7 +359,15 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split bool
 		if reserved[key] {
 			fail("Reserved library output filename %s", filename)
 		}
-		paths[source], owners[key] = filename, source
+		owners[key] = source
+		return filename
+	}
+	register := func(source cellKey) string {
+		if filename, ok := paths[source]; ok {
+			return filename
+		}
+		filename := registerFile(source, extension)
+		paths[source] = filename
 		return filename
 	}
 	groups := map[cellKey]string{}
@@ -366,31 +452,57 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split bool
 			files[filename] = carrier + " RNL cell " + source.Library + "/" + source.Cell + "\n" + cellHeader(carrier, filename) + withoutNativeIncludes(body, dialect)
 		}
 	}
+	symbolOnlyFiles := []map[string]string{}
+	symbolOnlySeen := map[cellKey]bool{}
+	for _, part := range parts {
+		if part.Entry != "" || len(part.Definitions) != 0 {
+			continue
+		}
+		source := cellKey{part.Library, part.Cell}
+		if symbolOnlySeen[source] {
+			continue
+		}
+		symbol, ok := symbols[source.Library+"/"+source.Cell]
+		if !ok {
+			continue
+		}
+		filename := registerFile(source, "rnl")
+		packageName := "virtuoso/" + source.Library + "/" + source.Cell
+		document, _ := reusableSymbolPackage(packageName, []librarySymbol{symbol})
+		files[filename] = document
+		symbolOnlySeen[source] = true
+		symbolOnlyFiles = append(symbolOnlyFiles, map[string]string{"library": source.Library, "cell": source.Cell, "file": filename, "package": packageName})
+	}
+	sort.Slice(symbolOnlyFiles, func(i, j int) bool { return symbolOnlyFiles[i]["file"] < symbolOnlyFiles[j]["file"] })
 	for key, directory := range directories {
 		if _, ok := owners[key]; ok || reserved[key] {
 			fail("Library directory %s conflicts with an output file", directory)
 		}
 	}
-	symbolNames := []string{}
-	for key := range symbols {
-		symbolNames = append(symbolNames, key)
+	allSymbols := []librarySymbol{}
+	for _, symbol := range symbols {
+		allSymbols = append(allSymbols, symbol)
 	}
-	sort.Strings(symbolNames)
-	packageText := `@RNL(type="header") { @VERSION("0.3"); @PACKAGE(name=` + quote("virtuoso-library/"+library) + `, version="0.1") }` + "\n@RNL {\n"
-	for _, key := range symbolNames {
-		packageText += symbols[key].Definition + ";\n"
+	packageText, symbolNames := reusableSymbolPackage("virtuoso-library/"+library, allSymbols)
+	var symbolFile any
+	if exportSymbols {
+		files["symbols.rnl"] = packageText
+		symbolFile = "symbols.rnl"
 	}
-	files["symbols.rnl"] = packageText + "}\n"
 	notes = unique(notes)
 	sort.Strings(notes)
 	modelReferences = unique(modelReferences)
 	sort.Strings(modelReferences)
-	return files, map[string]any{"version": version, "backend": "go", "kind": "library", "file_mode": "per-cell", "library": library, "format": dialect, "entries": entryIndex, "definitions": index, "symbols": symbolNames, "symbol_file": "symbols.rnl", "notes": notes, "behavior_model_references": modelReferences}
+	return files, map[string]any{"version": version, "backend": "go", "kind": "library", "export_selection_box": selectionSetting == nil || *selectionSetting, "file_mode": "per-cell", "library": library, "format": dialect, "entries": entryIndex, "definitions": index, "symbols": symbolNames, "export_symbols": exportSymbols, "symbol_file": symbolFile, "symbol_only_files": symbolOnlyFiles, "notes": notes, "behavior_model_references": modelReferences}
 }
 
 func runLibraryMerge(request string, fields []node, resourceDir string) map[string]any {
-	if len(fields) != 9 && len(fields) != 10 && len(fields) != 11 {
+	if len(fields) != 9 && len(fields) != 10 && len(fields) != 11 && len(fields) != 12 {
 		fail("Invalid library merge request")
+	}
+	exportSymbols := false
+	if len(fields) == 12 {
+		exportSymbols = requestBoolean(fields[11])
 	}
 	library, output, dialect, split := fields[2].atom, fields[3].atom, fields[4].atom, fields[5].atom == "t"
 	if dialect != "spectre" && dialect != "cdl" {
@@ -410,7 +522,7 @@ func runLibraryMerge(request string, fields []node, resourceDir string) map[stri
 		}
 		parts = append(parts, part)
 	}
-	files, report := assembleLibrary(parts, library, dialect, split, resourceDir)
+	files, report := assembleLibrary(parts, library, dialect, split, exportSymbols, resourceDir)
 	report["include_external_cells"], report["include_hierarchy"] = fields[7].atom == "t", fields[8].atom == "t"
 	skipped := []string{}
 	if len(fields) >= 10 {
@@ -421,7 +533,7 @@ func runLibraryMerge(request string, fields []node, resourceDir string) map[stri
 	sort.Strings(skipped)
 	report["skipped_cells_without_schematic_or_symbol"] = skipped
 	failed := []map[string]string{}
-	if len(fields) == 11 {
+	if len(fields) >= 11 {
 		for _, entry := range fields[10].list {
 			if !entry.group || len(entry.list) != 5 {
 				fail("Invalid failed library cell record")
@@ -458,6 +570,20 @@ func runLibraryMerge(request string, fields []node, resourceDir string) map[stri
 }
 
 func runSymbolJob(request string, fields []node) map[string]any {
+	view, schematics, symbols := "symbol", []string{"schematic"}, []string{"symbol"}
+	exportSelectionBox, snapshot := true, ""
+	if len(fields) == 13 && fields[0].atom == "rnl-symbol-job-v3" {
+		exportSelectionBox = requestBoolean(fields[12])
+		if exportSelectionBox {
+			snapshot = readText(filepath.Join(filepath.Dir(request), "selection-boxes.sx"))
+		}
+		fields = fields[:12]
+		fields[0] = atom("rnl-symbol-job-v2")
+	}
+	if len(fields) == 12 && fields[0].atom == "rnl-symbol-job-v2" {
+		view, schematics, symbols = fields[9].atom, viewList(fields[10].atom), viewList(fields[11].atom)
+		fields = fields[:9]
+	}
 	if len(fields) != 9 {
 		fail("Invalid symbol export request")
 	}
@@ -471,20 +597,21 @@ func runSymbolJob(request string, fields []node) map[string]any {
 	mkdir(native)
 	writeText(filepath.Join(native, "cds.lib"), "INCLUDE "+skillString(cds)+"\n")
 	template := filepath.Join(native, "symbol.il")
-	writeTemplate(template, map[string]string{"runDirectory": native, "library": library, "cell": cellName, "viewName": "symbol", "outputFile": filepath.Join(native, "symbol.edif"), "netlistMode": "Hierarchical", "netlistOption": "FALSE", "forConcept": "FALSE", "scalarOption": "FALSE", "scalarWithPortsUnexpanded": "FALSE", "outputCDFData": "FALSE", "interpretInhConn": "FALSE", "replaceBundleWithArray": "TRUE", "skipDupInstNameCk": "FALSE", "externalLibList": ""})
+	writeTemplate(template, map[string]string{"runDirectory": native, "library": library, "cell": cellName, "viewName": view, "hierarchyFile": hierarchyFile(native, schematics, symbols), "outputFile": filepath.Join(native, "symbol.edif"), "netlistMode": "Hierarchical", "netlistOption": "FALSE", "forConcept": "FALSE", "scalarOption": "FALSE", "scalarWithPortsUnexpanded": "FALSE", "outputCDFData": "FALSE", "interpretInhConn": "FALSE", "replaceBundleWithArray": "TRUE", "skipDupInstNameCk": "FALSE", "externalLibList": ""})
 	bins := filepath.Join(cadence, "bin")
 	if !isFile(filepath.Join(bins, "edifout")) {
 		bins = filepath.Join(cadence, "tools", "dfII", "bin")
 	}
 	runNative([]string{filepath.Join(bins, "edifout"), template}, native, filepath.Join(work, "symbol.log"), nativeEnvironment(working))
 	cells, _ := readEDIF(readText(filepath.Join(native, "symbol.edif")))
+	newSymbolBoxPolicy(&exportSelectionBox, snapshot, scale).apply(cells)
 	c := cells[cellKey{library, cellName}]
 	if c == nil || !c.Symbol.group {
 		fail("Native EDIF omitted symbol %s/%s", library, cellName)
 	}
 	notes := []string{}
 	symbol := publicSymbol(c, scale, &notes)
-	part := libraryCapture{Library: library, Cell: cellName, Dialect: dialect, Symbols: []librarySymbol{symbol}, Notes: notes}
+	part := libraryCapture{Library: library, Cell: cellName, Dialect: dialect, Symbols: []librarySymbol{symbol}, Notes: notes, ExportSelectionBox: &exportSelectionBox}
 	writeText(filepath.Join(work, "library-parts.json"), jsonText(part))
 	return map[string]any{"library": library, "cell": cellName, "kind": "symbol"}
 }

@@ -285,7 +285,11 @@ func memberIDs(n node) []string {
 		return []string{key}
 	}
 	out := []string{}
-	for i := range scalarNames(n) {
+	width := integer(n.at(2).atom)
+	if len(n.list) != 3 || width < 1 || width > 1000000 {
+		fail("Invalid EDIF array dimensions")
+	}
+	for i := 0; i < width; i++ {
 		out = append(out, fmt.Sprintf("%s[%d]", key, i))
 	}
 	return out
@@ -356,6 +360,11 @@ type portPlacement struct {
 	Port   string
 	XY     point
 	Orient string
+	// A hierarchical EDIF page may use a different bus identifier/order
+	// from its symbol interface. These fields belong to the drawing only.
+	Members   []string
+	Label     string
+	Direction string
 }
 type cell struct {
 	Library, Name, ID     string
@@ -370,6 +379,13 @@ type cell struct {
 	Directions            map[string]string
 	PortPlacements        []portPlacement
 	Annotations           []node
+	Ripper                bool
+	RipperJoins           [][]string
+	Parameters            []string
+	ExportSymbol          *cell
+	SelectionBox          *[4]float64
+	GeometryBox           bool
+	MissingSelectionBox   bool
 }
 
 func newCell(lib, n, id string) *cell {
@@ -388,6 +404,7 @@ func readEDIF(text string) (map[cellKey]*cell, []*cell) {
 		Cell   *cell
 		Route  *net
 		Joined node
+		ID     string
 	}
 	rawNets := []rawNet{}
 	refs := map[[3]string][]*instance{}
@@ -395,13 +412,19 @@ func readEDIF(text string) (map[cellKey]*cell, []*cell) {
 		libname := name(lib.at(1))
 		for _, raw := range children(lib, "cell") {
 			c := newCell(libname, name(raw.at(1)), ident(raw.at(1)))
+			ct := first(raw, "celltype")
+			c.Ripper = ct.group && strings.EqualFold(ct.at(1).atom, "RIPPER")
 			cells[cellKey{libname, c.Name}] = c
 			ordered = append(ordered, c)
 			ids[cellKey{strings.ToLower(ident(lib.at(1))), strings.ToLower(c.ID)}] = c
 			for _, view := range children(raw, "view") {
 				intf := first(view, "interface")
 				for _, p := range children(intf, "port") {
-					members, names := memberIDs(p.at(1)), scalarNames(p.at(1))
+					members := memberIDs(p.at(1))
+					names := members
+					if !c.Ripper {
+						names = scalarNames(p.at(1))
+					}
 					for i, k := range members {
 						if _, ok := c.Ports[k]; !ok {
 							c.PortOrder = append(c.PortOrder, k)
@@ -416,6 +439,24 @@ func readEDIF(text string) (map[cellKey]*cell, []*cell) {
 					c.Labels[key] = name(p.at(1))
 					if direction := first(p, "direction"); direction.group {
 						c.Directions[key] = strings.ToUpper(direction.at(1).atom)
+					}
+				}
+				if c.Ripper {
+					for _, joined := range children(intf, "joined") {
+						var columns [][]string
+						for _, pr := range joined.list[1:] {
+							ps := referencedPorts(c, pr, c.Name)
+							if columns == nil {
+								columns = make([][]string, len(ps))
+							}
+							if len(ps) != len(columns) {
+								fail("EDIF RIPPER interface width mismatch: %s", c.Name)
+							}
+							for i, p := range ps {
+								columns[i] = append(columns[i], p)
+							}
+						}
+						c.RipperJoins = append(c.RipperJoins, columns...)
 					}
 				}
 				symbol := first(intf, "symbol")
@@ -459,6 +500,15 @@ func readEDIF(text string) (map[cellKey]*cell, []*cell) {
 									action = first(property, "string").at(1).atom
 								}
 							}
+							if action != "ignore" {
+								for _, prop := range children(ins, "property") {
+									for _, s := range walk(prop, "string") {
+										for _, m := range parentParameter.FindAllStringSubmatch(decoded(s.at(1).atom), -1) {
+											c.Parameters = append(c.Parameters, m[1])
+										}
+									}
+								}
+							}
 							iids, labels := memberIDs(ins.at(1)), scalarNames(ins.at(1))
 							for i, id := range iids {
 								bundle := ""
@@ -481,7 +531,7 @@ func readEDIF(text string) (map[cellKey]*cell, []*cell) {
 								if tr.group {
 									pos = origin(tr)
 								}
-								c.PortPlacements = append(c.PortPlacements, portPlacement{key, pos, orientationOf(tr)})
+								c.PortPlacements = append(c.PortPlacements, portPlacement{Port: key, XY: pos, Orient: orientationOf(tr)})
 							}
 						}
 						for _, rn := range children(page, "net") {
@@ -495,7 +545,7 @@ func readEDIF(text string) (map[cellKey]*cell, []*cell) {
 								route.Labels = walk(rn.at(1), "display")
 							}
 							c.Routes = append(c.Routes, route)
-							rawNets = append(rawNets, rawNet{c, route, first(rn, "joined")})
+							rawNets = append(rawNets, rawNet{c, route, first(rn, "joined"), strings.ToLower(ident(rn.at(1)))})
 						}
 						c.Annotations = append(c.Annotations, children(page, "commentgraphics")...)
 						// Free figures on a page are notes, unlike the figures
@@ -512,6 +562,19 @@ func readEDIF(text string) (map[cellKey]*cell, []*cell) {
 			fail("EDIF omitted the symbol for %s/%s (set externalLibList to empty)", ins.Master.Library, ins.Master.Cell)
 		}
 		ins.Master = cellKey{c.Library, c.Name}
+	}
+	// Index unresolved page markers. Their identifier can name a page net
+	// rather than a symbol port when the two views group buses differently.
+	pagePorts := map[*cell]map[string][]int{}
+	for _, c := range ordered {
+		for i, p := range c.PortPlacements {
+			if len(c.Groups[p.Port]) == 0 {
+				if pagePorts[c] == nil {
+					pagePorts[c] = map[string][]int{}
+				}
+				pagePorts[c][p.Port] = append(pagePorts[c][p.Port], i)
+			}
+		}
 	}
 	for _, raw := range rawNets {
 		c, route := raw.Cell, raw.Route
@@ -549,14 +612,7 @@ func readEDIF(text string) (map[cellKey]*cell, []*cell) {
 					master = cells[ins.Master]
 					id = ins.ID
 				}
-				ports := master.Groups[strings.ToLower(ident(pr.at(1)))]
-				if tag(pr.at(1)) == "member" {
-					i := integer(pr.at(1).at(2).atom)
-					if i < 0 || i >= len(ports) {
-						fail("Invalid EDIF port member")
-					}
-					ports = []string{ports[i]}
-				}
+				ports := referencedPorts(master, pr, c.Library+"/"+c.Name+" net "+route.Name)
 				for _, p := range ports {
 					out = append(out, terminal{id, p})
 				}
@@ -577,7 +633,121 @@ func readEDIF(text string) (map[cellKey]*cell, []*cell) {
 				}
 			}
 		}
+		for _, index := range pagePorts[c][raw.ID] {
+			p := &c.PortPlacements[index]
+			members, direction := pagePortMembers(c, route, bitnets)
+			if len(p.Members) > 0 && (strings.Join(p.Members, "\x00") != strings.Join(members, "\x00") || p.Label != route.Name || p.Direction != direction) {
+				fail("Ambiguous EDIF schematic port %s in %s/%s: conflicting page nets", p.Port, c.Library, c.Name)
+			}
+			p.Members, p.Label, p.Direction = members, route.Name, direction
+		}
 		c.Nets = append(c.Nets, bitnets...)
 	}
+	for _, c := range ordered {
+		for _, p := range c.PortPlacements {
+			if len(c.Groups[p.Port]) == 0 && len(p.Members) == 0 {
+				fail("Cannot resolve EDIF schematic port %s in %s/%s: no interface port or matching page net", p.Port, c.Library, c.Name)
+			}
+		}
+		collapseRippers(c, cells)
+	}
 	return cells, ordered
+}
+
+var parentParameter = regexp.MustCompile(`\bpPar\(\s*"([^"\r\n]+)"\s*\)`)
+
+func referencedPorts(c *cell, pr node, context string) []string {
+	if tag(pr) == "portlist" {
+		out := []string{}
+		for _, p := range pr.list[1:] {
+			out = append(out, referencedPorts(c, p, context)...)
+		}
+		return out
+	}
+	if tag(pr) != "portref" || len(pr.list) < 2 {
+		fail("EDIF terminal interface mismatch in %s: empty or invalid portRef; synchronize schematic and symbol terminals and re-export", context)
+	}
+	ports := c.Groups[strings.ToLower(ident(pr.at(1)))]
+	if len(ports) == 0 {
+		fail("EDIF terminal interface mismatch in %s: port %s missing from %s/%s", context, name(pr.at(1)), c.Library, c.Name)
+	}
+	if tag(pr.at(1)) == "member" {
+		i := integer(pr.at(1).at(2).atom)
+		if i < 0 || i >= len(ports) {
+			fail("Invalid EDIF port member in %s", context)
+		}
+		ports = []string{ports[i]}
+	}
+	return ports
+}
+
+// A RIPPER is EDIF connectivity machinery, not a netlisted device. Resolve
+// joined members electrically while keeping every original drawn bus path.
+func collapseRippers(c *cell, cells map[cellKey]*cell) {
+	parent := map[string]string{}
+	var find func(string) string
+	find = func(s string) string {
+		if p, ok := parent[s]; ok && p != s {
+			parent[s] = find(p)
+			return parent[s]
+		}
+		return s
+	}
+	connected := map[terminal]string{}
+	for _, n := range c.Nets {
+		for _, t := range n.Terminals {
+			connected[t] = n.Name
+		}
+	}
+	rippers := map[string]bool{}
+	instances := []*instance{}
+	for _, ins := range c.Instances {
+		master := cells[ins.Master]
+		if !master.Ripper {
+			instances = append(instances, ins)
+			continue
+		}
+		rippers[ins.ID] = true
+		if len(master.RipperJoins) == 0 {
+			fail("EDIF RIPPER %s has no joined interface", master.Name)
+		}
+		for _, ps := range master.RipperJoins {
+			firstNet := ""
+			for _, p := range ps {
+				n, ok := connected[terminal{ins.ID, p}]
+				if !ok {
+					continue
+				}
+				if firstNet == "" {
+					firstNet = n
+				} else {
+					parent[find(n)] = find(firstNet)
+				}
+			}
+		}
+	}
+	if len(rippers) == 0 {
+		return
+	}
+	c.Instances = instances
+	merged := map[string]*net{}
+	nets := []*net{}
+	for _, n := range c.Nets {
+		key := find(n.Name)
+		if merged[key] == nil {
+			merged[key] = &net{Name: key}
+			nets = append(nets, merged[key])
+		}
+		for _, t := range n.Terminals {
+			if !rippers[t.Instance] {
+				merged[key].Terminals = append(merged[key].Terminals, t)
+			}
+		}
+	}
+	c.Nets = nets
+	for _, route := range c.Routes {
+		for i, bit := range route.Bits {
+			route.Bits[i] = find(bit)
+		}
+	}
 }

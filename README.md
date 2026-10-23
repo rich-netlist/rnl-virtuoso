@@ -12,7 +12,7 @@ netlist and drawing without rewriting device statements.
 - Export subcircuits in one file, separate files, or just the current level.
 - Schematics with ports become subcircuits; portless schematics remain top-level circuits.
 - Reference `eda-symbol` and `eda-style` separately, with an editable orientation table.
-- Whole-library exports share deduplicated definitions and a reusable symbol package,
+- Whole-library exports share deduplicated definitions and an optional reusable symbol package,
   with optional referenced external cells and support for symbol-only cells.
 
 ## Install
@@ -22,7 +22,7 @@ then extract it on the Virtuoso host:
 
 ```sh
 mkdir -p ~/tools
-tar -xzf rnl-virtuoso-0.8.0-linux-amd64.tar.gz -C ~/tools
+tar -xzf rnl-virtuoso-0.9.4-linux-amd64.tar.gz -C ~/tools
 ```
 
 In the CIW, load the entry point once:
@@ -38,7 +38,9 @@ Tested with IC6.1.8-64b.500.26 on Linux x86-64.
 
 ## Use
 
-Check and Save the schematic hierarchy, then select **RNL → Export RNL...**.
+Select **RNL → Export RNL...**. Stale schematic connectivity is automatically
+checked and saved by default (0.9.2+). Clear **Automatically Check & Save stale
+schematics**, or use `?autoCheckSave nil`, for read-only export.
 Choose a **new output directory**. **Spectre (simulation)** is recommended for
 sources, switches and Verilog-A models; CDL is an LVS export and may omit them.
 Keep the generated netlist, symbol/style files and report together.
@@ -50,14 +52,31 @@ Each cell's actual circuit is saved as `<cell>.scs` / `.sp` at the export root;
 foreign cells go to `<external-library>/<cell>.scs` / `.sp`, once per source cell.
 There are no entry wrappers or `netlists/` directory. Subcircuits have no native
 includes; portless tops include their descendants once in a flat list. Single-cell
-exports also retain the combined-file option. The output shares `symbols.rnl` and
+exports also retain the combined-file option. Optionally export a shared `symbols.rnl`; the output always shares
 the two presentation packages. The report lists entries, native
 definitions and exported symbols. The external-cell option preserves interfaces
 and symbols when off, and includes referenced schematic definitions when on.
+
+**Export symbols.rnl separately** is off by default (SKILL: `?exportSymbols nil`).
+Enable it to add the reusable symbol collection to either cell or library exports.
+Symbol-only library cells always get their own `<cell>.rnl`; `cell-symbol.rnl` is
+no longer generated. Embedded schematic symbols are preserved.
 Failed cells are skipped and reported with their reasons and logs; `complete`
 is false when any cell failed, and the completion notice gives the failure count.
 
 See [export details](docs/export.md) for options, conversion rules and limitations.
+
+Both forms provide **Schematic views** and **Symbol views** fields. Enter names
+separated by spaces, in descending priority, for example `schematic schematic_ideal`
+and `symbol_alt symbol`. The first existing view is selected for each cell.
+Interfaces compare expanded member names, allowing reversed bus ranges while
+preserving symbol pin order and native electrical mapping.
+The same options are available as `?schematicViews` and `?symbolViews` in the SKILL
+API (0.9.0+). Defaults remain `schematic` and `symbol`.
+
+**Export selection box** (enabled by default, 0.9.1+) uses the enclosing rectangle
+of all native selection boxes in the selected symbol view. Disable it to use the
+symbol graphics extent, excluding text. The SKILL keyword is `?exportSelectionBox`.
 
 ## Scripts and agents
 
@@ -83,7 +102,7 @@ new installations fetch the latest release from this repository.
 Building requires Go 1.22+ and Python 3.8+ on the development machine only:
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.8.0-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.9.4-linux-amd64.tar.gz
 python scripts/test.py
 ```
 

@@ -34,6 +34,11 @@ then runs the shared fixture tests against Python and Go. An RNL CLI with bus
 bundle symbol support is required for the checker/rendering assertions; use
 `--rnl` or `RNL_BIN`. Without it, those assertions are reported as skipped.
 Real PDK/design exports are not test fixtures and must not be committed.
+Go-only 0.9 regression cases cover EDIF RIPPER member equivalence and bus paths,
+noConn on a multi-terminal wire, empty ported schematics, explicit pPar parameters,
+native parameter/default preservation during merge, symbol selection without
+moving placed pins, ordered view lists, and native errors with a zero process exit.
+The read-only SKILL tests also validate view-list parsing and reject invalid inputs.
 Three additional Go-only PDK regression tests cover native series/parallel
 expansions, boundary mapping and rejection of unexpected branches/members.
 They include all eight orientations and model/name labels. Go unit tests also
@@ -82,7 +87,7 @@ branch must require prior consent; compatible existing installs must be reused.
 The runtime archive ships `rnl-api.il` and its docs, not agent skills or a bridge.
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.8.0-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.9.4-linux-amd64.tar.gz
 ```
 
 Use `--go /path/to/go` or `--backend /path/to/prebuilt-linux-executable` if needed.
@@ -94,3 +99,8 @@ and export directories are never overwritten.
 The release binary was tested with Go 1.27.3. Its [Linux kernel baseline is 3.2](https://go.dev/wiki/MinimumRequirements);
 older kernels and other architectures are not validated. Cadence's own OS and
 license requirements remain separate from the converter's requirements.
+
+Selection-box regressions cover multiple native rectangles, source/corner ordering,
+geometry mode, empty source selections, malformed snapshots, root symbols and
+library captures. RNL model checks cover both modes in all eight orientations,
+keep pin positions and exclude text from graphic extents.

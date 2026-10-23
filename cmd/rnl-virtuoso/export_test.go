@@ -242,22 +242,27 @@ func TestNativeProcessErrorHasDiagnosticAndLog(t *testing.T) {
 		t.Fatal(e)
 	}
 	log := filepath.Join(t.TempDir(), "native.log")
-	message := guarded(func() {
-		runNative([]string{exe, "-test.run=^TestNativeProcessHelper$"}, t.TempDir(), log, append(os.Environ(), "RNL_GO_TEST_PROCESS=1"))
-	})
-	for _, s := range []string{"OSSHNL-test", "Missing stop view", log} {
-		if !strings.Contains(message, s) {
-			t.Fatal(message)
+	for _, mode := range []string{"1", "zero"} {
+		message := guarded(func() {
+			runNative([]string{exe, "-test.run=^TestNativeProcessHelper$"}, t.TempDir(), log, append(os.Environ(), "RNL_GO_TEST_PROCESS="+mode))
+		})
+		for _, s := range []string{"OSSHNL-test", "Missing stop view", "I3", log} {
+			if !strings.Contains(message, s) {
+				t.Fatal(message)
+			}
 		}
 	}
 }
 
 func TestNativeProcessHelper(t *testing.T) {
-	if os.Getenv("RNL_GO_TEST_PROCESS") != "1" {
+	if os.Getenv("RNL_GO_TEST_PROCESS") == "" {
 		return
 	}
 	fmt.Println("ERROR (OSSHNL-test): Missing stop view")
 	fmt.Println("  at I3")
 	fmt.Println()
+	if os.Getenv("RNL_GO_TEST_PROCESS") == "zero" {
+		os.Exit(0)
+	}
 	os.Exit(7)
 }

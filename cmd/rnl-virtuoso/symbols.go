@@ -203,10 +203,23 @@ func graphics(n node, scale float64) []string {
 	return out
 }
 func symbolDefinition(c *cell, id string, terminals map[string]string, scale float64, notes *[]string) string {
+	if chosen := c.ExportSymbol; chosen != nil {
+		mapping := map[string]string{}
+		for p, name := range chosen.Ports {
+			mapping[p] = terminals[portID(c, name, "spectre", nil)]
+		}
+		return symbolDefinition(chosen, id, mapping, scale, notes)
+	}
 	if !c.Symbol.group {
 		fail("No EDIF symbol geometry for %s/%s", c.Library, c.Name)
 	}
+	if c.MissingSelectionBox {
+		fail("Missing native selection-box snapshot for %s/%s", c.Library, c.Name)
+	}
 	box := pointsOf(first(c.Symbol, "boundingbox"))
+	if c.GeometryBox {
+		box = nil
+	}
 	suffix := ""
 	if len(box) == 2 {
 		coords := []string{}
@@ -216,6 +229,13 @@ func symbolDefinition(c *cell, id string, terminals map[string]string, scale flo
 			}
 		}
 		suffix = "(box=[" + strings.Join(coords, ", ") + "])"
+	}
+	if c.SelectionBox != nil && !c.GeometryBox {
+		values := []string{}
+		for _, v := range *c.SelectionBox {
+			values = append(values, number(v))
+		}
+		suffix = "(box=[" + strings.Join(values, ", ") + "])"
 	}
 	body := []string{}
 	for _, fig := range children(c.Symbol, "figure") {

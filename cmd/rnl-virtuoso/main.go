@@ -78,7 +78,7 @@ func testJSON(dir string) {
 			convert(req.convertInput, dir)
 			out["capture"] = capture
 		case "library":
-			files, report := assembleLibrary(req.Captures, req.Library, req.Dialect, req.Split, dir)
+			files, report := assembleLibrary(req.Captures, req.Library, req.Dialect, req.Split, req.ExportSymbols, dir)
 			out["files"], out["report"] = files, report
 		case "", "convert":
 			files, report := convert(req.convertInput, dir)

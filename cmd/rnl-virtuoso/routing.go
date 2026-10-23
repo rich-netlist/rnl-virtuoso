@@ -13,6 +13,16 @@ type endpoint struct {
 }
 type stringSet map[string]bool
 
+func setDifference(a, b stringSet) []string {
+	out := stringSet{}
+	for x := range a {
+		if !b[x] {
+			out[x] = true
+		}
+	}
+	return sortedSet(out)
+}
+
 func set(xs []string) stringSet {
 	s := stringSet{}
 	for _, x := range xs {

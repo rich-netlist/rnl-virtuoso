@@ -45,7 +45,7 @@ procedure(rnlCIWLibraryChanged(form)
     cells = nil
     when(lib
       foreach(cell lib->cells
-        when(ddGetObj(lib->name cell->name "schematic") cells = cons(cell->name cells))))
+        when(rnlFindView(lib->name cell->name rnlViewList(form->schematicViews->value "schematicViews")) cells = cons(cell->name cells))))
     cells = sort(cells 'alphalessp)
     unless(cells cells = list(""))
     form->sourceCell->choices = cells
@@ -61,12 +61,12 @@ procedure(rnlCIWExportCallback(form)
       if(form->exportScope->value == "Library" then
         rnlStartLibraryExport(form->sourceLibrary->value form->outputDirectory->value
           form->includeHierarchy->value form->fileMode->value == "Separate files"
-          form->drawingScale->value format form->includeExternal->value)
+          form->drawingScale->value format form->includeExternal->value t form->schematicViews->value form->symbolViews->value form->exportSelectionBox->value form->autoCheckSave->value form->exportSymbols->value)
       else
-        rnlStartExport(form->sourceLibrary->value form->sourceCell->value "schematic"
+        rnlStartExport(form->sourceLibrary->value form->sourceCell->value nil
           form->outputDirectory->value form->includeHierarchy->value
           form->fileMode->value == "Separate files" form->drawingScale->value format
-          if(form->includeExternal->value then "" else form->sourceLibrary->value))) t)
+          if(form->includeExternal->value then "" else form->sourceLibrary->value) nil t form->schematicViews->value form->symbolViews->value form->exportSelectionBox->value form->autoCheckSave->value form->exportSymbols->value)) t)
     hiSetCallbackStatus(form if(result then t else nil))
     unless(result rnlNotice("Export could not start. See the CIW error message."))
   )
@@ -76,8 +76,8 @@ procedure(rnlShowCIWExport()
   let((libraries cv)
     libraries = sort(ddGetLibList()~>name 'alphalessp)
     unless(libraries error("No libraries are available.\n"))
-    unless(rnlCIWExportForm
-      rnlCIWExportForm = hiCreateAppForm(?name 'rnlCIWExportForm ?formTitle "Export RNL"
+    unless(rnlCIWExportForm && rnlCIWExportForm->exportSymbols
+      rnlCIWExportForm = hiCreateAppForm(?name 'rnlCIWExportFormV094 ?formTitle "Export RNL"
         ?callback 'rnlCIWExportCallback ?buttonLayout 'OKCancel ?unmapAfterCB t ?dontBlock t
         ?fields list(
           hiCreateCyclicField(?name 'exportScope ?prompt "Export" ?choices list("Cell" "Library")
@@ -86,6 +86,12 @@ procedure(rnlShowCIWExport()
             ?callback "rnlCIWLibraryChanged(hiGetCurrentForm())")
           hiCreateCyclicField(?name 'sourceCell ?prompt "Schematic cell" ?choices list("")
             ?callback "rnlCIWDefaults(hiGetCurrentForm())")
+          hiCreateStringField(?name 'schematicViews ?prompt "Schematic views (highest priority first)" ?value "schematic"
+            ?callback "rnlCIWLibraryChanged(hiGetCurrentForm())")
+          hiCreateStringField(?name 'symbolViews ?prompt "Symbol views (highest priority first)" ?value "symbol")
+          hiCreateBooleanButton(?name 'autoCheckSave ?buttonText "Automatically Check & Save stale schematics" ?value t)
+          hiCreateBooleanButton(?name 'exportSelectionBox ?buttonText "Export selection box" ?value t)
+          hiCreateBooleanButton(?name 'exportSymbols ?buttonText "Export symbols.rnl separately" ?value nil)
           hiCreateStringField(?name 'outputDirectory ?prompt "New output directory")
           hiCreateCyclicField(?name 'netlistFormat ?prompt "Netlist format"
             ?choices list("Spectre (simulation)" "SPICE / CDL (LVS)") ?value "Spectre (simulation)")
@@ -107,8 +113,8 @@ procedure(rnlShowCIWExport()
   )
 )
 
-procedure(rnlStartLibraryExport(lib destination hierarchy split scale @optional (format "spectre") (external nil) (notify t))
-  let((library tasks skipped work)
+procedure(rnlStartLibraryExport(lib destination hierarchy split scale @optional (format "spectre") (external nil) (notify t) (schematicViews "schematic") (symbolViews "symbol") (exportSelectionBox t) (autoCheckSave t) (exportSymbols nil))
+  let((library tasks skipped work schematicList symbolList selected)
     when(rnlActiveJob || rnlActiveBatch error("An RNL export is already running.\n"))
     library = ddGetObj(lib)
     unless(library error("Library %s was not found.\n" lib))
@@ -118,10 +124,12 @@ procedure(rnlStartLibraryExport(lib destination hierarchy split scale @optional 
     when(isDir(destination) || isFile(destination) error("Output already exists: %s. Choose a new directory.\n" destination))
     unless(member(format list("spectre" "cdl")) error("Choose spectre or cdl.\n"))
     unless(hierarchy error("Library export includes all of its cells; use the external-cell option to control foreign definitions.\n"))
+    schematicList = rnlViewList(schematicViews "schematicViews")
+    symbolList = rnlViewList(symbolViews "symbolViews")
     foreach(cell library->cells
       cond(
-        (ddGetObj(lib cell->name "schematic") tasks = cons(list(cell->name "schematic") tasks))
-        (ddGetObj(lib cell->name "symbol") tasks = cons(list(cell->name "symbol") tasks))
+        ((selected = rnlFindView(lib cell->name schematicList)) tasks = cons(list(cell->name selected "schematic") tasks))
+        ((selected = rnlFindView(lib cell->name symbolList)) tasks = cons(list(cell->name selected "symbol") tasks))
         (t skipped = cons(cell->name skipped))))
     unless(tasks error("Library %s has no schematic or symbol views.\n" lib))
     tasks = sort(tasks lambda((a b) alphalessp(car(a) car(b))))
@@ -129,7 +137,7 @@ procedure(rnlStartLibraryExport(lib destination hierarchy split scale @optional 
     unless(createDir(work) error("Cannot create library work directory.\n"))
     rnlActiveBatch = list(nil 'library lib 'destination destination 'notify notify
       'hierarchy hierarchy 'split t 'scale scale 'format format 'external external
-      'tasks tasks 'parts nil 'failures nil 'skipped skipped 'directory work 'phase "cells" 'count 0 'total length(tasks))
+      'schematicViews schematicViews 'symbolViews symbolViews 'exportSelectionBox exportSelectionBox 'autoCheckSave autoCheckSave 'exportSymbols exportSymbols 'tasks tasks 'parts nil 'failures nil 'skipped skipped 'directory work 'phase "cells" 'count 0 'total length(tasks))
     rnlLastBatch = rnlActiveBatch
     printf("RNL: library %s: %d cells; work: %s\n" lib length(tasks) work)
     rnlBatchNext()
@@ -137,20 +145,24 @@ procedure(rnlStartLibraryExport(lib destination hierarchy split scale @optional 
   )
 )
 
-procedure(rnlStartSymbolJob(lib cell scale format)
-  let((cv cds work port command)
-    cv = dbOpenCellViewByType(lib cell "symbol" nil "r")
-    unless(cv error("Cannot open %s/%s/symbol.\n" lib cell))
+procedure(rnlStartSymbolJob(lib cell scale format @optional (view "symbol") (schematicViews "schematic") (symbolViews "symbol") (exportSelectionBox t))
+  let((cv cds work port command selectionRows)
+    cv = dbOpenCellViewByType(lib cell view nil "r")
+    unless(cv error("Cannot open %s/%s/%s.\n" lib cell view))
     unwindProtect(
-      rnlCheckSavedSymbol(cv)
+      progn(rnlCheckSavedSymbol(cv)
+        when(exportSelectionBox selectionRows = list(rnlSelectionBoxRow(cv))))
       dbClose(cv))
     cds = ddGetForcedLib()
     when(!cds || cds == "" cds = ddGetStartup("cds.lib"))
     work = makeTempFileName("/tmp/rnlSymbolXXXX")
     unless(createDir(work) error("Cannot create symbol work directory.\n"))
+    port = outfile(strcat(work "/selection-boxes.sx"))
+    fprintf(port "%L\n" selectionRows)
+    close(port)
     port = outfile(strcat(work "/request.sx"))
-    fprintf(port "%L\n" list("rnl-symbol-job-v1" rnlInstallDirectory lib cell cds
-      getWorkingDir() car(getInstallPath()) scale format))
+    fprintf(port "%L\n" list("rnl-symbol-job-v3" rnlInstallDirectory lib cell cds
+      getWorkingDir() car(getInstallPath()) scale format view schematicViews symbolViews exportSelectionBox))
     close(port)
     command = strcat(rnlShellQuote(strcat(rnlInstallDirectory "/bin/rnl-virtuoso")) " " rnlShellQuote(strcat(work "/request.sx")))
     rnlActiveJob = list(nil 'directory work)
@@ -184,11 +196,11 @@ procedure(rnlBatchNext()
       batch->starting = t
       rnlPreflightError = nil
       result = errset(
-        if(cadr(task) == "schematic" then
+        if(caddr(task) == "schematic" then
           destination = strcat(batch->directory "/cell_" sprintf(nil "%d" batch->count))
-          rnlStartExport(batch->library car(task) "schematic" destination batch->hierarchy t
-            batch->scale batch->format if(batch->external then "" else batch->library) t)
-        else rnlStartSymbolJob(batch->library car(task) batch->scale batch->format)) t)
+          rnlStartExport(batch->library car(task) cadr(task) destination batch->hierarchy t
+            batch->scale batch->format if(batch->external then "" else batch->library) t t batch->schematicViews batch->symbolViews batch->exportSelectionBox batch->autoCheckSave)
+        else rnlStartSymbolJob(batch->library car(task) batch->scale batch->format cadr(task) batch->schematicViews batch->symbolViews batch->exportSelectionBox)) t)
       batch->starting = nil
       unless(result
         rnlBatchRecordFailure(task "preflight" if(rnlPreflightError then rnlPreflightError else sprintf(nil "%L" errset.errset)) batch->directory))
@@ -196,8 +208,8 @@ procedure(rnlBatchNext()
     unless(rnlActiveJob
       batch->phase = "merge"
       port = outfile(strcat(batch->directory "/request.sx"))
-      fprintf(port "%L\n" list("rnl-library-merge-v2" rnlInstallDirectory batch->library
-        batch->destination batch->format batch->split reverse(batch->parts) batch->external batch->hierarchy batch->skipped reverse(batch->failures)))
+      fprintf(port "%L\n" list("rnl-library-merge-v3" rnlInstallDirectory batch->library
+        batch->destination batch->format batch->split reverse(batch->parts) batch->external batch->hierarchy batch->skipped reverse(batch->failures) batch->exportSymbols))
       close(port)
       command = strcat(rnlShellQuote(strcat(rnlInstallDirectory "/bin/rnl-virtuoso")) " "
         rnlShellQuote(strcat(batch->directory "/request.sx")))

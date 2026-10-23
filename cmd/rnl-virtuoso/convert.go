@@ -30,25 +30,31 @@ func loadOrders(text string) map[cellKey][]string {
 }
 
 type convertInput struct {
-	Netlist          string                     `json:"netlist"`
-	Drawing          string                     `json:"drawing"`
-	Orders           []orderEntry               `json:"orders"`
-	Package          string                     `json:"package"`
-	Top              string                     `json:"top"`
-	Hierarchy        *bool                      `json:"hierarchy"`
-	Split            bool                       `json:"split"`
-	Scale            *float64                   `json:"scale"`
-	Dialect          string                     `json:"dialect"`
-	NameMaps         map[string]nameMap         `json:"name_maps"`
-	RootSymbol       *string                    `json:"root_symbol"`
-	BehaviorModels   map[string][]string        `json:"behavior_models"`
-	StylePackage     *string                    `json:"style_package"`
-	OrientationRules map[string]orientationRule `json:"orientation_rules"`
-	Standard         map[string]string          `json:"standard"`
-	LibraryScope     string                     `json:"library_scope"`
-	Capture          *libraryCapture            `json:"-"`
-	Annotations      string                     `json:"annotations"`
+	ExportSymbols      bool                       `json:"export_symbols"`
+	Netlist            string                     `json:"netlist"`
+	Drawing            string                     `json:"drawing"`
+	Orders             []orderEntry               `json:"orders"`
+	Package            string                     `json:"package"`
+	Top                string                     `json:"top"`
+	Hierarchy          *bool                      `json:"hierarchy"`
+	Split              bool                       `json:"split"`
+	Scale              *float64                   `json:"scale"`
+	Dialect            string                     `json:"dialect"`
+	NameMaps           map[string]nameMap         `json:"name_maps"`
+	RootSymbol         *string                    `json:"root_symbol"`
+	BehaviorModels     map[string][]string        `json:"behavior_models"`
+	StylePackage       *string                    `json:"style_package"`
+	OrientationRules   map[string]orientationRule `json:"orientation_rules"`
+	Standard           map[string]string          `json:"standard"`
+	LibraryScope       string                     `json:"library_scope"`
+	Capture            *libraryCapture            `json:"-"`
+	Annotations        string                     `json:"annotations"`
+	SymbolDrawings     []symbolDrawing            `json:"symbol_drawings"`
+	ExportSelectionBox *bool                      `json:"export_selection_box"`
+	SelectionBoxes     string                     `json:"selection_boxes"`
 }
+
+type symbolDrawing struct{ Library, Cell, Drawing string }
 
 func normalize(s, dialect string) string {
 	if dialect == "cdl" {
@@ -199,6 +205,30 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 	}
 	lines, blocks, keys := readNative(in.Netlist, in.Top, dialect)
 	cells, cellOrder := readEDIF(in.Drawing)
+	boxPolicy := newSymbolBoxPolicy(in.ExportSelectionBox, in.SelectionBoxes, scale)
+	boxPolicy.apply(cells)
+	for _, drawing := range in.SymbolDrawings {
+		choices, _ := readEDIF(drawing.Drawing)
+		boxPolicy.apply(choices)
+		for key, chosen := range choices {
+			if key.Library != drawing.Library || key.Cell != drawing.Cell {
+				continue
+			}
+			if original := cells[key]; original != nil && chosen.Symbol.group {
+				a, b := stringSet{}, stringSet{}
+				for _, n := range original.Ports {
+					a[n] = true
+				}
+				for _, n := range chosen.Ports {
+					b[n] = true
+				}
+				if len(a) != len(b) || !superset(a, b) {
+					fail("Selected symbol terminal interface mismatch in %s/%s: missing %v; extra %v", key.Library, key.Cell, setDifference(a, b), setDifference(b, a))
+				}
+				original.ExportSymbol = chosen
+			}
+		}
+	}
 	annotationGraphics := loadAnnotations(in.Annotations, scale)
 	topkey := normalize(in.Top, dialect)
 	if blocks[topkey] == nil {
@@ -241,6 +271,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 	}
 	if in.RootSymbol != nil {
 		cs, _ := readEDIF(*in.RootSymbol)
+		boxPolicy.apply(cs)
 		exported = cs[cellKey{rootCell.Library, rootCell.Name}]
 		if exported == nil || !exported.Symbol.group {
 			fail("Native EDIF omitted the current cell's symbol view")
@@ -253,7 +284,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 			b[v] = true
 		}
 		if len(a) != len(b) || !superset(a, b) {
-			fail("Current schematic and symbol terminal interfaces differ")
+			fail("Schematic/symbol terminal interface mismatch in %s/%s: missing from symbol %v; missing from schematic %v", rootCell.Library, rootCell.Name, setDifference(b, a), setDifference(a, b))
 		}
 	}
 	if dialect == "spectre" && rootSub {
@@ -477,7 +508,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 			}
 			xy, outputOrient := scaled(ins.XY, scale), ins.Orient
 			symbol := ""
-			if master.Library == "analogLib" && child == nil && group == nil {
+			if master.Library == "analogLib" && child == nil && group == nil && master.ExportSymbol == nil {
 				symbol = standardNames[strings.ToLower(master.Name)]
 			}
 			var destination []point
@@ -570,6 +601,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 				stats["instances"] += len(group.Members) - 1
 			}
 		}
+		markerBundles := stringSet{}
 		for index, ins := range c.Instances {
 			if bindings[strings.ToLower(ins.ID)] != nil || ins.Action == "ignore" {
 				continue
@@ -590,11 +622,22 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 			at := transform(scaled(loc, scale), ins.Orient, scaled(ins.XY, scale))
 			sid := "%marker_" + strconvI(index)
 			if strings.EqualFold(master.Name, "noconn") {
+				markerBits := []string{original}
+				if ins.Bundle != "" {
+					if markerBundles[ins.Bundle] {
+						continue
+					}
+					markerBundles[ins.Bundle] = true
+					for _, m := range c.Instances {
+						if m.Bundle == ins.Bundle {
+							markerBits = append(markerBits, connections[terminal{strings.ToLower(m.ID), p}])
+						}
+					}
+					markerBits = unique(markerBits)
+				}
 				targets := []string{}
-				all := []string{}
 				for _, e := range endpoints {
-					if set(e.Nets)[original] {
-						all = append(all, e.Ref)
+					if len(set(e.Nets)) == len(markerBits) && superset(set(e.Nets), set(markerBits)) {
 						if e.At == at {
 							targets = append(targets, e.Ref)
 						}
@@ -603,11 +646,8 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 				if len(targets) == 1 {
 					ss = append(ss, "$NO_CONNECT @ATTACH "+targets[0]+" => @ORIENT("+quote(ins.Orient)+")")
 				} else {
-					if len(all) != 1 {
-						fail("No-connect marker %s does not identify exactly one device terminal", ins.Name)
-					}
 					ss = append(ss, sid+" = "+pt(at), "$FIGURE @ATTACH "+sid+" => @SET-SYMBOL $NO_CONNECT_SYMBOL => @ORIENT("+quote(ins.Orient)+")")
-					endpoints = append(endpoints, endpoint{[]string{original}, at, sid})
+					endpoints = append(endpoints, endpoint{markerBits, at, sid})
 				}
 				continue
 			}
@@ -621,9 +661,16 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 		portSymbols := stringSet{}
 		for index, placement := range c.PortPlacements {
 			p, pos := placement.Port, placement.XY
+			members, label, direction := c.Groups[p], c.Labels[p], c.Directions[p]
+			if len(placement.Members) > 0 {
+				members, label, direction = placement.Members, placement.Label, placement.Direction
+			}
+			if len(members) == 0 {
+				fail("Cannot resolve EDIF schematic port %s in %s/%s: empty interface group", p, c.Library, c.Name)
+			}
 			bits := []string{}
 			valid := true
-			for _, k := range c.Groups[p] {
+			for _, k := range members {
 				n, ok := connections[terminal{"", k}]
 				if _, mapped := netmap[n]; !ok || !mapped {
 					valid = false
@@ -638,7 +685,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 			marker := sid
 			symbol := ""
 			glyph := ""
-			switch c.Directions[p] {
+			switch direction {
 			case "INPUT":
 				glyph, symbol = "IPIN", "%input_port_symbol"
 			case "OUTPUT":
@@ -675,16 +722,54 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 			if symbol != "" {
 				ss = append(ss, marker+" @SET-SYMBOL "+symbol)
 			}
-			if symbol != "" || len(bits) > 1 {
-				label := c.Labels[p]
-				if len(bits) == 1 {
+			if symbol != "" || len(bits) > 1 || placement.Label != "" {
+				if len(bits) == 1 && placement.Label == "" {
 					label = netmap[bits[0]]
 				}
 				ss = append(ss, marker+" @TEXT("+quote(literal(label))+`, key="name")`)
 			}
 			endpoints = append(endpoints, endpoint{bits, at, sid + term})
 		}
-		wires, count := drawRoutes(c, endpoints, netmap, scale)
+		// Native netlisting drops explicitly ignored instrumentation. A net
+		// connected only to such instances has no electrical counterpart either.
+		ignored := stringSet{}
+		for _, ins := range c.Instances {
+			if ins.Action == "ignore" {
+				ignored[ins.ID] = true
+			}
+		}
+		ignoredNets := stringSet{}
+		for _, n := range c.Nets {
+			if _, ok := netmap[n.Name]; ok || len(n.Terminals) == 0 {
+				continue
+			}
+			all := true
+			for _, terminal := range n.Terminals {
+				if !ignored[terminal.Instance] {
+					all = false
+				}
+			}
+			if all {
+				ignoredNets[n.Name] = true
+			}
+		}
+		routed := *c
+		routed.Routes = nil
+		for _, route := range c.Routes {
+			copy := *route
+			copy.Bits = nil
+			for _, bit := range route.Bits {
+				if !ignoredNets[bit] {
+					copy.Bits = append(copy.Bits, bit)
+				}
+			}
+			if len(copy.Bits) > 0 {
+				routed.Routes = append(routed.Routes, &copy)
+			} else {
+				notes = append(notes, "Omitted wire belonging only to nlAction=ignore instances: "+c.Library+"/"+c.Name+"/"+route.Name)
+			}
+		}
+		wires, count := drawRoutes(&routed, endpoints, netmap, scale)
 		ss = append(ss, wires...)
 		stats["wires"] += count
 		noteGraphics := []string{}
@@ -712,7 +797,15 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 		for _, p := range root.Ports {
 			ps = append(ps, escape(p))
 		}
-		rendered[topkey] = "subckt " + escape(root.Name) + " " + strings.Join(ps, " ") + "\n" + rendered[topkey] + "ends " + escape(root.Name) + "\n"
+		parameters := []string{}
+		for _, p := range unique(rootCell.Parameters) {
+			parameters = append(parameters, escape(p))
+		}
+		declaration := ""
+		if len(parameters) > 0 {
+			declaration = "parameters " + strings.Join(parameters, " ") + "\n"
+		}
+		rendered[topkey] = "subckt " + escape(root.Name) + " " + strings.Join(ps, " ") + "\n" + declaration + rendered[topkey] + "ends " + escape(root.Name) + "\n"
 	} else if dialect == "cdl" && !rootSub {
 		bodyStart := root.Start
 		for _, s := range statements(lines, "cdl") {
@@ -726,11 +819,12 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 	files := map[string]string{}
 	entry := netlistFilename(in.Top, extension)
 	parts := in.Capture
-	if in.Split && parts == nil {
+	if (in.Split || in.ExportSymbols) && parts == nil {
 		parts = &libraryCapture{Library: rootCell.Library, Cell: rootCell.Name, Dialect: dialect}
 	}
 	if parts != nil {
-		captureConversion(parts, keys, selected, blocks, source, cells, rendered, exported, topkey, rootSub, scale, &notes)
+		parts.ExportSelectionBox = &boxPolicy.native
+		captureConversion(parts, keys, selected, blocks, source, cells, rendered, exported, topkey, rootSub, scale, &notes, in.NameMaps)
 	}
 	sortedKeys := append([]string{}, keys...)
 	sort.SliceStable(sortedKeys, func(i, j int) bool { return blocks[sortedKeys[i]].Start < blocks[sortedKeys[j]].Start })
@@ -761,21 +855,16 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 		parts.Entry, parts.Template = entry, first+"\n"+header(carrier)+rest
 		if in.Split {
 			var layout map[string]any
-			files, layout = assembleLibrary([]libraryCapture{*parts}, rootCell.Library, dialect, true, resourceDir)
+			files, layout = assembleLibrary([]libraryCapture{*parts}, rootCell.Library, dialect, true, in.ExportSymbols, resourceDir)
 			cellIndex = layout["definitions"]
 		}
 	}
 	files["eda-symbol.rnl"], files["eda-style.rnl"] = in.Package, style
 	var symbolFile any
-	if exported != nil {
-		public := rootCell.Library + "/" + rootCell.Name
-		mapping := map[string]string{}
-		for _, p := range root.Ports {
-			mapping[port(exported, p)] = quote(p)
-		}
-		definition := symbolDefinition(exported, ref("$", public), mapping, scale, &notes)
-		files["cell-symbol.rnl"] = `@RNL(type="header") { @VERSION("0.3"); @PACKAGE(name=` + quote("virtuoso/"+public) + `, version="0.1") }` + "\n@RNL {\n" + definition + "\n}\n"
-		symbolFile = "cell-symbol.rnl"
+	if in.ExportSymbols {
+		packageText, _ := reusableSymbolPackage("virtuoso-library/"+rootCell.Library, parts.Symbols)
+		files["symbols.rnl"] = packageText
+		symbolFile = "symbols.rnl"
 	}
 	notes = unique(notes)
 	sort.Strings(notes)
@@ -783,7 +872,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 	if rootSub {
 		kind = "subcircuit"
 	}
-	return files, map[string]any{"entry": entry, "top": root.Name, "root_kind": kind, "symbol_file": symbolFile, "statistics": stats, "notes": notes, "definitions": cellIndex}
+	return files, map[string]any{"export_symbols": in.ExportSymbols, "export_selection_box": boxPolicy.native, "entry": entry, "top": root.Name, "root_kind": kind, "symbol_file": symbolFile, "statistics": stats, "notes": notes, "definitions": cellIndex}
 }
 
 func netlistFilename(name, extension string) string {

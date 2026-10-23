@@ -133,7 +133,7 @@ class LibraryTests(unittest.TestCase):
             prefix = '' if dialect == 'spectre' else '.'
             for split in (False, True):
                 with self.subTest(dialect=dialect, split=split):
-                    result = call(op='library', library='work', dialect=dialect, split=split, captures=captures)
+                    result = call(op='library', library='work', dialect=dialect, split=split, captures=captures, export_symbols=True)
                     files, report = result['files'], result['report']
                     self.assertEqual(len(report['definitions']), 6)
                     self.assertEqual(len(report['entries']), 5)
@@ -172,7 +172,7 @@ class LibraryTests(unittest.TestCase):
             captures = self.fixtures(dialect)
             for split in (False, True):
                 with self.subTest(dialect=dialect, split=split):
-                    result = call(op='library', library='work', dialect=dialect, split=split, captures=captures)
+                    result = call(op='library', library='work', dialect=dialect, split=split, captures=captures, export_symbols=True)
                     files, report = result['files'], result['report']
                     self.assertEqual(len(report['definitions']), 2)
                     self.assertEqual(len(report['entries']), 4)
@@ -184,7 +184,7 @@ class LibraryTests(unittest.TestCase):
                     self.assertIn('# @SET-SYMBOL %block_symbol', files['leaf.'+extension])
                     self.assertNotIn(('subckt ' if dialect == 'spectre' else '.SUBCKT ')+'bench', files['bench.'+extension])
                     self.check(files, [e['file'] for e in report['entries']]+['symbols.rnl'])
-            only = call(op='library', library='work', dialect=dialect, split=False, captures=[captures[-1]])
+            only = call(op='library', library='work', dialect=dialect, split=False, captures=[captures[-1]], export_symbols=True)
             self.assertEqual(only['report']['entries'], [])
             self.assertEqual(only['report']['definitions'], [])
             self.assertFalse([name for name in only['files'] if name.startswith('netlists/')])

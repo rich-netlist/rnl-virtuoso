@@ -1,9 +1,7 @@
 # Export options and conversion
 
-
-Check and Save the source schematic and its circuit descendants, then choose
-**RNL → Export RNL...**. The source is the currently edited cellview; it is
-captured when the form opens.
+Choose **RNL → Export RNL...**. The source library/cell is captured when the form opens;
+its view is selected using the ordered schematic view list.
 
 The CIW also has **File → Export → RNL...**. In **Cell** mode, choose the
 library and schematic cell directly; the options and backend are the same as
@@ -13,6 +11,10 @@ the schematic-editor entry. No editor window is required.
 | --- | --- |
 | New output directory | A new folder on the Virtuoso host; its parent must exist. Existing exports are refused. |
 | Netlist format | Spectre (simulation), the default, or SPICE / CDL (LVS). |
+| Schematic views (highest priority first) | Space-separated names, default `schematic`; for example `schematic schematic_ideal`. Selects the first available view for the root and descendants. |
+| Symbol views (highest priority first) | Space-separated names, default `symbol`; for example `symbol_alt symbol`. Selects the exported symbol definition and symbol-only library cells. |
+| Automatically Check & Save stale schematics | Enabled by default. Check and save stale source connectivity, including outdated instance terminals. Disable for read-only export. |
+| Export selection box | Enabled by default. Export the enclosing rectangle of every native `instance/drawing` selection shape in the selected symbol view. Disable to let RNL calculate the box from symbol graphics excluding text. A symbol with no native selection shape also uses its graphic extent. |
 | Root circuit | A schematic with ports becomes a subcircuit; one without ports remains the file-level circuit. |
 | Include subcircuits | Keep native netlist hierarchy; never flatten. When off, only the current block remains. |
 | Include referenced external cells | Export foreign schematic definitions when enabled; otherwise retain their calls and interface symbols. Available for both cell and library exports. |
@@ -49,19 +51,25 @@ symbols in the parent. Combined single-cell exports retain the original combined
 native hierarchy and model references.
 Unsafe filenames or case-insensitive file/directory collisions stop the export
 rather than overwrite a file or invent a different name.
-When the current cell has a saved `symbol` view, its native EDIF is also
+When the current cell has a saved view matching the symbol list, its native EDIF is also
 converted. The symbol is embedded in the current subcircuit (when it has ports)
-and exported as `cell-symbol.rnl`, with the public symbol `$"library/cell"` in
-package `virtuoso/library/cell` version `0.1`. Even a portless top with a symbol
-gets this separate reusable symbol file.
+and can be included in the optional `symbols.rnl` collection. The **Export
+symbols.rnl separately** setting (`?exportSymbols`, default `nil`, since 0.9.4)
+controls that additional package only. `cell-symbol.rnl` is no longer generated.
+Combined and separate single-cell exports use the same option, including portless
+cells with a symbol. Native EDIF symbol capture and embedded schematic symbols
+are preserved when the setting is off.
 Keep the directory together when opening or copying the result.
 
 ## Whole-library export
 
-Choose **Library** in the CIW form. All cells with a `schematic` view are exported;
-cells with only `symbol` are exported as reusable symbols. Cells with neither
+Choose **Library** in the CIW form. All cells matching the schematic view list are exported;
+cells matching only the symbol list are exported as reusable symbols. Cells with neither
 view are skipped and listed in `library-report.json`. The exporter reads saved
-views and does not check/save, create or edit source cells.
+views. By default, stale schematic connectivity is checked and saved in the
+source design (including current edits); disable **Automatically Check & Save
+stale schematics** / `?autoCheckSave nil` for read-only operation. No source
+cells or symbol views are created, and missing references are not repaired.
 
 Library mode always exports all of the library's own cells, one file per cell;
 the Combined file option applies only to single-cell export. **Include referenced
@@ -79,12 +87,18 @@ The common output directory contains:
   are relative to each file, including files inside these directories.
   Portless entries include their required descendants only; unrelated cells and
   other portless testbenches are never included.
-- `symbols.rnl`: package `virtuoso-library/<library>` version `0.1`, with reusable
+- `<symbol-only-cell>.rnl`: each library cell without a schematic is always saved
+  as its own reusable symbol package `virtuoso/<library>/<cell>` version `0.1`,
+  with symbol `$"library/cell"`. Foreign primary symbol-only cells, if present,
+  follow the same library subdirectory layout. These files do not depend on the
+  optional collection setting.
+- Optional `symbols.rnl` (default off): package `virtuoso-library/<library>` version `0.1`, with reusable
   symbols named `$"library/cell"`, including symbol-only cells and referenced
   interfaces. For example: `@USE-PACKAGE(name="virtuoso-library/myLib", version="0.1", path="symbols.rnl")`.
 - Shared `eda-symbol.rnl`, `eda-style.rnl` and `library-report.json`. The report
-  maps source cells, native subcircuit names, entry paths and exported symbols,
-  and records model references, notes and skipped cells.
+  maps source cells, native subcircuit names, entry paths, symbol-only files and exported symbols,
+  and records `export_symbols`, the optional `symbol_file` (null when disabled),
+  `symbol_only_files`, model references, notes and skipped cells.
 
 The queue runs one native job at a time. Results are published together only
 after all cells have been attempted and the merge succeeds. Existing output
@@ -99,6 +113,15 @@ electrical statements agree. Native context variants with distinct names stay
 distinct. A generated Spectre root wrapper may order its named ports differently
 from a native child definition. If the port sets and device statements agree,
 the cell file keeps the native child's positional port order and body.
+Root wrappers declare parameters explicitly referenced through source `pPar(...)`.
+When reconciling an older root capture that lacks those declarations, the native
+child's parameter declarations/defaults are retained only if source identity,
+port set and electrical body agree, and the root has no conflicting defaults.
+Bare parameters inferred from EDIF but absent from the native child are accepted
+only when no native device or parameter expression references them (0.9.3+).
+For empty subcircuits, different native bus-port spellings are reconciled only
+through the verified source-terminal mapping; the native child's spelling and
+ordering are retained. Nonempty bodies still require matching electrical statements.
 Differences in indentation and continuation wrapping are ignored during comparison;
 quoted strings retain their exact content. Conflicting native names or symbol geometry stop the export with a
 diagnostic; the exporter does not rewrite device calls to invent global aliases.
@@ -148,15 +171,37 @@ Array exports require an RNL runtime whose package symbol rules select the
 bundle after membership has been resolved. Older viewers may
 report errors about drawing hidden bundle members.
 
+## Source connectivity (0.9.2+)
+
+**Automatically Check & Save stale schematics** is enabled in both forms and in
+both public APIs (`?autoCheckSave t`). It runs `schCheck` and `dbSave` only when
+a selected schematic has stale connectivity or a placed instance's terminal
+members differ from its current master. It can save current source edits. A
+current schematic with unsaved edits must still be saved explicitly. Check/save
+failures, locked views, and unresolved source errors remain export failures.
+Use `?autoCheckSave nil` to reject stale source views without writing them.
+Managed views use Cadence batch auto-checkout before append access; a checkout
+failure is reported without bypassing locks or changing source-control settings.
+
+Schematic/symbol interfaces compare expanded terminal member names. Reversed
+bus ranges such as `FRAME<0:15>` and `FRAME<15:0>` are equivalent interfaces;
+the converter preserves their respective graphic order and native electrical
+mapping. Missing or extra members still fail.
+
 ## Conversion contract
 
-- Electrical statements come from native `si`: Spectre uses switch views
-  `schematic spectre veriloga veriloga_ans`, stop views
+- Electrical statements come from native `si`: Spectre uses the configured
+  schematic views followed by `spectre veriloga veriloga_ans`, stop views
   `spectre veriloga veriloga_ans`, hierarchical mode and command `nl`;
-  CDL uses `auCdl schematic`, stop view `auCdl`, command `netlist` and the native
+  CDL uses `auCdl` followed by the configured schematic views, stop view `auCdl`, command `netlist` and the native
   CDL preservation options. Spectre retains child `subckt` definitions and the native header/footer.
   A cell with both `schematic` and `spectre` views expands its schematic;
   a primitive or behavioral cell without a schematic keeps its native stop view.
+  EDIF uses a matching native hierarchy file. Symbol choices follow the symbol
+  list; original placed pins still anchor source wires. Empty ported schematics
+  are retained as empty subcircuits. Native `ERROR` diagnostics abort even if
+  the exporter process exits zero; terminal mismatch diagnostics identify the
+  selected views and the missing names. Source views are never repaired automatically.
   The current circuit gets a `subckt` wrapper if its EDIF interface has ports;
   a portless CDL root has its native wrapper removed. Device statements stay
   intact, and global declarations/model references stay outside the wrapper.
@@ -211,6 +256,13 @@ report errors about drawing hidden bundle members.
   The exported Spectre copy of `eda-symbol` omits SPICE instance-letter rules:
   an instance named `I0` keeps its cell symbol, while `isource` still selects a
   current source by model. CDL copies keep the SPICE letter rules.
+- Cadence EDIF Out can omit all but one native selection box. A read-only
+  `selection-boxes.sx` snapshot preserves every selection shape from the selected
+  symbol view. With **Export selection box** enabled, their union supplies one
+  enclosing rectangle; symbol outlines, pin markers, labels and the cellview bbox
+  do not expand it. With the option disabled, explicit boxes are omitted and RNL
+  computes the non-text graphic extent. This applies to root/child symbols,
+  symbol-only cells and reusable symbol packages.
 - Exported custom symbols contain geometry, layout/text size and `@PIN`s with
   unknown direction omitted. They contain no generated pin squares or fixed
   colors, line widths or style assignments. Presentation and optional pin marks
@@ -254,6 +306,12 @@ report errors about drawing hidden bundle members.
   and a visible `$IO_PORT` marker for its shape and range label. This lets the
   style package's port rules apply to buses as well, without fixed colors in
   exported symbols or extra electrical wires.
+- In hierarchical EDIF, a page marker can use a different bus identifier and
+  order from the symbol interface. The page net's explicit joined portRefs map
+  each displayed bit to its logical terminal. Original page range labels,
+  ordering, positions and orientations are preserved; the symbol interface and
+  native electrical port order remain unchanged. Missing or ambiguous mappings
+  report the source cell/port instead of an empty-net error (0.9.3+).
 - One-dimensional bus ports become RNL bus pins, multiple nets share one bus
   wire, and iterated instances become `BUNDLE`s. Their scalar native statements
   remain intact. Range labels retain the source spelling and bit order. Repeated connections
@@ -267,8 +325,8 @@ same terminal in a symbol are not: RNL 0.3 gives each terminal one pin, with
 later definitions overriding earlier ones. Such symbol pins still collapse to
 one connection location.
 
-This version targets saved schematic hierarchies with the fixed view lists
-above. Config views, arbitrary stop/switch view policies, HSPICE output,
+This version targets saved hierarchies with configurable schematic/symbol view lists.
+Config views, configurable simulator stop views, HSPICE output,
 layout extraction, mosaic/scaled instances and multidimensional arrays are
 not implemented. Verilog-A interface reading currently supports non-ANSI
 module headers, scalar ports and buses with literal integer bounds; it does

@@ -62,6 +62,24 @@ class SymbolTests(unittest.TestCase):
         for forbidden in ('#ff0000', 'width=0.8', 'direction=', 'linecolor=', 'fillcolor=', 'textcolor=', 'linewidth=', 'linestyle=', '@SET-STYLE'):
             self.assertNotIn(forbidden, text)
 
+    @unittest.skipIf(os.environ.get('RNL_EXPORT_BACKEND') == 'python', 'Selection-box modes are a Go backend extension')
+    def test_selection_box_modes_keep_native_union_or_graphic_extent(self):
+        native = '// Fixture\n// Library name: work\n// Cell name: top\nX0 (N1 N2) resistor r=1k\n'
+        snapshot = '(("analogLib" "custom_bounds" "symbol" 160 (((-0.0625 -0.15625) (0.0625 -0.125)) ((-0.0625 0.125) (0.0625 0.15625)))))'
+        for frame in edif.MATRICES:
+            for enabled in (True, False):
+                with self.subTest(frame=frame, exportSelectionBox=enabled):
+                    source, expected_pins = primitive_drawing('custom_bounds', [(0, 3), (0, -3)], frame)
+                    source = source.replace('(symbol ', '(symbol (boundingBox (rectangle (pt -10 -25) (pt 10 -20))) (figure device (rectangle (pt -20 -30) (pt 20 30))) (commentGraphics (annotate (stringDisplay "far label" (display (origin (pt 1000 1000)))))) ', 1)
+                    files, report = convert(native, source, {('analogLib', 'custom_bounds'): ['P1', 'P2']}, PACKAGE, 'top', dialect='spectre', export_selection_box=enabled, selection_boxes=snapshot)
+                    self.assertEqual(report['export_selection_box'], enabled)
+                    level = self.dump(files)
+                    item = next(i for i in level['items'] if i['id'] == '#X0')
+                    symbol = level['symbols'][item['symbol']]
+                    self.assertEqual(symbol['box'], [-1, -2.5, 1, 2.5] if enabled else [-2, -3, 2, 3])
+                    for pin, expected in zip(symbol['pins'], expected_pins):
+                        self.assertEqual(edif.transform(pin['pos'], item['orient'], item['at']), expected)
+
     def test_configuration_covers_changed_symbols_and_rejects_bad_rules(self):
         rules = orientation.load_rules()
         self.assertEqual(len(rules), 18)

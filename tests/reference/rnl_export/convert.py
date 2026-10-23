@@ -324,9 +324,4 @@ def convert(netlist, drawing, orders, package, top, hierarchy=True, split=False,
     files[entry] = first_line + '\n' + _header(carrier) + ''.join(includes) + rest
     files["eda-symbol.rnl"] = package
     files["eda-style.rnl"] = style_package
-    if exported_symbol:
-        public_name = root_cell.library+'/'+root_cell.name
-        mapping = {port_id(exported_symbol, p): p for p in root.ports}
-        definition = symbol_definition(exported_symbol, ref('$', public_name), mapping, scale, notes)
-        files['cell-symbol.rnl'] = '@RNL(type="header") { @VERSION("0.3"); @PACKAGE(name='+quote('virtuoso/'+public_name)+', version="0.1") }\n@RNL {\n'+definition+'\n}\n'
-    return files, {"entry": entry, "top": root.name, "root_kind": "subcircuit" if root_is_subcircuit else "top", "symbol_file": "cell-symbol.rnl" if exported_symbol else None, "statistics": stats, "notes": sorted(set(notes))}
+    return files, {"entry": entry, "top": root.name, "root_kind": "subcircuit" if root_is_subcircuit else "top", "symbol_file": None, "statistics": stats, "notes": sorted(set(notes))}

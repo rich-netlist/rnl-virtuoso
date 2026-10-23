@@ -18,7 +18,7 @@ SKILL 前端调用原生 Spectre/CDL 和 EDIF 导出器，Go 后端组合网表�
 
 ```sh
 mkdir -p ~/tools
-tar -xzf rnl-virtuoso-0.8.0-linux-amd64.tar.gz -C ~/tools
+tar -xzf rnl-virtuoso-0.9.4-linux-amd64.tar.gz -C ~/tools
 ```
 
 在 CIW 中执行一行即可，也可加入项目的 `.cdsinit`：
@@ -33,7 +33,8 @@ Linux x86-64 上测试。
 
 ## 使用
 
-先对原理图层次执行 Check and Save，再选择 **RNL → Export RNL...**，指定新的输出目录。
+选择 **RNL → Export RNL...**，指定新的输出目录。0.9.2 起默认自动对连接状态过期的原理图执行 Check & Save。
+取消 **Automatically Check & Save stale schematics**，或设置 `?autoCheckSave nil`，可保持只读导出。
 仿真源、开关和 Verilog-A 模型优先使用 **Spectre (simulation)**；CDL 用于 LVS，可能省略这些器件。
 导出后保持整个目录一起使用。模型引用仍为外部引用，本工具不会打包完整仿真环境。
 
@@ -43,13 +44,31 @@ Linux x86-64 上测试。
 外部 cell 保存到 `<外部库名>/<cell>.scs` / `.sp`，同一外部 cell 只保存一份。
 不再拆分入口文件和定义文件，也没有 `netlists/` 目录。
 带 port 的 subcircuit 不写原生 include；无 port 的 top 平铺 include 全部所需下级文件，每个文件一次。
-单 cell 导出仍可选合并文件；整库固定每个 cell 一个文件，共用 `symbols.rnl` 和 symbol/style 包。
+单 cell 导出仍可选合并文件；整库固定每个 cell 一个文件，共用 symbol/style 包。
 关闭外部 cell 导出时保留外部调用和符号，开启后连带导出原生网表中的外部子电路定义。
 `library-report.json` 列出入口、定义、符号及跳过的无 schematic/symbol 的 cell。
+
+0.9.4 新增 **Export symbols.rnl separately**，默认关闭，API 为 `?exportSymbols nil/t`。
+开启后额外生成汇总的 `symbols.rnl`；不再生成 `cell-symbol.rnl`。整库中的纯 symbol cell
+始终以 `<cell名>.rnl` 保存，不受此选项影响；`.scs` 内嵌的符号定义也保持不变。
 导出失败的 cell 会跳过并继续处理其余 cell；报告的 `failed_cells` 保存失败原因与日志路径，
 只要有失败项就会标记 `complete: false`，完成提示也会显示失败数量。
 
 更多选项与边界见 [导出说明](docs/export.md)。
+
+两个导出窗口均提供 **Schematic views** 和 **Symbol views** 文本框。
+用空格分隔 view 名，优先级从左到右递减，例如 `schematic schematic_ideal`、
+`symbol_alt symbol`。每个 cell 选择第一个存在的候选 view。
+SKILL API 对应参数为 `?schematicViews`、`?symbolViews`（0.9.0 起支持），
+默认仍为 `schematic` 和 `symbol`。原生报错和端口不一致会保留详细原因，
+连接状态过期时会自动 Check & Save 原设计（含当前编辑），也会刷新缺少 master 新增端口的实例。
+无法取得写权限、Check & Save 后仍无效、缺失引用或真实的端口位不一致，仍会明确报错。
+总线范围方向不同但成员相同（如 `<0:15>` 与 `<15:0>`）可正常导出，保留各自的方向和原生端口顺序。
+
+0.9.1 新增 **Export selection box**（默认勾选），API 为 `?exportSelectionBox t/nil`。勾选时取所选 symbol view 中所有原生选择框的包围矩形；取消时按 symbol 图形（不含文字）计算外框。
+
+0.9.3 修复分层 EDIF 中 schematic 与 symbol 总线方向不同的端口映射，
+保留原图的总线位序、标签、端口位置和方向。
 
 ## 脚本与 agent
 
@@ -75,7 +94,7 @@ rnlExportStatus(job)
 仅开发机需要 Go 1.22+ 和 Python 3.8+：
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.8.0-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.9.4-linux-amd64.tar.gz
 python scripts/test.py --rnl /path/to/rnl
 ```
 
