@@ -1,7 +1,5 @@
 # rnl-virtuoso
 
-[中文](README.zh.md)
-
 Export Virtuoso schematics to [Rich Netlist (RNL)](https://github.com/rich-netlist/rnl).
 Adds **RNL → Export RNL...** to the schematic editor and **File → Export → RNL...**
 to the CIW. Export a selected cell or a whole library. A SKILL front end reuses

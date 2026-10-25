@@ -17,8 +17,7 @@ def main():
     here = Path(__file__).resolve().parents[1]
     files = [(here/'rnl-virtuoso.il', 'rnl-virtuoso.il'), (here/'rnl-library.il', 'rnl-library.il'),
              (here/'rnl-api.il', 'rnl-api.il'), (here/'README.md', 'README.md'),
-             (here/'README.zh.md', 'README.zh.md'), (here/'LICENSE', 'LICENSE'),
-             (here/'Go-LICENSE.txt', 'Go-LICENSE.txt')]
+             (here/'LICENSE', 'LICENSE'), (here/'Go-LICENSE.txt', 'Go-LICENSE.txt')]
     files.extend((p, p.relative_to(here).as_posix()) for p in (here/'docs').glob('*.md'))
     files.extend((p, p.relative_to(here).as_posix()) for p in (here/'resources').iterdir() if p.is_file())
     files.extend((here/'LICENSES'/name, 'LICENSES/'+name) for name in ('MIT.txt', 'CC0-1.0.txt', 'BSD-3-Clause.txt'))
