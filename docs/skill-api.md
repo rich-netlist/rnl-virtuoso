@@ -25,6 +25,7 @@ Only library, cell and destination are required. The example lists all defaults.
 
 | Keyword | Values and meaning |
 | --- | --- |
+| `wait` | `nil` (default) returns a job ID immediately; `t` blocks until the whole export finishes and returns the final status alist. Unreleased extension; check `blocking_export` in `rnlExporterInfo()`. |
 | `view` | Optional explicit top view; default `nil` selects by `schematicViews`. Overrides only the root, preserving older calls that specify `?view`. |
 | `schematicViews` | Space-separated schematic view names, highest priority first; default `"schematic"`. Available since 0.9.0. |
 | `symbolViews` | Space-separated symbol view names, highest priority first; default `"symbol"`. Available since 0.9.0. |
@@ -54,7 +55,7 @@ External cells are excluded by default, matching the CIW form. There is no
 hierarchy or file-mode option for a library. Cell failures are recorded and
 skipped; a successful merge can therefore be **partial**.
 
-The `autoCheckSave`, `exportSelectionBox` and `exportSymbols` keywords also apply to library export.
+The `wait`, `autoCheckSave`, `exportSelectionBox` and `exportSymbols` keywords also apply to library export.
 Symbol-only library cells always export as `<cell>.rnl`, even when `exportSymbols`
 is disabled. The library report lists them in `symbol_only_files`; `symbol_file`
 is null when the optional collection is off. Selection boxes
@@ -87,7 +88,7 @@ be saved explicitly.
 
 ## Observe completion
 
-Export functions return a job ID (the native work directory) after preflight and
+With the default `?wait nil`, export functions return a job ID (the native work directory) after preflight and
 process launch. This means **started**, not completed. Startup errors raise a
 SKILL error and return no ID. One export can run per session; concurrent starts
 raise an error.
@@ -120,14 +121,83 @@ After success or partial completion, read the report. The library report has
 `complete`, `successful_cells` and `failed_cells` including reasons and logs.
 Conversion success does not mean the circuit was simulated.
 
-Return control to Virtuoso between polls so IPC callbacks can run. Bridge callers
+For asynchronous polling, return control to Virtuoso between polls so IPC callbacks can run. Bridge callers
 should issue separate `execute_skill` calls every few seconds. Do not busy-wait
 or sleep in a SKILL loop. On bridge timeout check `rnlExporterInfo()` before
 relaunching: a timeout does not cancel an existing export.
 
 `rnlExporterInfo()` returns `api_version` (integer 1), `tool_version`,
-`install_directory`, `busy`, and `active_id`. The active ID can describe a menu
+`install_directory`, `busy`, and `active_id`. The unreleased blocking extension also
+returns `blocking_export: t`; released 0.9.4 installations do not have it. The active ID can describe a menu
 job; then wait for `busy` to clear instead of querying public job history.
+
+## Blocking export and headless invocation
+
+For normal headless use, prefer the [one-command CLI](headless.md). It generates
+the driver and handles results/exit codes; the low-level example below is only
+for custom integrations.
+
+This is an unreleased API extension. Check
+`cadr(assoc("blocking_export" rnlExporterInfo()))` before passing `?wait` to an
+existing installation. Defaults and menu behavior remain asynchronous.
+
+```skill
+status = rnlExportCell("myLib" "myCell" "~/exports/myCell"
+  ?autoCheckSave nil ?wait t)
+status = rnlExportLibrary("myLib" "~/exports/myLib"
+  ?autoCheckSave nil ?wait t)
+
+; An already-started asynchronous job can also be awaited.
+status = rnlExportWait(job)
+```
+
+The blocking return value is the same final alist as `rnlExportStatus`, including
+`state`, `report` and failure counts. It can be `succeeded`, `partial` or `failed`;
+do not treat a non-nil value or `exit_code == 0` as proof of complete success.
+Startup/API errors still raise a SKILL error. `rnlExportWait()` defaults to the
+last API job; waiting again on a completed job immediately returns its status.
+
+Internally, the wait uses Cadence `ipcWait`, which services IPC completion
+handlers while suspending the caller. Library callbacks can therefore advance
+through every cell and the final merge. No caller-supplied timer or polling loop
+is needed. Native `si`/`edifout` processes run without the parent's MPS session
+binding, avoiding a 60-second session-response timeout observed in IC6.1.8 while
+the parent waits. Project and license environment variables remain inherited;
+the parent environment is unchanged. Blocking calls suspend interactive UI evaluation, so keep the menus
+and ordinary bridge calls asynchronous. A bridge timeout does not cancel a
+blocking export.
+
+Virtuoso accepts SKILL on standard input. From **Bash**, with the appropriate
+Cadence environment loaded and the current directory containing the project's
+`cds.lib`, no separate batch `.il` file is required:
+
+```bash
+virtuoso -nograph -nocdsinit -log "$PWD/rnl-export.log" <<'SKILL'
+let((result state)
+  result = errset(progn(
+    load("~/tools/rnl-virtuoso/rnl-virtuoso.il")
+    rnlExportCell("myLib" "myCell" "~/exports/myCell"
+      ?format "spectre" ?autoCheckSave nil ?wait t)
+  ) t)
+  state = when(result cadr(assoc("state" car(result))))
+  exit(cond((state == "succeeded" 0) (state == "partial" 3) (t 2)))
+)
+SKILL
+```
+
+Replace the cell call with `rnlExportLibrary` for a library. The quoted heredoc
+prevents shell expansion inside SKILL; names and paths supplied programmatically
+still need SKILL string escaping. Avoid concurrent use of the same output/log
+paths. A shell `timeout` around the dedicated process can bound a batch run;
+this API does not introduce job cancellation.
+
+`-nograph` supplies its own virtual display; a desktop or bridge is unnecessary.
+Do not substitute `-nographE`, which expects an existing display. The process
+still needs Virtuoso, native exporters, licenses and the project's PDK setup.
+It reads saved files, not unsaved edits in another session. `-nocdsinit` skips
+startup customizations; explicitly load required project initialization when
+needed. Load the environment setup commands from a site launch alias instead of
+invoking an alias that already starts an interactive Virtuoso process.
 
 ## Output and agent use
 
@@ -138,7 +208,7 @@ subcircuits; omitted children keep local interface symbols. Keep the entire
 output directory together. Model references remain external.
 
 Install the repository's `skills/rnl-virtuoso` directory into your agent's skills
-directory (Codex: `~/.codex/skills/rnl-virtuoso`). It uses the existing `virtuoso`
+directory (Codex: `~/.codex/skills/rnl-virtuoso`). It supports the headless CLI or existing `virtuoso`
 bridge skill, checks the host installation, and requests consent before installing
 a missing tool in the user's home. The skill contains instructions only; the
 exporter and bridge are obtained separately.

@@ -76,6 +76,18 @@ API (0.9.0+). Defaults remain `schematic` and `symbol`.
 of all native selection boxes in the selected symbol view. Disable it to use the
 symbol graphics extent, excluding text. The SKILL keyword is `?exportSelectionBox`.
 
+## Headless export (unreleased)
+
+```sh
+~/tools/rnl-virtuoso/bin/rnl-virtuoso export --lib myLib --cell myCell --out ./myCell_rnl
+```
+
+Run in the project containing `cds.lib`, or pass `--project`. Omit `--cell` to
+export the library. The CLI starts Virtuoso, waits and reports the result; no
+bridge or handwritten SKILL is needed. Environment files can be given with
+`--env-csh` or saved in user config. Use `--auto-check-save=false` for read-only
+export. See [headless usage](docs/headless.md) for setup, options and exit codes.
+
 ## Scripts and agents
 
 The public SKILL API exports without an editor or completion dialog:
@@ -87,10 +99,12 @@ rnlExportStatus(job)
 
 Use `rnlExportLibrary` for a whole library, `rnlExporterInfo` to inspect the
 installation, and keyword options for format/hierarchy/external cells. Jobs are
-asynchronous; see [API documentation](docs/skill-api.md) for completion states.
+asynchronous by default. The unreleased `?wait t` option returns the final status
+after completion, and supports headless calls through standard input without a
+bridge or separate batch SKILL file; see [API documentation](docs/skill-api.md#blocking-export-and-headless-invocation).
 
 Copy [skills/rnl-virtuoso](skills/rnl-virtuoso) to your agent's skill directory
-(Codex: `~/.codex/skills/rnl-virtuoso`). It builds on the existing `virtuoso`
+(Codex: `~/.codex/skills/rnl-virtuoso`). It supports the headless CLI or the existing `virtuoso`
 bridge skill, reuses a remote installation, and asks before installing a missing
 exporter in the user's home. The skill contains no exporter or bridge assets;
 new installations fetch the latest release from this repository.

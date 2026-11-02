@@ -23,7 +23,8 @@ HTTP client. Record the tag/source. Verify the archive against its `.sha256`
 asset before extraction. Do not use `curl | sh` or unrelated download sources.
 
 If no suitable release exists for the host architecture/API, explain the blocker.
-For an appropriate/authorized source build, clone upstream at the selected latest
+The headless CLI is newer than the published 0.9.4 interface; do not assume that
+a release has it without checking. For an appropriate/authorized source build, clone upstream at the selected latest
 revision, read its build instructions, and package on a development machine with
 Go and Python. Transfer the static archive; do not install build toolchains on
 the EDA host by default. Use the latest default branch only when the user asks
@@ -39,18 +40,19 @@ for an unreleased/source version or knowingly chooses it over the release.
    `rnl-virtuoso/`; reject absolute paths, `..`, and links escaping that root.
 3. Extract into a new staging directory on the destination filesystem. Require
    `rnl-virtuoso.il`, `rnl-library.il`, `rnl-api.il`, `bin/rnl-virtuoso`,
-   `resources/`, and docs. Check `bin/rnl-virtuoso --version` succeeds and matches
+   `resources/`, and docs. Check `bin/rnl-virtuoso -version` succeeds and matches
    the selected release.
 4. Move the staged directory to the final destination with a no-clobber
    operation. Do not overwrite an existing installation. For an approved upgrade,
    wait until exports finish, retain the prior directory as a uniquely named
    backup, then publish. Restore it if publication fails. Do not edit `.cdsinit`
    or `cds.lib`.
-5. In the selected bridge session evaluate
-   `load("ABSOLUTE_INSTALL_DIRECTORY/rnl-virtuoso.il")`, then
-   `rnlExporterInfo()`. Require API 1, the intended path and expected version.
-   Normal load also installs menus; no separate install call is needed. Continue
-   the requested export and report the version/path with its result.
+5. Verify the requested execution mode. For headless, require
+   `bin/rnl-virtuoso export --help` and read installed `docs/headless.md`; no bridge
+   is needed. For an existing bridge session, load
+   `ABSOLUTE_INSTALL_DIRECTORY/rnl-virtuoso.il`, then query `rnlExporterInfo()`;
+   require API 1, the intended path and expected version. Normal load installs
+   menus automatically. Continue the requested export and report version/path.
 
 Keep this skill instruction-only. Fetch the exporter from upstream as needed;
 never copy its runtime or the bridge into this skill as assets.

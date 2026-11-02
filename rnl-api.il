@@ -1,10 +1,11 @@
-; Public asynchronous API for CIW scripts and Virtuoso bridge agents.
+; Public API for CIW, bridge agents and blocking headless exports.
 ; Internal job objects stay in Virtuoso; public results contain only plain data.
 unless(boundp('rnlAPIJobs) rnlAPIJobs = makeTable('rnlAPIJobs nil))
 unless(boundp('rnlLastExportId) rnlLastExportId = nil)
 
 procedure(rnlExporterInfo()
   list(list("api_version" 1) list("tool_version" "0.9.4")
+    list("blocking_export" t)
     list("install_directory" rnlInstallDirectory)
     list("busy" if(rnlActiveJob || rnlActiveBatch then t else nil))
     list("active_id" cond((rnlActiveBatch rnlActiveBatch->directory)
@@ -43,10 +44,11 @@ procedure(rnlAPITrack(id kind job)
 
 procedure(rnlExportCell(lib cell destination @key (view nil)
     (format "spectre") (hierarchy t) (external t) (fileMode "separate") (scale 10.0)
-    (schematicViews "schematic") (symbolViews "symbol") (exportSelectionBox t) (autoCheckSave t) (exportSymbols nil))
+    (schematicViews "schematic") (symbolViews "symbol") (exportSelectionBox t) (autoCheckSave t) (exportSymbols nil) (wait nil))
   let((id)
     rnlAPIString(cell "cell")
     when(view rnlAPIString(view "view"))
+    rnlAPIBoolean(wait "wait")
     rnlAPIBoolean(hierarchy "hierarchy")
     rnlAPIBoolean(external "external")
     rnlAPIBoolean(exportSelectionBox "exportSelectionBox")
@@ -58,12 +60,14 @@ procedure(rnlExportCell(lib cell destination @key (view nil)
     id = rnlStartExport(lib cell view destination hierarchy fileMode == "separate"
       scale format if(external then "" else lib) nil nil schematicViews symbolViews exportSelectionBox autoCheckSave exportSymbols)
     rnlAPITrack(id "cell" rnlLastJob)
+    if(wait then rnlExportWait(id) else id)
   )
 )
 
 procedure(rnlExportLibrary(lib destination @key (format "spectre") (external nil) (scale 10.0)
-    (schematicViews "schematic") (symbolViews "symbol") (exportSelectionBox t) (autoCheckSave t) (exportSymbols nil))
+    (schematicViews "schematic") (symbolViews "symbol") (exportSelectionBox t) (autoCheckSave t) (exportSymbols nil) (wait nil))
   let((id)
+    rnlAPIBoolean(wait "wait")
     rnlAPIBoolean(external "external")
     rnlAPIBoolean(exportSelectionBox "exportSelectionBox")
     rnlAPIBoolean(autoCheckSave "autoCheckSave")
@@ -71,6 +75,7 @@ procedure(rnlExportLibrary(lib destination @key (format "spectre") (external nil
     destination = rnlAPIOptions(lib destination format scale)
     id = rnlStartLibraryExport(lib destination t t scale format external nil schematicViews symbolViews exportSelectionBox autoCheckSave exportSymbols)
     rnlAPITrack(id "library" rnlLastBatch)
+    if(wait then rnlExportWait(id) else id)
   )
 )
 
@@ -94,5 +99,25 @@ procedure(rnlExportStatus(@optional (id rnlLastExportId))
       list("work_directory" job->directory) list("error_file" strcat(job->directory "/error.txt"))
       list("completed_cells" completed) list("total_cells" total) list("failed_cells" failures)
       list("current_cell" when(batch && state == "running" && phase == "cells" car(job->currentTask))))
+  )
+)
+
+; ipcWait suspends the caller but services IPC messages and completion handlers.
+; A library handler can start the next worker; wait for it until the whole job
+; reaches a terminal state. Never synthesize completion or run the handler twice.
+procedure(rnlExportWait(@optional (id rnlLastExportId))
+  let((status process)
+    status = rnlExportStatus(id)
+    while(cadr(assoc("state" status)) == "running"
+      unless(rnlActiveJob && rnlActiveJob->process
+        error("RNL job %s has no active worker. Inspect its work-directory logs.\n" id))
+      process = rnlActiveJob->process
+      ipcWait(process)
+      status = rnlExportStatus(id)
+      when(cadr(assoc("state" status)) == "running" && rnlActiveJob &&
+          rnlActiveJob->process == process && !ipcIsAliveProcess(process)
+        error("RNL worker ended without completing job %s. Inspect the CIW callback diagnostics.\n" id))
+    )
+    status
   )
 )

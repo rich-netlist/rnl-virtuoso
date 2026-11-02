@@ -6,8 +6,9 @@
 | --- | --- |
 | `rnl-virtuoso.il` | Menu, form, preflight and asynchronous native-export launcher |
 | `rnl-library.il` | CIW selection form and sequential library export queue |
-| `rnl-api.il` | Public keyword API, quiet asynchronous jobs and status history |
+| `rnl-api.il` | Public keyword API, optional blocking waits and status history |
 | `skills/rnl-virtuoso/` | Agent instructions; exporter/bridge are not bundled |
+| `cmd/rnl-virtuoso/headless*.go` | One-command headless launcher, environment config, result/status handling and process lifecycle |
 | `cmd/rnl-virtuoso/` | Pure Go backend, parsers, geometry, routing and native job tests |
 | `resources/` | Editable package snapshots and orientation corrections |
 | `scripts/` | Archive builder and test driver; development tools only |
@@ -76,7 +77,11 @@ cover atomic publication and refusal of existing files, directories and symlinks
 
 For the SKILL API, load `tests/skill-api.il` in an idle test Virtuoso and call
 `rnlTestPublicAPI()`. It checks rejected inputs, concurrency and synthetic status
-transitions without accessing source libraries. Also run real cell and library
+transitions without accessing source libraries. `rnlTestBlockingAPI()` additionally
+uses real IPC workers to check successful/failed cells, a partial merge, repeat
+waits and state cleanup within one SKILL evaluation. Test `?wait t` for both cell
+and library export using headless standard input, with source writes disabled.
+Also run real cell and library
 exports through the bridge, polling in separate calls: check native completion,
 partial-library failures, retained earlier job IDs and absence of API dialogs.
 The API regression was exercised on IC6.1.8 at `thu-sui:65038` with a hierarchical
@@ -104,3 +109,14 @@ Selection-box regressions cover multiple native rectangles, source/corner orderi
 geometry mode, empty source selections, malformed snapshots, root symbols and
 library captures. RNL model checks cover both modes in all eight orientations,
 keep pin positions and exclude text from graphic extents.
+
+
+The headless CLI uses the installed SKILL API with `?wait t`; it writes a generated
+driver only inside its new log directory. Its tests cover config overrides,
+SKILL string quoting, successful/partial/failed/missing/inconsistent final status,
+timeout process-group cleanup, C shell setup paths with shell metacharacters,
+project-directory restoration and refusal to overwrite output. Process integration
+tests run on Linux (and require `/bin/csh` for the environment setup case); Windows
+runs the platform-independent cases. Run the compiled Linux test executable from
+`cmd/rnl-virtuoso` relative to the resource directory, as the existing tests expect.
+Use a temporary user config and read-only source options in real CLI regressions.

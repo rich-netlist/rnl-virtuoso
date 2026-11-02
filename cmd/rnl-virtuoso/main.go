@@ -127,9 +127,18 @@ func main() {
 		fmt.Fprintln(os.Stderr, e)
 		os.Exit(1)
 	}
+	if len(os.Args) > 1 && os.Args[1] == "export" {
+		os.Exit(headlessCLI(os.Args[2:], exe, os.Stdout, os.Stderr))
+	}
 	dir := flag.String("resources", filepath.Join(filepath.Dir(exe), "..", "resources"), "Symbol packages and orientation table directory")
 	showVersion := flag.Bool("version", false, "Print backend version")
 	test := flag.Bool("test-json", false, "Read one offline conversion/test request from stdin")
+	flag.Usage = func() {
+		fmt.Fprintln(os.Stderr, "Usage: rnl-virtuoso export --lib LIB [--cell CELL] --out DIRECTORY [options]")
+		fmt.Fprintln(os.Stderr, "       rnl-virtuoso [--resources directory] request.sx")
+		fmt.Fprintln(os.Stderr, "Use export --help for headless export options.")
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 	if *showVersion {
 		fmt.Println("rnl-virtuoso " + version + " (Go)")

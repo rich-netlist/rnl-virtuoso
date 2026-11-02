@@ -51,9 +51,13 @@ func isFile(path string) bool { s, e := os.Stat(path); return e == nil && s.Mode
 func nativeEnvironment(working string) []string {
 	env := []string{}
 	for _, value := range os.Environ() {
-		if !strings.HasPrefix(value, "PWD=") {
-			env = append(env, value)
+		// Native batch tools use the explicit cds.lib and si.env. Joining the
+		// parent's MPS session makes si wait for a UI response (60 seconds on
+		// IC6.1.8) when that parent is inside a blocking SKILL export.
+		if strings.HasPrefix(value, "PWD=") || strings.HasPrefix(value, "CDS_MPS_SESSION=") {
+			continue
 		}
+		env = append(env, value)
 	}
 	return append(env, "PWD="+working)
 }

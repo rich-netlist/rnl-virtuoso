@@ -1,6 +1,6 @@
 ; Run rnlTestPublicAPI() in an idle Virtuoso with the plugin loaded.
 ; No libraries are created or changed. Synthetic jobs test status transitions;
-; real native export/IPC completion is checked separately through the bridge.
+; real native export/IPC completion is checked separately in Virtuoso.
 procedure(rnlTestAPIAssert(condition message)
   unless(condition error("RNL API test: %s\n" message))
 )
@@ -18,6 +18,9 @@ procedure(rnlTestPublicAPI()
     foreach(expression list(
         'rnlExportStatus("missing")
         'rnlExportStatus()
+        'rnlExportWait("missing")
+        'rnlExportCell("lib" "cell" "/tmp/unused" ?wait "true")
+        'rnlExportLibrary("lib" "/tmp/unused" ?wait 0)
         'rnlExportCell("" "cell" "/tmp/unused")
         'rnlExportCell("lib" "" "/tmp/unused")
         'rnlExportCell("lib" "cell" "")
@@ -95,6 +98,40 @@ procedure(rnlTestTerminalInterfaces()
       "missing bus bit accepted")
     rnlTestAPIAssert(equal(rnlMissingTerminals(list("P") list("p")) list("P"))
       "terminal case folded")
+    t
+  )
+)
+
+; Real IPC completion within a single SKILL call; no design files are touched.
+procedure(rnlTestBlockingAPI()
+  unless(!rnlActiveJob && !rnlActiveBatch error("Run API tests only when idle.\n"))
+  let((rnlAPIJobs rnlLastExportId rnlActiveJob rnlActiveBatch job batch status)
+    rnlAPIJobs = makeTable('rnlTestBlockingJobs nil)
+    rnlTestAPIAssert(rnlTestAPIValue("blocking_export" rnlExporterInfo()) "blocking capability")
+    foreach(command list("/bin/sleep 1" "/bin/false")
+      job = list(nil 'directory "/tmp/rnl-api-test-worker" 'destination "/tmp/rnl-api-test-output"
+        'entry "test.scs" 'notify nil)
+      rnlAPITrack(job->directory "cell" job)
+      rnlActiveJob = job
+      job->process = ipcBeginProcess(command "" 'rnlProcessOutput 'rnlProcessOutput 'rnlProcessDone)
+      status = rnlExportWait()
+      rnlTestAPIAssert(rnlTestAPIValue("state" status) ==
+        if(command == "/bin/false" then "failed" else "succeeded") "blocking worker status")
+      rnlTestAPIAssert(equal(status rnlExportWait(job->directory)) "completed job changed on repeat wait")
+      rnlTestAPIAssert(!rnlActiveJob "blocking worker left active job")
+    )
+    batch = list(nil 'directory "/tmp/rnl-api-test-merge" 'destination "/tmp/rnl-api-test-library-output"
+      'phase "merge" 'count 1 'total 1 'notify nil
+      'failures list(list("badCell" "schematic" "preflight" "test" "/tmp/test")))
+    job = list(nil 'directory batch->directory 'destination batch->destination)
+    rnlAPITrack(batch->directory "library" batch)
+    rnlActiveBatch = batch
+    rnlActiveJob = job
+    job->process = ipcBeginProcess("/bin/sleep 1" "" 'rnlProcessOutput 'rnlProcessOutput 'rnlProcessDone)
+    status = rnlExportWait()
+    rnlTestAPIAssert(rnlTestAPIValue("state" status) == "partial" "partial merge treated as success")
+    rnlTestAPIAssert(rnlTestAPIValue("failed_cells" status) == 1 "partial failed count")
+    rnlTestAPIAssert(!rnlActiveJob && !rnlActiveBatch "partial merge left active job")
     t
   )
 )

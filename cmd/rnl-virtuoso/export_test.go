@@ -266,3 +266,28 @@ func TestNativeProcessHelper(t *testing.T) {
 	}
 	os.Exit(7)
 }
+
+func TestNativeEnvironmentIsIndependentOfParentSession(t *testing.T) {
+	t.Setenv("CDS_MPS_SESSION", "virtuoso-test-parent")
+	t.Setenv("PWD", "/old/project")
+	t.Setenv("CDS_LIC_FILE", "test-license-location")
+	t.Setenv("RNL_TEST_PDK_SETUP", "keep-pdk-environment")
+	values := map[string]string{}
+	for _, item := range nativeEnvironment("/selected/project") {
+		key, value, _ := strings.Cut(item, "=")
+		if _, duplicate := values[key]; duplicate && key == "PWD" {
+			t.Fatal("native environment has duplicate PWD")
+		}
+		values[key] = value
+	}
+	if _, inherited := values["CDS_MPS_SESSION"]; inherited {
+		t.Fatal("native batch worker would attach to the blocked parent session")
+	}
+	if values["PWD"] != "/selected/project" || values["CDS_LIC_FILE"] != "test-license-location" ||
+		values["RNL_TEST_PDK_SETUP"] != "keep-pdk-environment" {
+		t.Fatalf("project, licensing or PDK environment was changed: %v", values["PWD"])
+	}
+	if os.Getenv("CDS_MPS_SESSION") != "virtuoso-test-parent" || os.Getenv("PWD") != "/old/project" {
+		t.Fatal("native launch changed its parent's environment")
+	}
+}
