@@ -1,133 +1,110 @@
-# Export through an existing bridge
+# Export through an existing live-session connection
 
-Use the **virtuoso** skill for the bridge connection, target session and file
-transfer. This skill does not contain or install the bridge. If that skill or a
-working bridge is unavailable, resolve it before export. Use **eda-servers** when
-applicable for server identity/access, but install this exporter in the personal
-account. For inspecting/rendering RNL, use the **rnl** skill separately.
+This mode needs an already available way to evaluate SKILL in the requested
+Virtuoso session. It does not depend on another agent skill, a named MCP tool,
+a Python package or a particular client API. Use the actual connection's tool
+schema/documentation. If the endpoint, account, calling interface or access
+method is unknown, ask the user before connecting. Do not invent client methods,
+use a default session, or install/start a bridge as part of export.
+
+If no usable connection exists, ask whether the user will provide one or wants
+headless export. A bridge port alone does not establish connectivity or the
+protocol. File transfer can use a separate available, authorized method.
 
 ## Check the target installation
 
-1. Reuse the intended host, account and Virtuoso port from context; do not
-   silently switch to the bridge's default session. Remote checks must use the
-   same host/account as Virtuoso.
-2. Through the bridge evaluate:
+1. Verify the intended session identity. Evaluate this SKILL expression through
+   the available interface, checking transport errors and SKILL diagnostics:
    ```skill
    if(isCallable('rnlExporterInfo) then rnlExporterInfo() else nil)
    ```
-   API version 1 is supported. If loaded, use its `install_directory`. Otherwise
-   check the specified installation and then
-   `~/tools/rnl-virtuoso/rnl-virtuoso.il` on the remote host. Honor an existing
-   `rnlInstallDirectory` from an older plugin. Verify the companion
-   `bin/rnl-virtuoso -version`; read installed `docs/skill-api.md` when available.
-   Use `tool_version` and the installed documentation to decide which optional
-   keywords are supported; API 1 alone does not imply every newer option exists.
-   A file alone does not prove a working installation.
-3. For an existing compatible installation, load the normal entry point once if
-   needed, then query info. Do not update it merely because a newer release
-   exists. Do not reload while an export is active.
-4. If missing, prepare the exact host, personal path, latest GitHub release and
-   source using [installation](installation.md). **Obtain consent
-   before installing on that host**, unless the current request/session already
-   explicitly authorizes that installation. This gate comes from this skill's
-   intended workflow. An older installation lacking API 1 needs an approved
-   upgrade, not a silent replacement or guessed calls.
+2. If loaded, use the returned `install_directory` and `tool_version`. Otherwise,
+   establish the installation path from the user or verified session information
+   such as `rnlInstallDirectory`; do not assume a filesystem location. At that
+   location, verify `bin/rnl-virtuoso -version` and read `docs/skill-api.md`.
+   API version 1 is supported, but it does not guarantee every newer keyword.
+3. Load the normal `rnl-virtuoso.il` entry point if needed, using its confirmed
+   absolute path, and query info again. Do not reload during an active export.
+4. If the exporter is missing or incompatible, follow
+   [installation](installation.md). Obtain installation/upgrade consent unless
+   already authorized. Reuse a compatible installation without gratuitous upgrades.
 
-Source: https://github.com/rich-netlist/rnl-virtuoso. Fetch its latest published
-release when installation is needed. Do not pin this skill to a release, bundle
-an exporter binary/source copy, or include bridge assets. API 1 first appeared
-in 0.8.0.
+## Start the requested export
 
-## Choose and start the export
-
-Use context to determine library/cell, remote destination and options. Choose a
-fresh directory if none was specified. Default cell exports to Spectre, hierarchy
-enabled, external cells enabled and separate files. For a library, export all
-cells with external cells disabled unless requested. Retain user overrides.
-
-Exporter 0.9.2+ defaults to automatically Check & Save stale source schematics,
-including current edits. If source writes are not authorized, pass
-`?autoCheckSave nil` (requires 0.9.2+) and report stale views; otherwise retain the
-default. Never modify library mappings, startup files or source circuitry to
-make export pass without authorization. Real missing references and mismatches
-remain failures. On older versions, never run manual Check & Save without consent.
+Use the confirmed library, scope and output directory. The strings below are
+placeholders to replace, not machine-specific defaults. All paths are on the
+Virtuoso machine. Call only the entry point for the requested scope:
 
 ```skill
-load("~/tools/rnl-virtuoso/rnl-virtuoso.il") ; only if needed
+load("INSTALL_DIRECTORY/rnl-virtuoso.il") ; only if needed, replace with absolute path
 
-; Required positional arguments; all options below are the defaults.
-rnlExportCell("myLib" "myCell" "/home/user/exports/myCell"
-  ?format "spectre"
-  ?hierarchy t ?external t ?fileMode "separate" ?scale 10.0)
+; One cell, full hierarchy including foreign cells, separate files.
+job = rnlExportCell("LIBRARY" "CELL" "NEW_OUTPUT_DIRECTORY"
+  ?format "spectre" ?hierarchy t ?external t ?fileMode "separate"
+  ?scale 10.0 ?autoCheckSave nil)
 
-; Whole library: all schematic and symbol-only cells, fixed per-cell files.
-rnlExportLibrary("myLib" "/home/user/exports/myLib"
-  ?format "spectre" ?external nil ?scale 10.0)
+; Alternatively: whole library; foreign cell bodies excluded by default.
+job = rnlExportLibrary("LIBRARY" "NEW_OUTPUT_DIRECTORY"
+  ?format "spectre" ?external nil ?scale 10.0 ?autoCheckSave nil)
 ```
 
-Call **one** entry point for the requested scope. `format` is `"spectre"` or
-`"cdl"`; CDL is LVS output and may omit sources. `fileMode` is `"separate"` or
-`"combined"` (cell only); `hierarchy`/`external` are SKILL `t`/`nil`. Paths are
-remote. Existing outputs are refused. Save the returned job ID string to poll;
-it is not a completed result. Startup errors yield no ID.
+The default asynchronous call returns a job ID string, not a completed result.
+Startup errors yield no ID. Save the actual returned ID for later queries; do
+not rely on a transport retaining local client variables or reporting success
+just because the request was accepted. Existing output directories are refused.
 
-Pass these optional controls only when the installed exporter supports them:
+`format` accepts `"spectre"` or `"cdl"`; CDL is LVS output and may omit sources.
+`fileMode` accepts `"separate"` or `"combined"` (cell only).
+`hierarchy` and `external` use SKILL `t`/`nil`.
 
-- 0.9.0+: `?schematicViews` and `?symbolViews` are space-separated view lists,
-  searched left to right. Defaults are `"schematic"` and `"symbol"`; for example,
-  `?schematicViews "schematic schematic_ideal"` adds a fallback schematic view.
-  Leave `?view` unset for this selection; an explicit `?view` overrides the top.
-- 0.9.1+: `?exportSelectionBox t` (default) uses the union of the native symbol
-  selection boxes; `nil` uses the non-text symbol graphic extent.
-- 0.9.4+: `?exportSymbols nil` (default) omits the extra `symbols.rnl` collection;
-  `t` adds it. This applies to both cell modes and whole-library export, without
-  changing embedded schematic symbols. Older exporters need an authorized upgrade
-  when this control is required; do not pass an unsupported keyword.
+The exporter may automatically Check & Save stale source views. The examples
+explicitly disable this. `?autoCheckSave` requires 0.9.2+; without source-write
+authorization, verify that this control exists before exporting. Do not enable
+it or manually save stale views just to get a successful export.
 
-Use the bridge skill's configured client in a temporary Python script, with
-`client.execute_skill(expression)` and `client.download_file(remote, local)`.
-Build SKILL string literals with escaped quotes/backslashes (for example
-`json.dumps(value, ensure_ascii=False)` for ordinary names/paths, rejecting
-control characters); never interpolate unescaped user text. Bridge `output`
-contains printed SKILL data: check status/errors first, and do not use Python
-`eval` on it. A convenient narrow query is:
+Pass optional controls only when the installed exporter supports them:
 
-```skill
-cadr(assoc("state" rnlExportStatus("/tmp/job-id-from-start")))
-```
+- 0.9.0+: `?schematicViews` and `?symbolViews`: space-separated view lists,
+  searched left to right; defaults `"schematic"` and `"symbol"`. An explicit
+  `?view` overrides the selected cell's top view.
+- 0.9.1+: `?exportSelectionBox t` (default): union of native selection boxes;
+  `nil` uses non-text graphic extent.
+- 0.9.4+: `?exportSymbols nil` (default): omit the extra `symbols.rnl` collection;
+  `t` adds it without changing embedded symbols.
+- If `rnlExporterInfo()` reports `blocking_export` true, `?wait t` returns final
+  status and `rnlExportWait(id)` waits for an existing job. Use this only if the
+  transport supports a call lasting the entire export; asynchronous polling
+  avoids ordinary bridge request timeouts.
+
+Quote user-supplied strings for SKILL and for the transport separately. Escape
+backslashes/quotes and reject control characters; do not insert raw text into
+expressions. Interpret results according to the actual tool's schema. SKILL
+printed data is not JSON or executable Python; do not evaluate it as code.
 
 ## Wait and collect
 
-- Query `rnlExportStatus(id)` in separate bridge calls, roughly every 2–5 seconds
-  initially and less often for long jobs. Return control between calls; SKILL
-  wait loops can prevent IPC callbacks. Keep the user informed during long runs.
-- Results are association lists of string keys and two-element lists. `state`
-  is `running`, `succeeded`, `partial`, or `failed`. `phase`, `completed_cells`,
-  `total_cells`, `failed_cells`, and `current_cell` give progress. `report`,
-  `output_directory`, `work_directory`, and `error_file` locate artifacts. These
-  APIs do not create completion dialogs.
+- Query `rnlExportStatus("JOB_ID_RETURNED_BY_START")` in separate calls, initially
+  a few seconds apart and less often for long jobs. Return control between calls;
+  an ad hoc SKILL wait loop can prevent completion callbacks. Keep the user informed.
+- Results are association lists with string keys and two-element lists. `state`
+  is `running`, `succeeded`, `partial` or `failed`. `phase`, `completed_cells`,
+  `total_cells`, `failed_cells` and `current_cell` give progress. `report`,
+  `output_directory`, `work_directory` and `error_file` locate artifacts.
+  To query only the state, evaluate:
+  ```skill
+  cadr(assoc("state" rnlExportStatus("JOB_ID_RETURNED_BY_START")))
+  ```
 - `partial` means the library merged but some cells failed. Read
-  `library-report.json`, report failed cells/reasons, and preserve usable output.
-  Exit code zero alone is not complete success.
-- On failure, retrieve `error_file` if present and relevant native logs in
-  `work_directory`. A failed run may have no report. Do not repeatedly restart
-  an unchanged failing job.
-- On bridge timeout, check `rnlExporterInfo()` and the known job before retrying
-  a start. Only one export runs per session; timeout does not cancel it. IDs
-  persist across later API jobs/reloads, not Virtuoso restarts. Menu jobs are
-  visible as busy but have no public API history.
-- After success/partial, inspect the report and retrieve output when requested.
-  Copy/archive the **entire directory** with relative paths intact, including
-  external-library subdirectories and symbol/style files.
+  `library-report.json`, report failed cells/reasons and retain usable output.
+- On failure retrieve `error_file`, if present, and relevant native logs from
+  `work_directory`. There may be no report. Do not restart an unchanged failing job.
+- On transport timeout inspect `rnlExporterInfo()` and the known job before
+  starting anything again. Only one export runs per session; timeout does not
+  cancel it. Job IDs survive later exports/reloads, not Virtuoso restarts.
+  GUI-started jobs appear busy but have no public API history.
+- After success/partial, inspect the report and copy the entire directory when
+  requested. Ask for a missing delivery path or transfer method. Retain relative
+  paths, external-library directories and symbol/style files.
 
-In 0.9.4+, `cell-symbol.rnl` is no longer emitted. Symbol-only library cells
-always have their own `<cell>.rnl` output, listed in `symbol_only_files`, even
-when the optional collection is off. `export_symbols` records the selected option;
-`symbol_file` is null when no collection was requested. Its absence is expected,
-not an export failure. Keep the primary symbol-only files with the output.
-
-Ported files have no native includes: their caller must load dependencies once.
-Portless tops include descendants once. Child symbols are inherited from exported
-subcircuits; omitted cells retain local interfaces. Native model/Verilog-A
-references remain external, and export does not run simulation. Report source,
-options, status, result path, and relevant warnings.
+Apply the output interpretation and reporting rules in SKILL.md. Export does not
+run simulation or make external native models self-contained.
