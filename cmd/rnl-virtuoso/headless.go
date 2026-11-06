@@ -58,7 +58,7 @@ func parseHeadlessOptions(args []string, exe string, stderr io.Writer) (headless
 	fs.StringVar(&o.Cell, "cell", "", "Source cell; omit to export the whole library")
 	fs.StringVar(&o.Output, "out", "", "New output directory (required; relative to --project)")
 	fs.StringVar(&o.Project, "project", ".", "Project directory containing cds.lib")
-	fs.StringVar(&o.Logs, "logs", "", "New log directory (default: unique directory beside output)")
+	fs.StringVar(&o.Logs, "logs", "", "Log directory inside output/.rnl (default: .rnl/launcher; relative to output)")
 	fs.StringVar(&o.Install, "install-dir", "", "Exporter installation (default: executable's parent installation)")
 	fs.StringVar(&o.Virtuoso, "virtuoso", "virtuoso", "Virtuoso executable name or path")
 	fs.Var(&o.EnvCSH, "env-csh", "Source this C shell environment file before launch; repeatable, overrides config")
@@ -179,7 +179,7 @@ func parseHeadlessOptions(args []string, exe string, stderr io.Writer) (headless
 		return o, err
 	}
 	if o.Logs != "" {
-		o.Logs, err = expandHeadlessPath(o.Logs, o.Project)
+		o.Logs, err = expandHeadlessPath(o.Logs, o.Output)
 		if err != nil {
 			return o, err
 		}
@@ -213,6 +213,14 @@ func parseHeadlessOptions(args []string, exe string, stderr io.Writer) (headless
 			}
 		}
 	}
+	if err := validateNativeOutputPath(o.Output); err != nil {
+		return o, err
+	}
+	if o.Logs != "" {
+		if err := validateNativeOutputPath(o.Logs); err != nil {
+			return o, err
+		}
+	}
 	if o.Virtuoso == "" {
 		return o, errors.New("--virtuoso must not be empty")
 	}
@@ -237,9 +245,11 @@ func headlessDriver(o headlessOptions) string {
 	call += " ?format " + q(o.Format) + " ?external " + b(o.External) + " ?scale " + strconv.FormatFloat(o.Scale, 'g', -1, 64) +
 		" ?schematicViews " + q(o.SchematicViews) + " ?symbolViews " + q(o.SymbolViews) + " ?autoCheckSave " + b(o.AutoCheckSave) +
 		" ?exportSelectionBox " + b(o.SelectionBox) + " ?exportSymbols " + b(o.Symbols) + " ?wait t)"
-	return "let((result status port state)\n" +
+	return "let((result status port state rnlPreparedOutput)\n" +
 		"  result = errset(progn(\n    load(" + q(filepath.Join(o.Install, "rnl-virtuoso.il")) + ")\n" +
-		"    unless(cadr(assoc(\"blocking_export\" rnlExporterInfo())) error(\"This installation lacks blocking export support.\\n\"))\n    " + call + "\n  ) t)\n" +
+		"    unless(cadr(assoc(\"blocking_export\" rnlExporterInfo())) error(\"This installation lacks blocking export support.\\n\"))\n" +
+		"    unless(cadr(assoc(\"output_workspace\" rnlExporterInfo())) error(\"This installation lacks output workspace support.\\n\"))\n" +
+		"    rnlPreparedOutput = " + q(o.Output) + "\n    " + call + "\n  ) t)\n" +
 		"  status = if(result then car(result) else list(list(\"state\" \"failed\") list(\"message\" sprintf(nil \"%L\" errset.errset))))\n" +
 		"  port = outfile(" + q(filepath.Join(o.Logs, "status.sx")) + ")\n  unless(port error(\"Cannot write final export status.\\n\"))\n" +
 		"  fprintf(port \"%L\\n\" status)\n  close(port)\n  state = cadr(assoc(\"state\" status))\n" +
@@ -305,6 +315,8 @@ func headlessCommand(ctx context.Context, o headlessOptions) *exec.Cmd {
 		}
 		env = append(env, "RNL_HEADLESS_PROJECT="+o.Project)
 		script.WriteString("unsetenv DISPLAY\nunsetenv CDS_NOGRAPH_DISPLAY\nunsetenv CDS_MPS_SESSION\ncd \"$RNL_HEADLESS_PROJECT\"\nif ($status != 0) exit $status\n")
+		env = append(env, "RNL_HEADLESS_TMP="+filepath.Join(o.Output, ".rnl", "tmp"), "RNL_HEADLESS_LOG="+o.Logs)
+		script.WriteString("setenv TMPDIR \"$RNL_HEADLESS_TMP\"\nsetenv TMP \"$RNL_HEADLESS_TMP\"\nsetenv TEMP \"$RNL_HEADLESS_TMP\"\nsetenv CDS_LOG_PATH \"$RNL_HEADLESS_LOG\"\n")
 		env = append(env, "RNL_HEADLESS_EXEC="+o.Virtuoso)
 		script.WriteString("exec \"$RNL_HEADLESS_EXEC\"")
 		for i, a := range args {
@@ -315,7 +327,7 @@ func headlessCommand(ctx context.Context, o headlessOptions) *exec.Cmd {
 		cmd = exec.CommandContext(ctx, "/bin/csh", "-f", "-c", script.String())
 	}
 	cmd.Dir = o.Project
-	cmd.Env = env
+	cmd.Env = workspaceEnvironment(env, filepath.Join(o.Output, ".rnl", "tmp"), o.Logs)
 	configureHeadlessProcess(cmd)
 	return cmd
 }
@@ -351,18 +363,33 @@ func runHeadless(ctx context.Context, o headlessOptions, stderr io.Writer) (map[
 	} else if !os.IsNotExist(e) {
 		return bad(e)
 	}
+	if e := validateNativeOutputPath(o.Output); e != nil {
+		return bad(e)
+	}
+	if e := validateNativeOutputPath(o.Logs); e != nil {
+		return bad(e)
+	}
+	metadata := filepath.Join(o.Output, ".rnl")
+	if o.Logs == "" {
+		o.Logs = filepath.Join(metadata, "launcher")
+	}
+	if !pathWithin(metadata, o.Logs) || o.Logs == metadata ||
+		pathWithin(filepath.Join(metadata, "work"), o.Logs) || pathWithin(filepath.Join(metadata, "tmp"), o.Logs) {
+		return bad(errors.New("--logs must be a directory inside output/.rnl, outside reserved work and tmp directories"))
+	}
 	if e := os.MkdirAll(filepath.Dir(o.Output), 0755); e != nil {
 		return bad(e)
 	}
+	if e := os.Mkdir(o.Output, 0755); e != nil {
+		return bad(fmt.Errorf("reserve new output directory: %w", e))
+	}
+	if e := os.MkdirAll(o.Logs, 0700); e != nil {
+		return bad(fmt.Errorf("create log directory: %w", e))
+	}
+	if e := os.MkdirAll(filepath.Join(metadata, "tmp"), 0700); e != nil {
+		return bad(fmt.Errorf("create scratch directory: %w", e))
+	}
 	var err error
-	if o.Logs == "" {
-		o.Logs, err = os.MkdirTemp(filepath.Dir(o.Output), filepath.Base(o.Output)+".logs-")
-	} else {
-		err = os.Mkdir(o.Logs, 0700)
-	}
-	if err != nil {
-		return bad(fmt.Errorf("create new log directory: %w", err))
-	}
 	out["log_directory"] = o.Logs
 	out["log"] = filepath.Join(o.Logs, "launcher.log")
 	if err = os.WriteFile(filepath.Join(o.Logs, "driver.il"), []byte(headlessDriver(o)), 0600); err != nil {

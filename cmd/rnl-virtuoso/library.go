@@ -511,9 +511,7 @@ func runLibraryMerge(request string, fields []node, resourceDir string) map[stri
 	if !filepath.IsAbs(output) {
 		fail("Library output directory must be absolute")
 	}
-	if _, err := os.Lstat(output); !os.IsNotExist(err) {
-		fail("Library output already exists or cannot be accessed: %s", output)
-	}
+	validateExportWorkspace(output, filepath.Dir(request))
 	parts := []libraryCapture{}
 	for _, path := range fields[6].list {
 		var part libraryCapture
@@ -544,7 +542,7 @@ func runLibraryMerge(request string, fields []node, resourceDir string) map[stri
 	sort.Slice(failed, func(i, j int) bool { return failed[i]["cell"] < failed[j]["cell"] })
 	report["failed_cells"], report["complete"], report["successful_cells"] = failed, len(failed) == 0, len(parts)
 	report["output_directory"], report["work_directory"] = output, filepath.Dir(request)
-	staging, err := os.MkdirTemp(filepath.Dir(output), ".rnl-library-stage-")
+	staging, err := os.MkdirTemp(filepath.Dir(request), "stage-")
 	if err != nil {
 		fail("%s", err)
 	}
@@ -561,7 +559,7 @@ func runLibraryMerge(request string, fields []node, resourceDir string) map[stri
 		writeText(path, text)
 	}
 	writeText(filepath.Join(staging, "library-report.json"), jsonText(report))
-	if err := publish(staging, output); err != nil {
+	if err := publishExport(staging, output, filepath.Dir(request), "library-report.json"); err != nil {
 		fail("Cannot publish library: %s", err)
 	}
 	writeText(filepath.Join(filepath.Dir(request), "result.json"), jsonText(report))

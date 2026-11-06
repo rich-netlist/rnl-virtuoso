@@ -15,12 +15,12 @@ netlist and drawing without rewriting device statements.
 
 ## Install
 
-Download the Linux x86-64 archive from [Releases](https://github.com/rich-netlist/rnl-virtuoso/releases),
+Download the Linux x86-64 archive from [latest release](https://github.com/rich-netlist/rnl-virtuoso/releases/latest),
 then extract it on the Virtuoso host:
 
 ```sh
 mkdir -p ~/tools
-tar -xzf rnl-virtuoso-0.9.4-linux-amd64.tar.gz -C ~/tools
+tar -xzf rnl-virtuoso-0.9.5-linux-amd64.tar.gz -C ~/tools
 ```
 
 In the CIW, load the entry point once:
@@ -39,7 +39,8 @@ Tested with IC6.1.8-64b.500.26 on Linux x86-64.
 Select **RNL → Export RNL...**. Stale schematic connectivity is automatically
 checked and saved by default (0.9.2+). Clear **Automatically Check & Save stale
 schematics**, or use `?autoCheckSave nil`, for read-only export.
-Choose a **new output directory**. **Spectre (simulation)** is recommended for
+Choose a **new output directory**. All exporter logs, native work files and
+scratch stay below its reserved `.rnl/` subdirectory, including failed jobs. **Spectre (simulation)** is recommended for
 sources, switches and Verilog-A models; CDL is an LVS export and may omit them.
 Keep the generated netlist, symbol/style files and report together.
 External model references remain external; this does not package a runnable simulation deck.
@@ -76,7 +77,7 @@ API (0.9.0+). Defaults remain `schematic` and `symbol`.
 of all native selection boxes in the selected symbol view. Disable it to use the
 symbol graphics extent, excluding text. The SKILL keyword is `?exportSelectionBox`.
 
-## Headless export (unreleased)
+## Headless export (0.9.5+)
 
 ```sh
 ~/tools/rnl-virtuoso/bin/rnl-virtuoso export --lib myLib --cell myCell --out ./myCell_rnl
@@ -99,22 +100,24 @@ rnlExportStatus(job)
 
 Use `rnlExportLibrary` for a whole library, `rnlExporterInfo` to inspect the
 installation, and keyword options for format/hierarchy/external cells. Jobs are
-asynchronous by default. The unreleased `?wait t` option returns the final status
+asynchronous by default. The `?wait t` option (0.9.5+) returns the final status
 after completion, and supports headless calls through standard input without a
 bridge or separate batch SKILL file; see [API documentation](docs/skill-api.md#blocking-export-and-headless-invocation).
 
 Copy [skills/rnl-virtuoso](skills/rnl-virtuoso) to your agent's skill directory
-(Codex: `~/.codex/skills/rnl-virtuoso`). It supports the headless CLI or the existing `virtuoso`
-bridge skill, reuses a remote installation, and asks before installing a missing
-exporter in the user's home. The skill contains no exporter or bridge assets;
-new installations fetch the latest release from this repository.
+(Codex: `~/.codex/skills/rnl-virtuoso`). It supports the headless CLI or an available
+live-session connection, checks for a compatible installation, and asks before
+installing or upgrading at an agreed location. No other agent skill or specific
+bridge client is required. The skill contains no exporter or bridge assets;
+new installations fetch the latest release from this repository and verify its
+checksum and capabilities. Version 0.9.5 includes all interfaces described here.
 
 ## Build and test
 
 Building requires Go 1.22+ and Python 3.8+ on the development machine only:
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.9.4-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.9.5-linux-amd64.tar.gz
 python scripts/test.py
 ```
 

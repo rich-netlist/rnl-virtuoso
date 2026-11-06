@@ -9,7 +9,7 @@ the schematic-editor entry. No editor window is required.
 
 | Option | Behavior |
 | --- | --- |
-| New output directory | A new folder on the Virtuoso host; its parent must exist. Existing exports are refused. |
+| New output directory | A new folder on the Virtuoso host; its parent must exist. Spaces and shell metacharacters in the path are rejected before launch. Existing exports are refused. |
 | Netlist format | Spectre (simulation), the default, or SPICE / CDL (LVS). |
 | Schematic views (highest priority first) | Space-separated names, default `schematic`; for example `schematic schematic_ideal`. Selects the first available view for the root and descendants. |
 | Symbol views (highest priority first) | Space-separated names, default `symbol`; for example `symbol_alt symbol`. Selects the exported symbol definition and symbol-only library cells. |
@@ -155,7 +155,7 @@ rnlStartExport("myLib" "myCell" "schematic" "/path/to/new-export" t nil 10.0)
 ; optional eighth argument: "spectre" (default) or "cdl"
 ```
 
-This returns the temporary job directory immediately. `rnlActiveJob` is non-nil
+This returns the job directory inside `<output>/.rnl/work` immediately. `rnlActiveJob` is non-nil
 while the process runs; `rnlLastJob->status` is its exit status after completion.
 One job runs per Virtuoso session. The job directory keeps the exact native
 netlist/EDIF, `si.env`, CDF terminal metadata, native name maps, logs and any error for diagnosis.

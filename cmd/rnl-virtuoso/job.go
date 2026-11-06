@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const version = "0.9.4"
+const version = "0.9.5"
 
 func nativeDiagnostic(text string) string {
 	lines := strings.Split(text, "\n")
@@ -101,8 +101,11 @@ func runNative(argv []string, cwd, log string, env []string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
 	defer cancel()
+	if e := os.MkdirAll(filepath.Join(filepath.Dir(log), "tmp"), 0700); e != nil {
+		fail("Cannot create export scratch directory: %s", e)
+	}
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	cmd.Dir, cmd.Env, cmd.Stdout, cmd.Stderr = cwd, env, f, f
+	cmd.Dir, cmd.Env, cmd.Stdout, cmd.Stderr = cwd, workspaceEnvironment(env, filepath.Join(filepath.Dir(log), "tmp"), filepath.Dir(log)), f, f
 	err := cmd.Run()
 	closeErr := f.Close()
 	if ctx.Err() != nil {
@@ -234,14 +237,7 @@ func runJob(request, resourceDir string) map[string]any {
 	if e != nil {
 		fail("%s", e)
 	}
-	if _, e = os.Lstat(output); e == nil {
-		fail("Output already exists: %s. Choose a new export directory.", output)
-	} else if !os.IsNotExist(e) {
-		fail("%s", e)
-	}
-	if s, e := os.Stat(filepath.Dir(output)); e != nil || !s.IsDir() {
-		fail("Output parent directory does not exist: %s", filepath.Dir(output))
-	}
+	validateExportWorkspace(output, work)
 	packageText, style := resource(resourceDir, "eda-symbol.rnl"), resource(resourceDir, "eda-style.rnl")
 	env := nativeEnvironment(working)
 	bins := filepath.Join(cadence, "bin")
@@ -340,7 +336,7 @@ func runJob(request, resourceDir string) map[string]any {
 		writeText(filepath.Join(work, "library-parts.json"), jsonText(parts))
 	}
 	report["version"], report["backend"], report["source"], report["work_directory"], report["output_directory"], report["format"], report["behavior_model_references"] = version, "go", map[string]string{"library": library, "cell": cellName, "view": view}, work, output, dialect, refs
-	staging, e := os.MkdirTemp(filepath.Dir(output), ".rnl-stage-")
+	staging, e := os.MkdirTemp(work, "stage-")
 	if e != nil {
 		fail("%s", e)
 	}
@@ -357,7 +353,7 @@ func runJob(request, resourceDir string) map[string]any {
 		writeText(path, content)
 	}
 	writeText(filepath.Join(staging, "export-report.json"), jsonText(report))
-	if e = publish(staging, output); e != nil {
+	if e = publishExport(staging, output, work, "export-report.json"); e != nil {
 		fail("Cannot publish export: %s", e)
 	}
 	writeText(filepath.Join(work, "result.json"), jsonText(report))

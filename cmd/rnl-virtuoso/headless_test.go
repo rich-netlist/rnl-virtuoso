@@ -111,6 +111,11 @@ set -eu
 [ -z "${DISPLAY-}" ]
 [ -z "${CDS_NOGRAPH_DISPLAY-}" ]
 [ -z "${CDS_MPS_SESSION-}" ]
+[ "$TMPDIR" = "$RNL_TEST_OUTPUT/.rnl/tmp" ]
+[ "$TEMP" = "$TMPDIR" ]
+[ "$TMP" = "$TMPDIR" ]
+case "$CDS_LOG_PATH" in "$RNL_TEST_OUTPUT/.rnl/"*) ;; *) exit 91;; esac
+printf scratch > "$TMPDIR/native-scratch"
 while [ "$#" -gt 0 ]; do
  case "$1" in -restore) driver="$2"; shift;; esac
  shift
@@ -120,7 +125,7 @@ case "$RNL_TEST_MODE" in
  timeout) sleep 30 & wait;;
  missing) exit 0;;
  fail) printf '(("state" "failed") ("message" "source error"))\n' > "$logs/status.sx"; exit 2;;
- *) mkdir "$RNL_TEST_OUTPUT"; printf '{}' > "$RNL_TEST_OUTPUT/report.json";;
+ *) test -d "$RNL_TEST_OUTPUT/.rnl"; printf '{}' > "$RNL_TEST_OUTPUT/report.json";;
 esac
 state=succeeded
 code=0
@@ -156,6 +161,20 @@ func TestHeadlessProcessStates(t *testing.T) {
 			if code != tc.code || result["state"] != tc.state {
 				t.Fatalf("%d %v", code, result)
 			}
+			for _, key := range []string{"log_directory", "log"} {
+				if !pathWithin(o.Output, result[key].(string)) {
+					t.Fatalf("external %s: %v", key, result)
+				}
+			}
+			if !isFile(filepath.Join(o.Output, ".rnl", "tmp", "native-scratch")) {
+				t.Fatal("scratch not retained inside output")
+			}
+			entries, _ := os.ReadDir(filepath.Dir(o.Output))
+			for _, e := range entries {
+				if strings.Contains(e.Name(), ".logs-") {
+					t.Fatal("sibling log directory created")
+				}
+			}
 			if tc.mode == "timeout" && time.Since(started) > 5*time.Second {
 				t.Fatal("timeout left descendant holding output pipe")
 			}
@@ -169,7 +188,7 @@ func TestHeadlessCSHSetupAndNoOverwrite(t *testing.T) {
 		t.Skip("requires csh")
 	}
 	source := filepath.Join(filepath.Dir(o.Output), "setup with ' $!.csh")
-	if err := os.WriteFile(source, []byte("setenv DISPLAY :42\nsetenv CDS_NOGRAPH_DISPLAY :42\ncd /tmp\n"), 0600); err != nil {
+	if err := os.WriteFile(source, []byte("setenv DISPLAY :42\nsetenv CDS_NOGRAPH_DISPLAY :42\nsetenv TMPDIR /invalid\nsetenv CDS_LOG_PATH /invalid\ncd /tmp\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	o.EnvCSH = []string{source}
@@ -182,5 +201,42 @@ func TestHeadlessCSHSetupAndNoOverwrite(t *testing.T) {
 	after, _ := os.ReadFile(filepath.Join(o.Output, "report.json"))
 	if code != 2 || !strings.Contains(result["message"].(string), "already exists") || !bytes.Equal(before, after) {
 		t.Fatalf("overwrote output: %v", result)
+	}
+}
+
+func TestHeadlessLogContainment(t *testing.T) {
+	for _, name := range []string{"outside", "output", "metadata", "work", "tmp"} {
+		t.Run(name, func(t *testing.T) {
+			o := makeHeadlessFixture(t)
+			o.Logs = map[string]string{"outside": filepath.Join(filepath.Dir(o.Output), "outside"), "output": o.Output, "metadata": filepath.Join(o.Output, ".rnl"), "work": filepath.Join(o.Output, ".rnl", "work", "log"), "tmp": filepath.Join(o.Output, ".rnl", "tmp", "log")}[name]
+			result, code := runHeadless(context.Background(), o, io.Discard)
+			if code != 2 || !strings.Contains(result["message"].(string), "--logs must") {
+				t.Fatalf("accepted invalid logs: %v", result)
+			}
+			if _, e := os.Lstat(o.Output); !os.IsNotExist(e) {
+				t.Fatal("created output before rejecting external logs")
+			}
+		})
+	}
+	o := makeHeadlessFixture(t)
+	o.Logs = filepath.Join(o.Output, ".rnl", "custom", "launcher")
+	t.Setenv("RNL_TEST_MODE", "success")
+	result, code := runHeadless(context.Background(), o, io.Discard)
+	if code != 0 || result["log_directory"] != o.Logs {
+		t.Fatalf("custom logs: %v", result)
+	}
+}
+
+func TestHeadlessRejectsUnsafeOutputBeforeWriting(t *testing.T) {
+	for _, name := range []string{"with space", "shell;token"} {
+		o := makeHeadlessFixture(t)
+		o.Output = filepath.Join(filepath.Dir(o.Output), name)
+		result, code := runHeadless(context.Background(), o, io.Discard)
+		if code != 2 || !strings.Contains(result["message"].(string), "native export paths") {
+			t.Fatal(result)
+		}
+		if _, e := os.Lstat(o.Output); !os.IsNotExist(e) {
+			t.Fatal("unsafe output created")
+		}
 	}
 }

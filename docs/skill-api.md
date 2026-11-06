@@ -11,7 +11,8 @@ These functions use the same native exporters, connectivity checks and conversio
 as the menus. They do not open an editor or show completion dialogs. By default
 they Check & Save stale source schematics, including current edits. Use
 `?autoCheckSave nil` when source writes are not authorized. The current Virtuoso session supplies `cds.lib`, Cadence tools and
-licenses. Output paths refer to that machine. Existing output is never overwritten.
+licenses. Output paths refer to that machine. Native output paths containing
+spaces or shell metacharacters are rejected before launch. Existing output is never overwritten.
 
 ## Export a cell
 
@@ -116,7 +117,12 @@ calls are not registered in this API history.
 | `completed_cells`, `total_cells`, `failed_cells` | Attempt counts; completed includes failed attempts |
 | `current_cell` | Current library cell while exporting cells, otherwise `nil` |
 
-Paths identify expected artifacts; a failed job may have no final output/report.
+Paths identify expected artifacts; a failed job may have no final report.
+The output is reserved before worker launch. All exporter work files, native
+inputs, scratch and logs stay below `<output>/.rnl/`; the job ID normally names
+`<output>/.rnl/work`. Library subjobs remain inside that workspace. Results stay
+at the output root and the completion report is written last. Retain `.rnl` when
+collecting diagnostics; a failed output must not be mistaken for a finished export.
 After success or partial completion, read the report. The library report has
 `complete`, `successful_cells` and `failed_cells` including reasons and logs.
 Conversion success does not mean the circuit was simulated.
@@ -127,9 +133,11 @@ or sleep in a SKILL loop. On bridge timeout check `rnlExporterInfo()` before
 relaunching: a timeout does not cancel an existing export.
 
 `rnlExporterInfo()` returns `api_version` (integer 1), `tool_version`,
-`install_directory`, `busy`, and `active_id`. The unreleased blocking extension also
-returns `blocking_export: t`; released 0.9.4 installations do not have it. The active ID can describe a menu
-job; then wait for `busy` to clear instead of querying public job history.
+`install_directory`, `busy`, and `active_id`. Since 0.9.5 it also returns
+`blocking_export: t` and `output_workspace: t` for blocking calls and work files
+contained in the output directory. Older releases lack these capabilities.
+The active ID can describe a menu job; then wait for `busy` to clear instead of
+querying public job history.
 
 ## Blocking export and headless invocation
 
@@ -137,7 +145,7 @@ For normal headless use, prefer the [one-command CLI](headless.md). It generates
 the driver and handles results/exit codes; the low-level example below is only
 for custom integrations.
 
-This is an unreleased API extension. Check
+Available since 0.9.5. Check
 `cadr(assoc("blocking_export" rnlExporterInfo()))` before passing `?wait` to an
 existing installation. Defaults and menu behavior remain asynchronous.
 
@@ -208,7 +216,8 @@ subcircuits; omitted children keep local interface symbols. Keep the entire
 output directory together. Model references remain external.
 
 Install the repository's `skills/rnl-virtuoso` directory into your agent's skills
-directory (Codex: `~/.codex/skills/rnl-virtuoso`). It supports the headless CLI or existing `virtuoso`
-bridge skill, checks the host installation, and requests consent before installing
-a missing tool in the user's home. The skill contains instructions only; the
-exporter and bridge are obtained separately.
+directory (Codex: `~/.codex/skills/rnl-virtuoso`). It supports the headless CLI or an
+available live-session connection, checks the installation, and requests consent
+before installing or upgrading at an agreed location. It requires no other agent
+skill or specific bridge client. The skill contains instructions only; the
+exporter is obtained separately from the latest suitable upstream release.

@@ -169,7 +169,11 @@ func TestLibraryMergeReportsFailedCellsEvenWhenNoneSucceeded(t *testing.T) {
 	output := filepath.Join(dir, "export")
 	fields := []node{atom("rnl-library-merge-v2"), atom(""), atom("work"), atom(output), atom("spectre"), atom("t"), {group: true}, atom("nil"), atom("t"), {group: true}, parse(`(("broken" "schematic" "preflight" "Missing reference library" "logs"))`, true)}
 	resources := filepath.Join("..", "..", "resources")
-	report := runLibraryMerge(filepath.Join(dir, "request.sx"), fields, resources)
+	work := filepath.Join(output, ".rnl", "work")
+	if e := os.MkdirAll(work, 0700); e != nil {
+		t.Fatal(e)
+	}
+	report := runLibraryMerge(filepath.Join(work, "request.sx"), fields, resources)
 	failed := report["failed_cells"].([]map[string]string)
 	if report["complete"] != false || report["successful_cells"] != 0 || len(failed) != 1 || failed[0]["reason"] != "Missing reference library" {
 		t.Fatal(report)

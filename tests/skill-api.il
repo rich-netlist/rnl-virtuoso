@@ -46,6 +46,9 @@ procedure(rnlTestPublicAPI()
     rnlTestAPIAssert(equal(rnlViewList(" schematic_ideal  schematic schematic_ideal " "test")
       list("schematic_ideal" "schematic")) "view order or deduplication")
 
+    rnlTestAPIAssert(rnlOutputPath("/rnl-api-validation-output") == "/rnl-api-validation-output" "valid native output path rejected")
+    foreach(path list("/tmp/space path" "/tmp/a;b" "/tmp/a$b")
+      rnlTestAPIAssert(!errset(rnlOutputPath(path) nil) "unsafe native output path accepted"))
     rnlTestTerminalInterfaces()
     id = "/tmp/rnl-api-test-cell"
     job = list(nil 'directory id 'destination "/tmp/result")

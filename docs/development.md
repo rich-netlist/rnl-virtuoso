@@ -18,8 +18,10 @@
 The backend inherits Virtuoso's environment and invokes its native `si` and
 `edifout` tools. Request files are inert S-expressions. Spectre/CDL statements
 stay intact; RNL drawing records are added as comments. The converter uses no
-third-party Go modules. Native files and logs stay in the temporary job directory
-when an input cannot be converted without guessing.
+third-party Go modules. Native files and logs stay under the reserved output
+`.rnl/work/` directory, including failed jobs. Staging stays there too; publication
+refuses collisions and writes the completion report after the result files. Native
+children receive TMPDIR/TMP/TEMP and CDS_LOG_PATH locations inside the output.
 
 ## Checks
 
@@ -92,7 +94,7 @@ branch must require prior consent; compatible existing installs must be reused.
 The runtime archive ships `rnl-api.il` and its docs, not agent skills or a bridge.
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.9.4-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.9.5-linux-amd64.tar.gz
 ```
 
 Use `--go /path/to/go` or `--backend /path/to/prebuilt-linux-executable` if needed.

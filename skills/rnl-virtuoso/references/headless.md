@@ -25,7 +25,8 @@ For an explicitly requested whole-library export:
 Omitting `--cell` selects the whole library. The tool generates and executes its
 SKILL internally; do not reconstruct a driver or timer loop. External cell bodies
 are excluded by default for a library; add `--external=true` when requested.
-Relative output paths are relative to `--project`. Existing outputs are refused.
+Relative output paths are relative to `--project`. Output/log paths with spaces
+or shell metacharacters are rejected before launch. Existing outputs are refused.
 The default 30-minute timeout covers the whole run; increase it for large jobs
 when justified. Keep the command running through completion.
 
@@ -89,4 +90,9 @@ unrelated interactive/bridge startup to work around an unexplained failure.
   process before retrying. A broken connection is not proof that export stopped.
   Do not blindly start a duplicate export.
 
-Read installed `docs/headless.md` or `export --help` for additional supported flags.
+The current workspace layout keeps launcher logs in `<output>/.rnl/launcher/`,
+native jobs in `.rnl/work/`, and scratch/staging inside the output tree. Keep this
+hidden directory when retrieving diagnostics. `--logs` may select another
+subdirectory below output/.rnl, outside work/tmp; external paths are rejected.
+Read installed `docs/headless.md` or `export --help` to verify layout and flags
+before using an older installation.

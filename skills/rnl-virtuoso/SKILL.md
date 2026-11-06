@@ -51,9 +51,12 @@ edits. Do not save source edits merely to make them visible without authorizatio
 ## Check the exporter
 
 At the confirmed installation, inspect `bin/rnl-virtuoso -version` and its docs.
-For headless mode require `bin/rnl-virtuoso export --help` to succeed; a version
+Version 0.9.5 introduced the headless CLI, `blocking_export` and `output_workspace`.
+For new installations or authorized upgrades, discover the latest stable release
+rather than pinning this minimum version. For headless mode require `bin/rnl-virtuoso export --help` to succeed; a version
 string or API version alone does not prove the subcommand exists. In a live
-session, query `rnlExporterInfo()` as described in the bridge reference.
+session, query `rnlExporterInfo()` as described in the bridge reference. When all
+exporter files must stay in the output directory, require `output_workspace: t`.
 
 Reuse a compatible installation. If missing or lacking required capabilities,
 follow [installation](references/installation.md): determine the upstream build
@@ -66,7 +69,10 @@ force an export.
 
 Defaults: Spectre, full hierarchy, separate files; external cells enabled for a
 cell export, disabled for a library. A library exports all schematic and
-symbol-only cells with per-cell files. Use a new output directory.
+symbol-only cells with per-cell files. Use a new output directory without spaces
+or shell metacharacters (a native netlister limitation). Exporters with
+`output_workspace` capability keep all work files and diagnostics under its `.rnl/`
+subdirectory, including failures; directory existence does not mean completion.
 
 The exporter defaults to automatically Check & Save stale schematics. Without
 source-write authorization, use CLI `--auto-check-save=false` or API

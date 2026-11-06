@@ -120,8 +120,7 @@ procedure(rnlStartLibraryExport(lib destination hierarchy split scale @optional 
     unless(library error("Library %s was not found.\n" lib))
     unless(destination && destination != "" && scale && scale > 0
       error("Choose a new output directory and a positive scale.\n"))
-    destination = simplifyFilename(destination)
-    when(isDir(destination) || isFile(destination) error("Output already exists: %s. Choose a new directory.\n" destination))
+    destination = rnlOutputPath(destination)
     unless(member(format list("spectre" "cdl")) error("Choose spectre or cdl.\n"))
     unless(hierarchy error("Library export includes all of its cells; use the external-cell option to control foreign definitions.\n"))
     schematicList = rnlViewList(schematicViews "schematicViews")
@@ -133,8 +132,7 @@ procedure(rnlStartLibraryExport(lib destination hierarchy split scale @optional 
         (t skipped = cons(cell->name skipped))))
     unless(tasks error("Library %s has no schematic or symbol views.\n" lib))
     tasks = sort(tasks lambda((a b) alphalessp(car(a) car(b))))
-    work = makeTempFileName("/tmp/rnlLibraryXXXX")
-    unless(createDir(work) error("Cannot create library work directory.\n"))
+    work = rnlCreateOutputWork(destination)
     rnlActiveBatch = list(nil 'library lib 'destination destination 'notify notify
       'hierarchy hierarchy 'split t 'scale scale 'format format 'external external
       'schematicViews schematicViews 'symbolViews symbolViews 'exportSelectionBox exportSelectionBox 'autoCheckSave autoCheckSave 'exportSymbols exportSymbols 'tasks tasks 'parts nil 'failures nil 'skipped skipped 'directory work 'phase "cells" 'count 0 'total length(tasks))
@@ -155,7 +153,8 @@ procedure(rnlStartSymbolJob(lib cell scale format @optional (view "symbol") (sch
       dbClose(cv))
     cds = ddGetForcedLib()
     when(!cds || cds == "" cds = ddGetStartup("cds.lib"))
-    work = makeTempFileName("/tmp/rnlSymbolXXXX")
+    unless(rnlActiveBatch error("Symbol jobs require a library export workspace.\n"))
+    work = strcat(rnlActiveBatch->directory "/symbol_" sprintf(nil "%d" rnlActiveBatch->count))
     unless(createDir(work) error("Cannot create symbol work directory.\n"))
     port = outfile(strcat(work "/selection-boxes.sx"))
     fprintf(port "%L\n" selectionRows)

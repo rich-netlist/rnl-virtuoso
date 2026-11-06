@@ -10,7 +10,10 @@ Do not ask again for consent already given for the same action and destination.
 
 Source: https://github.com/rich-netlist/rnl-virtuoso.git
 
-Discover the latest published release and its assets. Prefer a matching static
+Discover the [latest stable release](https://github.com/rich-netlist/rnl-virtuoso/releases/latest)
+and its assets; do not use a fixed tag or a cached asset URL. Version 0.9.5 is the
+first release with the headless CLI, blocking API and output-contained workspace.
+Prefer a matching static
 Linux archive when it supports the requested interface; the runtime then needs
 neither Python nor Go. Do not assume an architecture, asset name or version.
 For example, if GitHub CLI is available:
@@ -21,8 +24,9 @@ gh release download TAG --repo rich-netlist/rnl-virtuoso --pattern ASSET_PATTERN
 ```
 
 Replace placeholders with the discovered values and quote for the actual shell.
-Without `gh`, use an available web/HTTP tool and GitHub's release metadata to
-obtain asset URLs. Record the chosen version and source. Verify the archive
+Without `gh`, use an available web/HTTP tool to read
+`https://api.github.com/repos/rich-netlist/rnl-virtuoso/releases/latest` and obtain
+asset URLs from its `assets` entries. Record the chosen version and source. Verify the archive
 against its published `.sha256` file before extraction.
 
 Older releases may lack the headless CLI or other requested API options. Check
@@ -54,6 +58,8 @@ approval for an already authorized installation.
    headless mode, require `bin/rnl-virtuoso export --help` and read
    `docs/headless.md`. For live-session mode, inspect `docs/skill-api.md` for the
    required API/options, then perform the session check after loading below.
+   Require `output_workspace: t` when output-contained diagnostics are needed;
+   check `blocking_export: t` before using `?wait t`.
 5. Publish without overwriting an unexpected installation. For an approved
    upgrade, wait until exports finish and retain the prior installation as a
    uniquely named backup. Restore it if publication fails. Do not change project

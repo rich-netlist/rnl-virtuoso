@@ -5,6 +5,38 @@ unless(boundp('rnlMenu) rnlMenu = nil)
 unless(boundp('rnlExportForm) rnlExportForm = nil)
 unless(boundp('rnlPreflightError) rnlPreflightError = nil)
 
+; Only the headless driver may hand over its freshly reserved output root.
+unless(boundp('rnlPreparedOutput) rnlPreparedOutput = nil)
+
+procedure(rnlOutputPath(destination)
+  unless(stringp(destination) && destination != "" error("Choose a new output directory.\n"))
+  destination = simplifyFilename(destination)
+  unless(substring(destination 1 1) == "/"
+    destination = simplifyFilename(strcat(getWorkingDir() "/" destination)))
+  foreach(ch parseString(destination "")
+    when(charToInt(concat(ch)) <= 32 || charToInt(concat(ch)) == 127 ||
+        member(ch parseString("\"'`$\\;&|<>()*?[]{}!" ""))
+      error("Native export paths cannot contain spaces, control characters or shell metacharacters: %s. Choose a plain output path.\n" destination)))
+  when((isDir(destination) || isFile(destination)) && destination != rnlPreparedOutput
+    error("Output already exists: %s. Choose a new directory.\n" destination))
+  destination
+)
+
+procedure(rnlCreateOutputWork(destination)
+  let((metadata work)
+    metadata = strcat(destination "/.rnl")
+    if(destination == rnlPreparedOutput then
+      unless(isDir(metadata) error("Missing headless output reservation: %s.\n" metadata))
+      rnlPreparedOutput = nil
+    else
+      unless(createDir(destination) error("Cannot create new output directory: %s. Check its parent and permissions.\n" destination))
+      unless(createDir(metadata) error("Cannot create export metadata directory: %s.\n" metadata)))
+    work = strcat(metadata "/work")
+    unless(createDir(work) error("Cannot create export work directory: %s.\n" work))
+    work
+  )
+)
+
 procedure(rnlNotice(message)
   printf("RNL: %s\n" message)
   hiDisplayAppDBox(?name 'rnlNoticeBox ?dboxBanner "RNL Export"
@@ -238,7 +270,7 @@ procedure(rnlStartExport(lib cell view destination hierarchy split scale @option
     when(rnlActiveJob error("An RNL export is already running.\n"))
     when(boundp('rnlActiveBatch) && rnlActiveBatch && !rnlActiveBatch->starting
       error("An RNL library export is already running.\n"))
-    unless(destination && destination != "" error("Choose a new output directory.\n"))
+    destination = rnlOutputPath(destination)
     unless(scale && scale > 0 error("Drawing scale must be positive.\n"))
     unless(member(format list("spectre" "cdl")) error("Choose spectre or cdl.\n"))
     schematicList = rnlViewList(schematicViews "schematicViews")
@@ -266,9 +298,11 @@ procedure(rnlStartExport(lib cell view destination hierarchy split scale @option
     cds = ddGetForcedLib()
     when(!cds || cds == "" cds = ddGetStartup("cds.lib"))
     unless(cds error("No active cds.lib was found.\n"))
-    work = makeTempFileName("/tmp/rnlXXXX")
-    unless(createDir(work) error("Cannot create export work directory.\n"))
-    unless(simInitEnvWithArgs(strcat(work "/si") lib cell view simulator nil)
+    work = rnlCreateOutputWork(destination)
+    ; Precreate safely; g_forceInit initializes this new, empty native directory.
+    ; Cadence's own directory-creation shell command does not quote spaces.
+    unless(createDir(strcat(work "/si")) error("Cannot create native netlist directory.\n"))
+    unless(simInitEnvWithArgs(strcat(work "/si") lib cell view simulator t)
       error("Could not initialize the native netlist exporter.\n"))
     port = outfile(strcat(work "/si/si.env") "a")
     unless(port error("Cannot write native netlist settings.\n"))

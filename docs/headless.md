@@ -1,7 +1,7 @@
 # One-command headless export
 
-This command is an unreleased extension. Check `bin/rnl-virtuoso export --help`
-on the installed tool before using it; the published 0.9.4 archive lacks it.
+Available since 0.9.5. Check `bin/rnl-virtuoso export --help` on the installed
+tool before using it; older archives may lack the command.
 The CLI is part of the existing static Go executable. It needs neither Python nor
 a bridge, and generates the SKILL driver internally.
 
@@ -11,8 +11,9 @@ a bridge, and generates the SKILL driver internally.
 ```
 
 The current directory must contain the project's `cds.lib`, or pass
-`--project /path/to/project`. Relative output and log paths are resolved against
-that project directory. Existing outputs are refused; missing output parent
+`--project /path/to/project`. Relative output paths are resolved against that project directory; relative
+`--logs` paths are resolved against the output directory. Native output/log paths must not contain spaces or shell metacharacters;
+unsupported paths are rejected before launch. Existing outputs are refused; missing output parent
 directories are created. Omitting `--cell` deliberately selects the whole library.
 
 ## Cadence environment
@@ -72,7 +73,7 @@ Run `rnl-virtuoso export --help` for the full list. Boolean flags use
 | `--symbols` | `false`, optional extra `symbols.rnl` collection |
 | `--scale` | `10`, positive finite EDIF units per RNL unit |
 | `--timeout` | `30m` for the entire run; e.g. `2h`, or `0` for no deadline |
-| `--logs` | A new directory; otherwise a unique `<output>.logs-*` directory beside output |
+| `--logs` | Default `.rnl/launcher` inside output; custom paths must stay below output/.rnl, outside reserved work/tmp directories |
 | `--verbose` | Stream native output to stderr as well as the log |
 | `--install-dir` | Override the installation normally found beside the executable |
 
@@ -94,6 +95,15 @@ messages. Use the shell exit status as well as JSON `state`:
 | 2 | `failed` | Invalid input, startup, native export or conversion failure |
 | 124 | `timed_out` | Whole-run deadline reached |
 | 130 | `interrupted` | Interrupted by SIGINT/SIGTERM |
+
+The output directory is reserved before launch. RNL files and reports stay at
+its root; `.rnl/launcher/` holds launcher/CIW logs, the generated driver and final
+status, `.rnl/work/` holds native inputs, intermediate netlists/EDIF and conversion
+logs, and `.rnl/tmp/` holds launcher scratch. Library cell jobs and staging also
+stay inside this tree. Native child processes receive local temporary/log paths. Cadence session,
+license and OS housekeeping files retain their own runtime locations.
+The `.rnl` name is reserved and retained on failure; directory existence alone is
+not proof of success. The completion report is published after the result files.
 
 Successful/partial results include the report and output directory; results after
 launch also identify the log directory. It contains `launcher.log`, `CDS.log`,
