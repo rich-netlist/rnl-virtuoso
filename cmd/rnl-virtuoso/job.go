@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const version = "0.9.5"
+const version = "0.9.6"
 
 func nativeDiagnostic(text string) string {
 	lines := strings.Split(text, "\n")

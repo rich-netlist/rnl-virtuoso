@@ -94,7 +94,7 @@ branch must require prior consent; compatible existing installs must be reused.
 The runtime archive ships `rnl-api.il` and its docs, not agent skills or a bridge.
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.9.5-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.9.6-linux-amd64.tar.gz
 ```
 
 Use `--go /path/to/go` or `--backend /path/to/prebuilt-linux-executable` if needed.

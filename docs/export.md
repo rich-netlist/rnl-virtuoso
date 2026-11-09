@@ -243,7 +243,11 @@ mapping. Missing or extra members still fail.
   Instances explicitly marked `nlAction=ignore` are omitted as in the native
   netlist, with an export note. Other missing native devices remain errors.
 - Spectre behavioral leaves use the selected Verilog-A module's declared port
-  order, checked against EDIF, instead of guessing from a missing CDF. Native
+  order, checked against EDIF, instead of guessing from a missing CDF. Ports
+  may use explicit direction declarations or only `electrical` declarations.
+  Internal electrical nodes and function/task arguments are excluded. Module
+  header order and declared bus direction are preserved; conflicting direction
+  and electrical ranges are reported with the module and port names. Native
   `ahdl_include` lines are preserved, with their original model file references
   recorded in the export report. Model files remain external; copying the RNL
   bundle does not make a portable simulation deck. Ordinary `veriloga` takes
