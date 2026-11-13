@@ -32,6 +32,7 @@ Only library, cell and destination are required. The example lists all defaults.
 | `symbolViews` | Space-separated symbol view names, highest priority first; default `"symbol"`. Available since 0.9.0. |
 | `autoCheckSave` | `t` (default) checks and saves stale schematic connectivity, including instances whose terminal interfaces became stale after a master edit; `nil` rejects stale source views without saving. Since 0.9.2. Applies to cell and library exports. |
 | `exportSymbols` | `nil` (default) omits the additional reusable collection; `t` writes `symbols.rnl`. Available in cell and library exports since 0.9.4. Does not alter embedded symbols. `cell-symbol.rnl` is never generated. |
+| `symbolLibraries` | List of RNL symbol library package paths (`.rnl`), highest priority first; `nil` (default) uses the bundled `eda-symbol`. A mapping file `<package>.virtuoso.json` beside a package maps Virtuoso cells to its symbols. Since 0.10.0. Applies to cell and library exports. |
 | `exportSelectionBox` | `t` (default) uses the enclosing rectangle of all selection boxes in the selected Virtuoso symbol view; `nil` uses the non-text symbol graphics extent. Since 0.9.1. Applies to cell and library exports, including symbol-only cells. |
 | `format` | `"spectre"` or `"cdl"`; CDL is LVS output and may omit simulation sources |
 | `hierarchy` | `t` includes descendants; `nil` emits the current level with child interfaces |
@@ -135,7 +136,8 @@ relaunching: a timeout does not cancel an existing export.
 `rnlExporterInfo()` returns `api_version` (integer 1), `tool_version`,
 `install_directory`, `busy`, and `active_id`. Since 0.9.5 it also returns
 `blocking_export: t` and `output_workspace: t` for blocking calls and work files
-contained in the output directory. Older releases lack these capabilities.
+contained in the output directory, and since 0.10.0 `symbol_libraries: t` for
+`?symbolLibraries`. Older releases lack these capabilities.
 The active ID can describe a menu job; then wait for `busy` to clear instead of
 querying public job history.
 

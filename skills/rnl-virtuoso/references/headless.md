@@ -72,6 +72,9 @@ unrelated interactive/bridge startup to work around an unexplained failure.
 - `--format spectre|cdl`, `--file-mode separate|combined` (cell only),
   `--hierarchy=false` (cell only), `--external=true|false`, `--scale 10`.
   CDL is LVS output and can omit simulation sources.
+- `--symbol-library PATH` (repeatable, highest priority first) replaces the
+  bundled `eda-symbol` with the given RNL symbol libraries; use only packages the
+  user names. Config key `symbol_libraries`;
 - `--selection-box=false` uses graphic extent instead of native selection boxes;
   `--symbols` enables the additional `symbols.rnl` collection.
 - Boolean flags use `--flag=false`, not `--flag false`. Keep source writes off

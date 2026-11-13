@@ -269,7 +269,24 @@ mapping. Missing or extra members still fail.
   recorded in the export report. Model files remain external; copying the RNL
   bundle does not make a portable simulation deck. Ordinary `veriloga` takes
   precedence over `veriloga_ans` when both exist.
-- Common `analogLib` primitives use `eda-symbol`. Its pins bind the terminal
+- Leaf instances take their symbols from the **symbol libraries**: RNL packages
+  given in priority order (`?symbolLibraries`, `--symbol-library`, or the forms'
+  **Symbol libraries** field). The default list holds only the bundled
+  `eda-symbol`; a given list replaces it. Each library used is copied into the
+  export and referenced in every header, the highest priority last, so its names
+  win (RNL 0.4, 16.2). Which Virtuoso cell a symbol draws is exporter
+  configuration, not RNL (16.4): a mapping file beside the package,
+  `<package>.virtuoso.json`, lists library/cell to symbol, the terminal names the
+  symbol binds in node order, and any orientation compensation. A library without
+  one is matched by its own `@DEVICE` terminal names and rules of the form
+  `# @SELECT-INSTANCE(model=…) => @SET-SYMBOL $X`, by the instance's native model
+  name, without orientation compensation. The first library by priority that maps
+  an instance gives its symbol; instances that no library maps keep their EDIF
+  symbol and are listed under `unmapped_cells` in the report. RNL 0.4 has no
+  package-qualified names: a chosen symbol whose name a library of higher priority
+  also defines is copied into the level as a `%` definition, with a warning in the
+  report's `warnings`.
+  The bundled `eda-symbol` maps common `analogLib` primitives. Its pins bind the terminal
   names of the standard series 0.4, so the exporter writes them in CDF node order,
   such as `#"R0" @SET-SYMBOL(terminals=["p", "n"]) $RESISTOR`: the instance binds
   by position whatever terminal names its host gives it, and the same statement
@@ -294,10 +311,11 @@ mapping. Missing or extra members still fail.
   colors, line widths or style assignments. Presentation and optional pin marks
   come from the separately referenced `eda-style` package. Replace that header
   reference to apply another style.
-- [symbol-orientations.json](../resources/symbol-orientations.json) is
-  the editable table for all 18 documented symbol changes. Its transforms use
-  RNL/EDIF matrix conventions, including `MY` for negating x. The configuration
-  and pinned package snapshots are described in [resource notes](../resources/README.md).
+- [eda-symbol.virtuoso.json](../resources/eda-symbol.virtuoso.json) is the
+  editable mapping of the bundled library, including the 18 documented symbol
+  changes. Its transforms use RNL/EDIF matrix conventions, including `MY` for
+  negating x. The mapping format and pinned package snapshots are described in
+  [resource notes](../resources/README.md).
 - A child symbol is embedded in its own subcircuit definition with `# @SET-SYMBOL`.
   This also applies to separate files and library exports: the parent uses the
   child's default symbol. In current-level mode, or when an external child is

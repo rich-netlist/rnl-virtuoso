@@ -104,7 +104,7 @@ func testJSON(dir string) {
 		case "rules":
 			text := req.Text
 			if text == "" {
-				text = resource(dir, "symbol-orientations.json")
+				text = resource(dir, "eda-symbol.virtuoso.json")
 			}
 			out["rules"] = loadRules(text)
 		case "interfaces":

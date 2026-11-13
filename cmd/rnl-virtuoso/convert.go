@@ -30,28 +30,26 @@ func loadOrders(text string) map[cellKey][]string {
 }
 
 type convertInput struct {
-	ExportSymbols      bool                       `json:"export_symbols"`
-	Netlist            string                     `json:"netlist"`
-	Drawing            string                     `json:"drawing"`
-	Orders             []orderEntry               `json:"orders"`
-	Package            string                     `json:"package"`
-	Top                string                     `json:"top"`
-	Hierarchy          *bool                      `json:"hierarchy"`
-	Split              bool                       `json:"split"`
-	Scale              *float64                   `json:"scale"`
-	Dialect            string                     `json:"dialect"`
-	NameMaps           map[string]nameMap         `json:"name_maps"`
-	RootSymbol         *string                    `json:"root_symbol"`
-	BehaviorModels     map[string][]string        `json:"behavior_models"`
-	StylePackage       *string                    `json:"style_package"`
-	OrientationRules   map[string]orientationRule `json:"orientation_rules"`
-	Standard           map[string]string          `json:"standard"`
-	LibraryScope       string                     `json:"library_scope"`
-	Capture            *libraryCapture            `json:"-"`
-	Annotations        string                     `json:"annotations"`
-	SymbolDrawings     []symbolDrawing            `json:"symbol_drawings"`
-	ExportSelectionBox *bool                      `json:"export_selection_box"`
-	SelectionBoxes     string                     `json:"selection_boxes"`
+	ExportSymbols      bool                `json:"export_symbols"`
+	Netlist            string              `json:"netlist"`
+	Drawing            string              `json:"drawing"`
+	Orders             []orderEntry        `json:"orders"`
+	SymbolLibraries    []libraryInput      `json:"symbol_libraries"`
+	Top                string              `json:"top"`
+	Hierarchy          *bool               `json:"hierarchy"`
+	Split              bool                `json:"split"`
+	Scale              *float64            `json:"scale"`
+	Dialect            string              `json:"dialect"`
+	NameMaps           map[string]nameMap  `json:"name_maps"`
+	RootSymbol         *string             `json:"root_symbol"`
+	BehaviorModels     map[string][]string `json:"behavior_models"`
+	StylePackage       *string             `json:"style_package"`
+	LibraryScope       string              `json:"library_scope"`
+	Capture            *libraryCapture     `json:"-"`
+	Annotations        string              `json:"annotations"`
+	SymbolDrawings     []symbolDrawing     `json:"symbol_drawings"`
+	ExportSelectionBox *bool               `json:"export_selection_box"`
+	SelectionBoxes     string              `json:"selection_boxes"`
 }
 
 type symbolDrawing struct{ Library, Cell, Drawing string }
@@ -99,21 +97,17 @@ func portID(c *cell, spelling, dialect string, names map[string]string) string {
 	}
 	return id
 }
+
 // RNL 0.4 uses no package implicitly: the header names the standard collection,
 // drops its automatic fill (the drawing already holds every wire, port and
-// marker of the source schematic), then the two EDA packages. One package per
-// line, so a reader can replace or remove one of them.
+// marker of the source schematic), then the symbol libraries, the highest
+// priority last, and the style package. One package per line, so a reader can
+// replace or remove one of them.
 const rnlVersion = "0.4"
 
-func header(carrier string) string {
-	return strings.ReplaceAll(`* @RNL(type="header") {
-*   @VERSION("`+rnlVersion+`");
-*   @USE-PACKAGE(name="rnl-std-all", version="0.4");
-*   @USE-PACKAGE(name="rnl-std-fill") {};
-*   @USE-PACKAGE(name="eda-symbol", version="0.2", path="eda-symbol.rnl");
-*   @USE-PACKAGE(name="eda-style", version="0.2", path="eda-style.rnl")
-* }
-`, "*", carrier)
+func header(carrier string, libraries []*symbolLibrary) string {
+	lines := append(append([]string{`@VERSION("` + rnlVersion + `")`, `@USE-PACKAGE(name="rnl-std-all", version="0.4")`, `@USE-PACKAGE(name="rnl-std-fill") {}`}, libraryHeaderLines(libraries)...), `@USE-PACKAGE(name="eda-style", version="0.2", path="eda-style.rnl")`)
+	return carrier + " @RNL(type=\"header\") {\n" + carrier + "   " + strings.Join(lines, ";\n"+carrier+"   ") + "\n" + carrier + " }\n"
 }
 
 // A usage has no terminals in RNL 0.4 (12.1): wires end at a named pin of its symbol.
@@ -202,16 +196,9 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 	if in.StylePackage != nil {
 		style = *in.StylePackage
 	}
-	rules := in.OrientationRules
-	if rules == nil {
-		rules = loadRules(resource(resourceDir, "symbol-orientations.json"))
-	}
-	standards := packagePins(in.Package)
-	terminalNames := loadTerminals(resource(resourceDir, "symbol-orientations.json"))
-	standardNames := standard
-	if in.Standard != nil {
-		standardNames = in.Standard
-	}
+	libraries := loadSymbolLibraries(in.SymbolLibraries, resourceDir)
+	unmapped, warnings := stringSet{}, []string{}
+	librarySymbolsByLevel := map[string]map[string]string{}
 	orders := map[cellKey][]string{}
 	for _, row := range in.Orders {
 		ports := []string{}
@@ -381,6 +368,8 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 		endpoints := []endpoint{}
 		busMembers := map[string][]busMember{}
 		localSymbols := map[string]string{}
+		librarySymbolsByLevel[key] = map[string]string{}
+		copies := librarySymbolsByLevel[key]
 		expandedTypes := map[int]string{}
 		expandedCount := 0
 		var symbolCell *cell
@@ -531,16 +520,24 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 				stats["bundles"]++
 			}
 			xy, outputOrient := scaled(ins.XY, scale), ins.Orient
-			symbol := ""
-			if master.Library == "analogLib" && child == nil && group == nil && master.ExportSymbol == nil {
-				symbol = standardNames[strings.ToLower(master.Name)]
+			// A leaf instance takes the symbol of the first symbol library, by
+			// priority, that maps its cell; otherwise its own EDIF symbol.
+			var choice *symbolChoice
+			if child == nil && group == nil && master.ExportSymbol == nil {
+				nodes := []string{}
+				for _, p := range order {
+					nodes = append(nodes, master.Ports[p])
+				}
+				choice = chooseSymbol(libraries, ins.Master, words[0], nativeModel(words, dialect), dialect, nodes)
 			}
 			var destination []point
-			// A package symbol with named pins binds the terminal names of the
-			// standard series; SET-SYMBOL lists them in node order (11.3), so the
-			// instance binds by position whatever names the host gives it.
-			names := terminalNames[symbol]
-			if pins, ok := standards[symbol]; symbol != "" && ok {
+			var names []string
+			reference := ""
+			if choice != nil {
+				// A symbol with named pins binds them in node order through
+				// SET-SYMBOL terminals= (11.3), whatever names the host gives.
+				names = choice.Terminals
+				pins := choice.Library.Pins[choice.Symbol]
 				complete := len(names) == 0 || len(order) <= len(names)
 				for i := range order {
 					key := strconvI(i + 1)
@@ -555,21 +552,46 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 				}
 				if !complete {
 					destination = nil
+					notes = append(notes, "Symbol library "+choice.Library.Name+" gives "+ins.Master.Library+"/"+ins.Master.Cell+" the symbol $"+choice.Symbol+", but its pins do not bind every terminal of the instance; the EDIF symbol is kept")
 				}
+				reference = "$" + choice.Symbol
+				if other := hiddenBy(libraries, choice); destination != nil && other != nil {
+					// RNL 0.4 has no package-qualified names (16.2): a symbol whose
+					// name a library of higher priority also defines is copied into
+					// the level.
+					copyKey := choice.Library.File + "\x00" + choice.Symbol
+					if id, ok := copies[copyKey]; ok {
+						reference = id
+					} else if text, ok := localCopy(choice.Library, choice.Symbol, "%library_symbol_"+strconvI(len(copies))); ok {
+						reference = "%library_symbol_" + strconvI(len(copies))
+						copies[copyKey] = reference
+						ss = append(ss, text)
+						warnings = append(warnings, "Symbol $"+choice.Symbol+" of "+choice.Library.Name+" is also defined by "+other.Name+", which has priority; it is copied into "+c.Library+"/"+c.Name)
+					} else {
+						destination = nil
+						warnings = append(warnings, "Symbol $"+choice.Symbol+" of "+choice.Library.Name+" is also defined by "+other.Name+" and includes other symbols, so it cannot be copied; "+ins.Master.Library+"/"+ins.Master.Cell+" keeps its EDIF symbol")
+					}
+				}
+				if destination != nil && choice.Mode == "rules" {
+					notes = append(notes, "Drawn by the rules of symbol library "+choice.Library.Name+", without orientation compensation: "+ins.Master.Library+"/"+ins.Master.Cell)
+				}
+			}
+			if child == nil && group == nil && master.ExportSymbol == nil && destination == nil {
+				unmapped[ins.Master.Library+"/"+ins.Master.Cell] = true
 			}
 			if destination != nil {
 				src := []point{}
 				for _, p := range order {
 					src = append(src, scaled(master.Pins[p], scale))
 				}
-				xy, outputOrient = place(symbol, src, destination, ins.Orient, xy, rules)
-				assignment := " @SET-SYMBOL $" + symbol
+				xy, outputOrient = place(choice.Symbol, src, destination, ins.Orient, xy, map[string]orientationRule{choice.Symbol: choice.Rule})
+				assignment := " @SET-SYMBOL " + reference
 				if len(names) > 0 {
 					quoted := []string{}
 					for _, n := range names[:len(order)] {
 						quoted = append(quoted, quote(n))
 					}
-					assignment = " @SET-SYMBOL(terminals=[" + strings.Join(quoted, ", ") + "]) $" + symbol
+					assignment = " @SET-SYMBOL(terminals=[" + strings.Join(quoted, ", ") + "]) " + reference
 				}
 				ss = append(ss, host+assignment)
 				stats["standard_symbols"]++
@@ -775,8 +797,18 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 			case "OUTPUT":
 				glyph, symbol = "OPIN", "%output_port_symbol"
 			}
+			var glyphLibrary *symbolLibrary
+			if symbol != "" {
+				kind := "input"
+				if direction == "OUTPUT" {
+					kind = "output"
+				}
+				if glyphLibrary, glyph = portGlyph(libraries, kind); glyphLibrary == nil {
+					symbol = ""
+				}
+			}
 			if symbol != "" && !portSymbols[symbol] {
-				ss = append(ss, packageSymbolDefinition(in.Package, glyph, symbol))
+				ss = append(ss, packageSymbolDefinition(glyphLibrary.Text, glyph, symbol))
 				portSymbols[symbol] = true
 			}
 			definition, args, term := "$IO_PORT", netsRef(bits, netmap), usagePin(sid, "pin")
@@ -933,18 +965,22 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 	template = append(template, strings.Join(lines[cursor:], ""))
 	native := strings.Join(out, "")
 	firstLine, rest, _ := strings.Cut(native, "\n")
-	files[entry] = firstLine + "\n" + header(carrier) + rest
+	files[entry] = firstLine + "\n" + header(carrier, libraries) + rest
 	var cellIndex any
 	if parts != nil {
 		first, rest, _ := strings.Cut(strings.Join(template, ""), "\n")
-		parts.Entry, parts.Template = entry, first+"\n"+header(carrier)+rest
+		parts.Entry, parts.Template = entry, first+"\n"+header(carrier, libraries)+rest
+		parts.SymbolLibraries = libraryRecords(in.SymbolLibraries, libraries)
 		if in.Split {
 			var layout map[string]any
 			files, layout = assembleLibrary([]libraryCapture{*parts}, rootCell.Library, dialect, true, in.ExportSymbols, resourceDir)
 			cellIndex = layout["definitions"]
 		}
 	}
-	files["eda-symbol.rnl"], files["eda-style.rnl"] = in.Package, style
+	for _, l := range libraries {
+		files[l.File] = l.Text
+	}
+	files["eda-style.rnl"] = style
 	var symbolFile any
 	if in.ExportSymbols {
 		packageText, _ := reusableSymbolPackage("virtuoso-library/"+rootCell.Library, parts.Symbols)
@@ -957,7 +993,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 	if rootSub {
 		kind = "subcircuit"
 	}
-	return files, map[string]any{"export_symbols": in.ExportSymbols, "export_selection_box": boxPolicy.native, "entry": entry, "top": root.Name, "root_kind": kind, "symbol_file": symbolFile, "statistics": stats, "notes": notes, "definitions": cellIndex}
+	return files, map[string]any{"symbol_libraries": libraryReport(libraries), "unmapped_cells": sortedSet(unmapped), "warnings": unique(warnings), "export_symbols": in.ExportSymbols, "export_selection_box": boxPolicy.native, "entry": entry, "top": root.Name, "root_kind": kind, "symbol_file": symbolFile, "statistics": stats, "notes": notes, "definitions": cellIndex}
 }
 
 func netlistFilename(name, extension string) string {

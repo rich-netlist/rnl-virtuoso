@@ -24,7 +24,8 @@ type libraryCapture struct {
 	Symbols                                 []librarySymbol
 	Notes                                   []string
 	ModelReferences                         []string
-	ExportSelectionBox                      *bool `json:",omitempty"`
+	ExportSelectionBox                      *bool          `json:",omitempty"`
+	SymbolLibraries                         []libraryInput `json:",omitempty"`
 }
 
 func publicSymbol(c *cell, scale float64, notes *[]string) librarySymbol {
@@ -254,9 +255,13 @@ func relativeNetlistPath(from, to string) string {
 	return filepath.ToSlash(path)
 }
 
-func cellHeader(carrier, filename string) string {
-	text := header(carrier)
-	for _, name := range []string{"eda-symbol.rnl", "eda-style.rnl"} {
+func cellHeader(carrier, filename string, libraries []*symbolLibrary) string {
+	text := header(carrier, libraries)
+	names := []string{"eda-style.rnl"}
+	for _, l := range libraries {
+		names = append(names, l.File)
+	}
+	for _, name := range names {
 		text = strings.ReplaceAll(text, quote(name), quote(relativeNetlistPath(filename, name)))
 	}
 	return text
@@ -330,7 +335,19 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split, exp
 		notes = append(notes, part.Notes...)
 		modelReferences = append(modelReferences, part.ModelReferences...)
 	}
-	files := map[string]string{"eda-symbol.rnl": resource(resourceDir, "eda-symbol.rnl"), "eda-style.rnl": resource(resourceDir, "eda-style.rnl")}
+	// Every cell of a library export uses the same symbol libraries.
+	var inputs []libraryInput
+	for i, part := range parts {
+		if i > 0 && jsonText(part.SymbolLibraries) != jsonText(parts[0].SymbolLibraries) {
+			fail("Library cells were converted with different symbol libraries")
+		}
+		inputs = part.SymbolLibraries
+	}
+	libraries := loadSymbolLibraries(inputs, resourceDir)
+	files := map[string]string{"eda-style.rnl": resource(resourceDir, "eda-style.rnl")}
+	for _, l := range libraries {
+		files[l.File] = l.Text
+	}
 	names := []string{}
 	for key := range definitions {
 		names = append(names, key)
@@ -339,7 +356,10 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split, exp
 	paths := map[cellKey]string{}
 	owners := map[string]cellKey{}
 	directories := map[string]string{}
-	reserved := stringSet{"eda-symbol.rnl": true, "eda-style.rnl": true, "symbols.rnl": true, "library-report.json": true}
+	reserved := stringSet{"eda-style.rnl": true, "symbols.rnl": true, "library-report.json": true}
+	for _, l := range libraries {
+		reserved[l.File] = true
+	}
 	// Netlist files and primary symbol-only files share collision checks.
 	registerFile := func(source cellKey, extension string) string {
 		filename := netlistFilename(source.Cell, extension)
@@ -449,7 +469,7 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split, exp
 	for source, body := range groups {
 		filename := paths[source]
 		if _, ok := roots[source]; !ok {
-			files[filename] = carrier + " RNL cell " + source.Library + "/" + source.Cell + "\n" + cellHeader(carrier, filename) + withoutNativeIncludes(body, dialect)
+			files[filename] = carrier + " RNL cell " + source.Library + "/" + source.Cell + "\n" + cellHeader(carrier, filename, libraries) + withoutNativeIncludes(body, dialect)
 		}
 	}
 	symbolOnlyFiles := []map[string]string{}

@@ -144,7 +144,7 @@ func TestSymbolPackageServesBothDialectsUnchanged(t *testing.T) {
 		t.Fatal("instance letters must sit in the SPICE record and model rules outside it")
 	}
 	drawing := testEDIF(`(cell top (view schematic (interface (port A)) (contents (net A (joined (portRef A))))))`)
-	files, _ := convert(convertInput{Top: "top", Dialect: "spectre", Drawing: drawing, Netlist: "// Library name: work\n// Cell name: top\n// View name: schematic\n", Package: text}, testResources())
+	files, _ := convert(convertInput{Top: "top", Dialect: "spectre", Drawing: drawing, Netlist: "// Library name: work\n// Cell name: top\n// View name: schematic\n"}, testResources())
 	if files["eda-symbol.rnl"] != text {
 		t.Fatal("the Spectre copy differs from the pinned package")
 	}
@@ -206,7 +206,7 @@ func TestOrientationRulesAndAllFrames(t *testing.T) {
 			}
 		}
 	}
-	base := `{"schema":2,"package":{"name":"eda-symbol","version":"0.2"},"symbols":{"DIODE":{"package_to_source":"R270","align_pins":[1,2]}}}`
+	base := `{"schema":1,"package":{"name":"eda-symbol","version":"0.2"},"symbols":{"DIODE":{"package_to_source":"R270","align_pins":[1,2]}}}`
 	rules := loadRules(base)
 	at, o := place("DIODE", []point{{0, 3}, {0, -3}}, []point{{-3, 0}, {3, 0}}, "MY", point{20, -10}, rules)
 	if at != (point{20, -10}) || o != compose("MY", "R270") {

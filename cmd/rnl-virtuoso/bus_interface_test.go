@@ -12,7 +12,7 @@ func TestReversedSymbolBusKeepsMemberIdentity(t *testing.T) {
 	symbol := testEDIF(`(cell leaf (view symbol (interface (port (array (rename a "A<1:0>") 2)) (symbol
   (portImplementation a (connectLocation (figure pin (dot (pt 0 0)))))))))`)
 	in := convertInput{Top: "leaf", Dialect: "spectre", Drawing: drawing, RootSymbol: &symbol,
-		Netlist: "// Library name: work\n// Cell name: leaf\n// View name: schematic\n", Package: resource(testResources(), "eda-symbol.rnl"),
+		Netlist:  "// Library name: work\n// Cell name: leaf\n// View name: schematic\n",
 		NameMaps: map[string]nameMap{"leaf": {"net": {"A<0>": "A_0", "A<1>": "A_1"}}}}
 	files, _ := convert(in, testResources())
 	text := files["leaf.scs"]

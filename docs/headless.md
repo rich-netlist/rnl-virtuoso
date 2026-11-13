@@ -70,6 +70,7 @@ Run `rnl-virtuoso export --help` for the full list. Boolean flags use
 | `--schematic-views`, `--symbol-views` | `schematic`, `symbol`; quoted space-separated lists in priority order |
 | `--auto-check-save` | `true`, matching GUI/API; **use `--auto-check-save=false` for read-only export** |
 | `--selection-box` | `true`, union of native selection boxes |
+| `--symbol-library` | Bundled `eda-symbol`; repeat for several `.rnl` symbol libraries, highest priority first. Config key `symbol_libraries` |
 | `--symbols` | `false`, optional extra `symbols.rnl` collection |
 | `--scale` | `10`, positive finite EDIF units per RNL unit |
 | `--timeout` | `30m` for the entire run; e.g. `2h`, or `0` for no deadline |

@@ -29,8 +29,7 @@ func convertBlock(t *testing.T) string {
 	t.Helper()
 	files, _ := convert(convertInput{Top: "top", Dialect: "spectre", Drawing: blockDrawing,
 		Netlist: "// Library name: work\n// Cell name: top\n// View name: schematic\nX0 (n1 n0 vdd) blk\n",
-		Orders:  []orderEntry{{Library: "work", Cell: "blk", Ports: []string{"D<1>", "D<0>", "VDD"}}},
-		Package: resource(testResources(), "eda-symbol.rnl")}, testResources())
+		Orders:  []orderEntry{{Library: "work", Cell: "blk", Ports: []string{"D<1>", "D<0>", "VDD"}}}}, testResources())
 	return files["top.scs"]
 }
 

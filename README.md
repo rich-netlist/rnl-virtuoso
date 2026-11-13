@@ -9,8 +9,8 @@ netlist and drawing without rewriting device statements.
 - Preserve hierarchy, custom block symbols, placement, orientation, wires, buses and drawn arrays.
 - Export subcircuits in one file, separate files, or just the current level.
 - Schematics with ports become subcircuits; portless schematics remain top-level circuits.
-- Write RNL 0.4: name the standard collection `rnl-std-all` 0.4 and reference `eda-symbol`
-  and `eda-style` 0.2 separately, with an editable orientation table. Open the result with a
+- Write RNL 0.4: name the standard collection `rnl-std-all` 0.4, the symbol libraries
+  (by default the bundled `eda-symbol` 0.2, with an editable Virtuoso mapping) and `eda-style` 0.2. Open the result with a
   viewer or checker that reads RNL 0.4; version 0.9.6 is the last that writes RNL 0.3.
 - Whole-library exports share deduplicated definitions and an optional reusable symbol package,
   with optional referenced external cells and support for symbol-only cells.

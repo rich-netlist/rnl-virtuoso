@@ -37,8 +37,7 @@ func TestRipperMemberConnectivityAndBusGraphics(t *testing.T) {
 
 func TestEmptyPortedSchematicAndExplicitParentParameters(t *testing.T) {
 	drawing := testEDIF(`(cell top (view schematic (interface (port A)) (contents (net A (joined (portRef A))))))`)
-	pkg := resource(testResources(), "eda-symbol.rnl")
-	files, _ := convert(convertInput{Top: "top", Dialect: "spectre", Drawing: drawing, Netlist: "// Library name: work\n// Cell name: top\n// View name: schematic\n", Package: pkg}, testResources())
+	files, _ := convert(convertInput{Top: "top", Dialect: "spectre", Drawing: drawing, Netlist: "// Library name: work\n// Cell name: top\n// View name: schematic\n"}, testResources())
 	if !strings.Contains(files["top.scs"], "subckt top A\n") || !strings.Contains(files["top.scs"], "ends top") {
 		t.Fatal(files)
 	}
@@ -91,7 +90,7 @@ func TestNoConnAtWireEndWithMultipleDevices(t *testing.T) {
    (figure wire (path (pointList (pt 0 0) (pt 10 0) (pt 20 0))))
    (figure wire (path (pointList (pt 10 0) (pt 10 -10)))))
   (net B (joined (portRef n (instanceRef R0)) (portRef n (instanceRef R1)))))))`)
-	files, _ := convert(convertInput{Top: "top", Dialect: "spectre", Drawing: drawing, Netlist: "R0 (A B) resistor r=1\nR1 (A B) resistor r=2\n", Package: resource(testResources(), "eda-symbol.rnl"), Orders: []orderEntry{{"work", "resistor", []string{"p", "n"}}}}, testResources())
+	files, _ := convert(convertInput{Top: "top", Dialect: "spectre", Drawing: drawing, Netlist: "R0 (A B) resistor r=1\nR1 (A B) resistor r=2\n", Orders: []orderEntry{{"work", "resistor", []string{"p", "n"}}}}, testResources())
 	if !strings.Contains(files["top.scs"], "@SET-SYMBOL $NO_CONNECT_SYMBOL") || !strings.Contains(files["top.scs"], "R1 (A B) resistor r=2") {
 		t.Fatal(files)
 	}

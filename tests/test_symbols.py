@@ -13,13 +13,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'tests/support'))
 from rnl_export import ExportError, edif, resources
 from rnl_export.symbols import package_pins
-from rnl_export.symbols import STANDARD
-from fixtures import drawing, netlist, spectre_netlist, primitive_drawing
+from fixtures import drawing, netlist, spectre_netlist, primitive_drawing, ports
 from go_backend import convert, symbol_definition, orientation_api as orientation
 
 PACKAGE = resources.read('eda-symbol.rnl')
 # Terminal names of the package symbols with named pins, in node order.
-TERMINALS = json.loads(resources.read('symbol-orientations.json'))['terminals']
+TERMINALS = json.loads(resources.read('eda-symbol.virtuoso.json'))['terminals']
 
 
 def node_pins(pins, symbol, count):
@@ -54,7 +53,7 @@ class SymbolTests(unittest.TestCase):
         source, _ = primitive_drawing('idc', [(0, 3), (0, -3)], 'R0')
         source = source.replace('X0', 'I0')
         native = '// Library name: work\n// Cell name: top\nI0 (N1 N2) isource dc=1u\n'
-        files, _ = convert(native, source, {('analogLib', 'idc'): ['P1', 'P2']}, PACKAGE, 'top', dialect='spectre')
+        files, _ = convert(native, source, {('analogLib', 'idc'): ['PLUS', 'MINUS']}, PACKAGE, 'top', dialect='spectre')
         level = self.dump(files)
         item = next(i for i in level['items'] if i['id'] == '#I0')
         self.assertEqual(level['symbols'][item['symbol']]['name'], '$CURRENT_SOURCE')
@@ -87,7 +86,7 @@ class SymbolTests(unittest.TestCase):
         rules = orientation.load_rules()
         self.assertEqual(len(rules), 18)
         self.assertTrue(set(rules).issubset(package_pins(PACKAGE)))
-        bad = json.loads(resources.read('symbol-orientations.json'))
+        bad = json.loads(resources.read('eda-symbol.virtuoso.json'))
         bad['symbols']['DIODE']['package_to_source'] = 'guessed-rotation'
         with self.assertRaisesRegex(ExportError, 'Invalid package orientation'):
             orientation.load_rules(json.dumps(bad))
@@ -101,7 +100,7 @@ class SymbolTests(unittest.TestCase):
                 with self.subTest(cell=cell, orientation=orient):
                     drawing_text, expected = primitive_drawing(cell, pins, orient)
                     native = '// Fixture\n// Library name: work\n// Cell name: top\nX0 ('+' '.join('N%d' % i for i in range(1, len(pins)+1))+') '+model+'\n'
-                    files, _ = convert(native, drawing_text, {('analogLib', cell): ['P%d' % i for i in range(1, len(pins)+1)]}, PACKAGE, 'top', dialect='spectre')
+                    files, _ = convert(native, drawing_text, {('analogLib', cell): ports(cell, len(pins))}, PACKAGE, 'top', dialect='spectre')
                     level = self.dump(files)
                     instance = next(i for i in level['items'] if i['id'] == '#X0')
                     view = level['symbols'][instance['symbol']]
@@ -126,8 +125,8 @@ class SymbolTests(unittest.TestCase):
             self.assertEqual(edif.transform(new[i], orient, xy), edif.transform(old[i], 'MY', (20, -10)))
         self.assertNotEqual(edif.transform(new[1], orient, xy), edif.transform(old[1], 'MY', (20, -10)))
         source, expected = primitive_drawing('test_tline', old, 'MY')
-        with patch.dict(STANDARD, {'test_tline': 'TRANSMISSION_LINE'}):
-            files, _ = convert('// Fixture\n// Library name: work\n// Cell name: top\nX0 (N1 N2 N3 N4) tline\n', source, {('analogLib', 'test_tline'): ['P1', 'P2', 'P3', 'P4']}, PACKAGE, 'top', dialect='spectre')
+        files, _ = convert('// Fixture\n// Library name: work\n// Cell name: top\nX0 (N1 N2 N3 N4) tline\n', source, {('analogLib', 'test_tline'): ['P1', 'P2', 'P3', 'P4']}, PACKAGE, 'top', dialect='spectre',
+                           extra_cells=[('analogLib', 'test_tline', 'TRANSMISSION_LINE')])
         self.dump(files)
         self.assertEqual(files['top.scs'].count('@WIRE('), 4)
         self.assertRegex(files['top.scs'], r'&"N2" @WIRE\(mode="straight"\) \{#"X0":2 ')
@@ -188,7 +187,7 @@ class SymbolTests(unittest.TestCase):
                 self.assertIn('rnl-virtuoso/bin/rnl-virtuoso', names)
                 self.assertEqual(bundle.getmember('rnl-virtuoso/bin/rnl-virtuoso').mode, 0o755)
                 self.assertFalse(any(name.endswith('.py') for name in names))
-                for name in ('eda-symbol.rnl', 'eda-style.rnl', 'symbol-orientations.json'):
+                for name in ('eda-symbol.rnl', 'eda-symbol.virtuoso.json', 'eda-style.rnl'):
                     self.assertIn('rnl-virtuoso/resources/'+name, names)
 
 

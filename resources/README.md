@@ -19,10 +19,20 @@ terminal names stay positional). Its SPICE instance-letter rules (`I*`, `V*`,
 etc.) are in a record with `language="spice"`: they act only on SPICE sections,
 never on Spectre instance names, so Spectre and CDL exports ship the same copy.
 
-`symbol-orientations.json` (schema 2) describes the 18 changed symbol interfaces
-under `symbols`, and under `terminals` the terminal names that each package
-symbol with named pins binds, in node order; the converter writes them as
-`@SET-SYMBOL(terminals=[…])`. Its
+`eda-symbol.virtuoso.json` is the mapping of the bundled symbol library: the
+exporter's configuration of which Virtuoso cells its symbols draw, kept beside the
+package because it is not RNL (RNL 0.4, 16.4). Every symbol library may have one,
+named `<package file without .rnl>.virtuoso.json`:
+
+- `schema` 1 and `package`, the name and version the package declares;
+- `cells`: `library`, `cell` and `symbol`, optionally with the cell's own
+  `terminals`, `package_to_source` and `align_pins`;
+- `terminals`: the terminal names that each symbol with named pins binds, in node
+  order; the converter writes them as `@SET-SYMBOL(terminals=[…])`;
+- `symbols`: the 18 changed symbol interfaces, with their compensation;
+- `ports`: the glyphs copied for input and output schematic pins.
+
+Its
 `package_to_source` is the compensation applied to the **new package's local
 coordinates** before the instance's Virtuoso/EDIF orientation. For example,
 `DIODE` uses `R270` and `VOLTAGE_CONTROLLED_SWITCH` uses `MYR90`. `R90` means

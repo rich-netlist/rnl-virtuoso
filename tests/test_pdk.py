@@ -11,12 +11,12 @@ class PDKTests(unittest.TestCase):
     def test_optional_cdf_terminals_require_complete_active_pin_coverage(self):
         source, _ = primitive_drawing('vsource', [(0, 3), (0, -3)], 'R0')
         native = '// Library name: work\n// Cell name: top\nX0 (N1 N2) vsource type=pwl wave=[0 0 1n 1]\n'
-        orders = {('analogLib', 'vsource'): ['P1', 'P2', 'MODP', 'MODN']}
+        orders = {('analogLib', 'vsource'): ['PLUS', 'MINUS', 'MODP', 'MODN']}
         files, report = convert(native, source, orders, resources.read('eda-symbol.rnl'), 'top', dialect='spectre')
         self.assertIn(native.splitlines()[-1], files['top.scs'])
         self.assertTrue(any('MODP, MODN' in note for note in report['notes']))
         test_symbols.SymbolTests().dump(files)
-        for metadata, text in [(['P1', 'MODP'], native), (orders['analogLib', 'vsource'], native.replace('(N1 N2)', '(N1 N2 EXTRA)'))]:
+        for metadata, text in [(['PLUS', 'MODP'], native), (orders['analogLib', 'vsource'], native.replace('(N1 N2)', '(N1 N2 EXTRA)'))]:
             with self.assertRaisesRegex(ExportError, 'interface differ|node count differs'):
                 convert(text, source, {('analogLib', 'vsource'): metadata}, resources.read('eda-symbol.rnl'), 'top', dialect='spectre')
 
@@ -35,7 +35,7 @@ class PDKTests(unittest.TestCase):
         drawing, _ = primitive_drawing('res', [(0, 3), (0, -3)], 'R0')
         drawing = drawing.replace('(cell top ', '(cell &_experiment ').replace('X0', '&_R0')
         native = '// Library name: work\n// Cell name: _experiment\n_R0 (N1 N2) resistor r=1k\n'
-        files, report = convert(native, drawing, {('analogLib', 'res'): ['P1', 'P2']}, resources.read('eda-symbol.rnl'), '_experiment', dialect='spectre')
+        files, report = convert(native, drawing, {('analogLib', 'res'): ['PLUS', 'MINUS']}, resources.read('eda-symbol.rnl'), '_experiment', dialect='spectre')
         self.assertEqual(report['entry'], '_experiment.scs')
         self.assertIn('#"_R0"', files['_experiment.scs'])
         self.assertNotIn('#"&_R0"', files['_experiment.scs'])

@@ -74,7 +74,7 @@ func TestSelectionBoxRootSymbolAndLibraryCapture(t *testing.T) {
 	for _, enabled := range []bool{true, false} {
 		capture := &libraryCapture{Library: "work", Cell: "top", Dialect: "spectre"}
 		files, report := convert(convertInput{Top: "top", Dialect: "spectre", Drawing: drawing, RootSymbol: &symbol,
-			Netlist: "// Library name: work\n// Cell name: top\n", Package: resource(testResources(), "eda-symbol.rnl"),
+			Netlist:            "// Library name: work\n// Cell name: top\n",
 			ExportSelectionBox: &enabled, SelectionBoxes: snapshot, Capture: capture, ExportSymbols: true}, testResources())
 		if report["export_selection_box"] != enabled || capture.ExportSelectionBox == nil || *capture.ExportSelectionBox != enabled {
 			t.Fatal(report, capture)

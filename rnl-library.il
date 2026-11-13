@@ -61,12 +61,12 @@ procedure(rnlCIWExportCallback(form)
       if(form->exportScope->value == "Library" then
         rnlStartLibraryExport(form->sourceLibrary->value form->outputDirectory->value
           form->includeHierarchy->value form->fileMode->value == "Separate files"
-          form->drawingScale->value format form->includeExternal->value t form->schematicViews->value form->symbolViews->value form->exportSelectionBox->value form->autoCheckSave->value form->exportSymbols->value)
+          form->drawingScale->value format form->includeExternal->value t form->schematicViews->value form->symbolViews->value form->exportSelectionBox->value form->autoCheckSave->value form->exportSymbols->value form->symbolLibraries->value)
       else
         rnlStartExport(form->sourceLibrary->value form->sourceCell->value nil
           form->outputDirectory->value form->includeHierarchy->value
           form->fileMode->value == "Separate files" form->drawingScale->value format
-          if(form->includeExternal->value then "" else form->sourceLibrary->value) nil t form->schematicViews->value form->symbolViews->value form->exportSelectionBox->value form->autoCheckSave->value form->exportSymbols->value)) t)
+          if(form->includeExternal->value then "" else form->sourceLibrary->value) nil t form->schematicViews->value form->symbolViews->value form->exportSelectionBox->value form->autoCheckSave->value form->exportSymbols->value form->symbolLibraries->value)) t)
     hiSetCallbackStatus(form if(result then t else nil))
     unless(result rnlNotice("Export could not start. See the CIW error message."))
   )
@@ -76,8 +76,8 @@ procedure(rnlShowCIWExport()
   let((libraries cv)
     libraries = sort(ddGetLibList()~>name 'alphalessp)
     unless(libraries error("No libraries are available.\n"))
-    unless(rnlCIWExportForm && rnlCIWExportForm->exportSymbols
-      rnlCIWExportForm = hiCreateAppForm(?name 'rnlCIWExportFormV094 ?formTitle "Export RNL"
+    unless(rnlCIWExportForm && rnlCIWExportForm->symbolLibraries
+      rnlCIWExportForm = hiCreateAppForm(?name 'rnlCIWExportFormV0100 ?formTitle "Export RNL"
         ?callback 'rnlCIWExportCallback ?buttonLayout 'OKCancel ?unmapAfterCB t ?dontBlock t
         ?fields list(
           hiCreateCyclicField(?name 'exportScope ?prompt "Export" ?choices list("Cell" "Library")
@@ -89,6 +89,7 @@ procedure(rnlShowCIWExport()
           hiCreateStringField(?name 'schematicViews ?prompt "Schematic views (highest priority first)" ?value "schematic"
             ?callback "rnlCIWLibraryChanged(hiGetCurrentForm())")
           hiCreateStringField(?name 'symbolViews ?prompt "Symbol views (highest priority first)" ?value "symbol")
+          hiCreateStringField(?name 'symbolLibraries ?prompt "Symbol libraries (.rnl paths, highest priority first; empty: eda-symbol)" ?value "")
           hiCreateBooleanButton(?name 'autoCheckSave ?buttonText "Automatically Check & Save stale schematics" ?value t)
           hiCreateBooleanButton(?name 'exportSelectionBox ?buttonText "Export selection box" ?value t)
           hiCreateBooleanButton(?name 'exportSymbols ?buttonText "Export symbols.rnl separately" ?value nil)
@@ -113,7 +114,7 @@ procedure(rnlShowCIWExport()
   )
 )
 
-procedure(rnlStartLibraryExport(lib destination hierarchy split scale @optional (format "spectre") (external nil) (notify t) (schematicViews "schematic") (symbolViews "symbol") (exportSelectionBox t) (autoCheckSave t) (exportSymbols nil))
+procedure(rnlStartLibraryExport(lib destination hierarchy split scale @optional (format "spectre") (external nil) (notify t) (schematicViews "schematic") (symbolViews "symbol") (exportSelectionBox t) (autoCheckSave t) (exportSymbols nil) (symbolLibraries nil))
   let((library tasks skipped work schematicList symbolList selected)
     when(rnlActiveJob || rnlActiveBatch error("An RNL export is already running.\n"))
     library = ddGetObj(lib)
@@ -125,6 +126,7 @@ procedure(rnlStartLibraryExport(lib destination hierarchy split scale @optional 
     unless(hierarchy error("Library export includes all of its cells; use the external-cell option to control foreign definitions.\n"))
     schematicList = rnlViewList(schematicViews "schematicViews")
     symbolList = rnlViewList(symbolViews "symbolViews")
+    symbolLibraries = rnlSymbolLibraryList(symbolLibraries)
     foreach(cell library->cells
       cond(
         ((selected = rnlFindView(lib cell->name schematicList)) tasks = cons(list(cell->name selected "schematic") tasks))
@@ -135,7 +137,7 @@ procedure(rnlStartLibraryExport(lib destination hierarchy split scale @optional 
     work = rnlCreateOutputWork(destination)
     rnlActiveBatch = list(nil 'library lib 'destination destination 'notify notify
       'hierarchy hierarchy 'split t 'scale scale 'format format 'external external
-      'schematicViews schematicViews 'symbolViews symbolViews 'exportSelectionBox exportSelectionBox 'autoCheckSave autoCheckSave 'exportSymbols exportSymbols 'tasks tasks 'parts nil 'failures nil 'skipped skipped 'directory work 'phase "cells" 'count 0 'total length(tasks))
+      'schematicViews schematicViews 'symbolViews symbolViews 'exportSelectionBox exportSelectionBox 'autoCheckSave autoCheckSave 'exportSymbols exportSymbols 'symbolLibraries symbolLibraries 'tasks tasks 'parts nil 'failures nil 'skipped skipped 'directory work 'phase "cells" 'count 0 'total length(tasks))
     rnlLastBatch = rnlActiveBatch
     printf("RNL: library %s: %d cells; work: %s\n" lib length(tasks) work)
     rnlBatchNext()
@@ -198,7 +200,7 @@ procedure(rnlBatchNext()
         if(caddr(task) == "schematic" then
           destination = strcat(batch->directory "/cell_" sprintf(nil "%d" batch->count))
           rnlStartExport(batch->library car(task) cadr(task) destination batch->hierarchy t
-            batch->scale batch->format if(batch->external then "" else batch->library) t t batch->schematicViews batch->symbolViews batch->exportSelectionBox batch->autoCheckSave)
+            batch->scale batch->format if(batch->external then "" else batch->library) t t batch->schematicViews batch->symbolViews batch->exportSelectionBox batch->autoCheckSave nil batch->symbolLibraries)
         else rnlStartSymbolJob(batch->library car(task) batch->scale batch->format cadr(task) batch->schematicViews batch->symbolViews batch->exportSelectionBox)) t)
       batch->starting = nil
       unless(result

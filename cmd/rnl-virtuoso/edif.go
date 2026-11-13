@@ -375,20 +375,20 @@ type cell struct {
 	Pins                  map[string]point
 	// Every connection location of each port group, in the order of the
 	// symbol's portImplementations: a terminal may be drawn at several pins.
-	PinSets               map[string][]point
-	Symbol                node
-	Instances             []*instance
-	Nets, Routes          []*net
-	Directions            map[string]string
-	PortPlacements        []portPlacement
-	Annotations           []node
-	Ripper                bool
-	RipperJoins           [][]string
-	Parameters            []string
-	ExportSymbol          *cell
-	SelectionBox          *[4]float64
-	GeometryBox           bool
-	MissingSelectionBox   bool
+	PinSets             map[string][]point
+	Symbol              node
+	Instances           []*instance
+	Nets, Routes        []*net
+	Directions          map[string]string
+	PortPlacements      []portPlacement
+	Annotations         []node
+	Ripper              bool
+	RipperJoins         [][]string
+	Parameters          []string
+	ExportSymbol        *cell
+	SelectionBox        *[4]float64
+	GeometryBox         bool
+	MissingSelectionBox bool
 }
 
 func newCell(lib, n, id string) *cell {

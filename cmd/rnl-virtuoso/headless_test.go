@@ -55,6 +55,13 @@ func TestHeadlessDriverEscapesInputAndStatus(t *testing.T) {
 	if strings.Contains(text, "hiRegTimer") || !strings.Contains(text, "?wait t)") {
 		t.Fatal("driver should use blocking API")
 	}
+	if strings.Contains(text, "?symbolLibraries") {
+		t.Fatal("the default symbol libraries need no keyword")
+	}
+	o.SymbolLibraries = cshFiles{"/libs/pdk.rnl", "/libs/a \"b\".rnl"}
+	if libraries := headlessDriver(o); !strings.Contains(libraries, `?symbolLibraries list("/libs/pdk.rnl" `+skillString(`/libs/a "b".rnl`)+`) ?wait t)`) {
+		t.Fatal("symbol libraries not passed in order:\n", libraries)
+	}
 	// Parse the driver with the SKILL string lexer to prove quoted user data remains one token.
 	n := parse("("+text+")", true)
 	var count int

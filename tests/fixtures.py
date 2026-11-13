@@ -67,9 +67,22 @@ def marker_drawing(stub=True):
             '(library work (cell top (view schematic (interface) (contents %s)))))') % (resistor, marker('gnd'), marker('noConn'), content)
 
 
+# Terminal names of analogLib cells as their CDF termOrder gives them (read from
+# IC618's analogLib); symbol libraries map cells by these names.
+CDF_TERMINALS = {'res': ['PLUS', 'MINUS'], 'vsource': ['PLUS', 'MINUS'], 'idc': ['PLUS', 'MINUS'],
+                 'diode': ['PLUS', 'MINUS'], 'switch': ['N+', 'N-', 'NC+', 'NC-']}
+
+
+def ports(cell, count):
+    """The terminal names of an analogLib cell, else P1, P2, ..."""
+    names = CDF_TERMINALS.get(cell)
+    return list(names) if names and len(names) == count else ['P%d' % i for i in range(1, count + 1)]
+
+
 def primitive_drawing(cell, pins, orientation):
     """Original pin-only master and wire stubs, in units ten times RNL's."""
-    interface = ' '.join('(port P%d)' % i for i in range(1, len(pins)+1))
+    names = ports(cell, len(pins))
+    interface = ' '.join('(port (rename P%d "%s"))' % (i, name) for i, name in enumerate(names, 1))
     pin_impl = ' '.join('(portImplementation P%d (connectLocation (figure pin (dot (pt %g %g)))))' % (i, x*10, y*10) for i, (x, y) in enumerate(pins, 1))
     # Transform stub coordinates independently using integer fixture matrices.
     matrices = {'R0': (1, 0, 0, 1), 'R90': (0, -1, 1, 0), 'R180': (-1, 0, 0, -1), 'R270': (0, 1, -1, 0),

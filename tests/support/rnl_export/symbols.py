@@ -1,15 +1,5 @@
-"""Test support: the standard symbol table sent to the Go backend, and a reader of package pins."""
+"""Test support: a reader of package pins."""
 import re
-
-
-STANDARD = {
-    "res": "RESISTOR", "cap": "CAPACITOR", "ind": "INDUCTOR",
-    "vdc": "VOLTAGE_SOURCE", "vsource": "VOLTAGE_SOURCE", "vsin": "VSIN", "vpulse": "VPULSE",
-    "idc": "CURRENT_SOURCE", "isource": "CURRENT_SOURCE", "isin": "ISIN", "ipulse": "IPULSE",
-    "vcvs": "VCVS_4TERM", "vccs": "VCCS_4TERM", "switch": "VOLTAGE_CONTROLLED_SWITCH",
-    "nmos": "NMOS", "nmos4": "NMOS_4TERM", "pmos": "PMOS", "pmos4": "PMOS_4TERM",
-    "npn": "NPN", "pnp": "PNP", "diode": "DIODE",
-}
 
 
 def package_pins(text):

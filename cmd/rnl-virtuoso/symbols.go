@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -37,10 +38,8 @@ func literal(s string) string {
 	return b.String()
 }
 
-var standard = map[string]string{"res": "RESISTOR", "cap": "CAPACITOR", "ind": "INDUCTOR", "vdc": "VOLTAGE_SOURCE", "vsource": "VOLTAGE_SOURCE", "vsin": "VSIN", "vpulse": "VPULSE", "idc": "CURRENT_SOURCE", "isource": "CURRENT_SOURCE", "isin": "ISIN", "ipulse": "IPULSE", "vcvs": "VCVS_4TERM", "vccs": "VCCS_4TERM", "switch": "VOLTAGE_CONTROLLED_SWITCH", "nmos": "NMOS", "nmos4": "NMOS_4TERM", "pmos": "PMOS", "pmos4": "PMOS_4TERM", "npn": "NPN", "pnp": "PNP", "diode": "DIODE"}
-
 func packagePins(text string) map[string]map[string]point {
-	starts := rx(`\$([A-Z][A-Z_0-9]*)\s*=\s*@DEFINE-SYMBOL\b`).FindAllStringSubmatchIndex(text, -1)
+	starts := rx(`\$([A-Za-z_][A-Za-z_0-9]*|"(?:[^"]|"")*")\s*=\s*@DEFINE-SYMBOL\b`).FindAllStringSubmatchIndex(text, -1)
 	out := map[string]map[string]point{}
 	pattern := rx(`\(\s*([-+\d.]+)\s*,\s*([-+\d.]+)\s*\)\s*@PIN\(terminal\s*=\s*(\d+|"[^"]+")`)
 	for i, m := range starts {
@@ -60,7 +59,7 @@ func packagePins(text string) map[string]map[string]point {
 // Directional ports have no separate symbol in the standard series. Copy the two
 // self-contained EDA glyphs locally so removing eda-symbol later is still valid.
 func packageSymbolDefinition(text, name, id string) string {
-	m := rx(`\$` + name + `\s*=\s*(@DEFINE-SYMBOL\b)`).FindStringSubmatchIndex(text)
+	m := rx(`\$` + regexp.QuoteMeta(name) + `\s*=\s*(@DEFINE-SYMBOL\b)`).FindStringSubmatchIndex(text)
 	if m == nil {
 		fail("Missing port symbol %s in the EDA package", name)
 	}
@@ -135,6 +134,7 @@ func textStatement(value string, display node, scale float64, owner, key string,
 	}
 	return pt(at) + " @TEXT(" + strings.Join(params, ", ") + ")"
 }
+
 // The name of the n-th pin of a port group drawn at several pins.
 func multiPinName(group, n int) string { return "pin_" + strconvI(group+1) + "_" + strconvI(n+1) }
 
@@ -360,7 +360,7 @@ func loadRules(text string) map[string]orientationRule {
 	if e := json.Unmarshal([]byte(text), &data); e != nil {
 		fail("Unsupported symbol orientation configuration: %s", e)
 	}
-	if data.Schema != 2 || len(data.Package) != 2 || data.Package["name"] != "eda-symbol" || data.Package["version"] != "0.2" {
+	if data.Schema != 1 || len(data.Package) != 2 || data.Package["name"] == "" || data.Package["version"] == "" {
 		fail("Unsupported symbol orientation configuration")
 	}
 	if data.Symbols == nil {
@@ -391,27 +391,6 @@ func loadRules(text string) map[string]orientationRule {
 	}
 	return out
 }
-// loadTerminals reads, for each package symbol with named pins, the terminal
-// names it binds in node order. SET-SYMBOL writes them as terminals= (11.3).
-func loadTerminals(text string) map[string][]string {
-	var data struct {
-		Terminals map[string][]string `json:"terminals"`
-	}
-	if e := json.Unmarshal([]byte(text), &data); e != nil {
-		fail("Unsupported symbol orientation configuration: %s", e)
-	}
-	for name, names := range data.Terminals {
-		seen := stringSet{}
-		for _, n := range names {
-			if n == "" || seen[strings.ToLower(n)] || strings.Trim(n, "0123456789") == "" {
-				fail("Invalid terminal names for %s", name)
-			}
-			seen[strings.ToLower(n)] = true
-		}
-	}
-	return data.Terminals
-}
-
 func compose(outer, inner string) string {
 	x := transform(transform(point{1, 0}, inner, point{}), outer, point{})
 	y := transform(transform(point{0, 1}, inner, point{}), outer, point{})

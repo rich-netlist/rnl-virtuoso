@@ -174,6 +174,18 @@ func runJob(request, resourceDir string) map[string]any {
 			return runSymbolJob(request, fields)
 		}
 	}
+	// v8 adds the symbol libraries: package paths, highest priority first; an
+	// empty list means the bundled default.
+	var symbolLibraries []libraryInput
+	if len(fields) == 22 && fields[0].atom == "rnl-export-job-v8" {
+		for _, path := range fields[21].list {
+			if strings.TrimSpace(path.atom) != "" {
+				symbolLibraries = append(symbolLibraries, libraryInput{Path: path.atom})
+			}
+		}
+		fields = fields[:21]
+		fields[0] = atom("rnl-export-job-v7")
+	}
 	exportSymbols := false
 	if len(fields) == 21 && fields[0].atom == "rnl-export-job-v7" {
 		exportSymbols = requestBoolean(fields[20])
@@ -238,7 +250,7 @@ func runJob(request, resourceDir string) map[string]any {
 		fail("%s", e)
 	}
 	validateExportWorkspace(output, work)
-	packageText, style := resource(resourceDir, "eda-symbol.rnl"), resource(resourceDir, "eda-style.rnl")
+	style := resource(resourceDir, "eda-style.rnl")
 	env := nativeEnvironment(working)
 	bins := filepath.Join(cadence, "bin")
 	if !isFile(filepath.Join(bins, "si")) {
@@ -328,7 +340,7 @@ func runJob(request, resourceDir string) map[string]any {
 	if capture {
 		parts = &libraryCapture{Library: library, Cell: cellName, Dialect: dialect}
 	}
-	files, report := convert(convertInput{Netlist: electrical, Drawing: drawing, Orders: orders, Package: packageText, Top: cellName, Hierarchy: &hierarchy, Split: split, Scale: &scale, Dialect: dialect, NameMaps: maps, RootSymbol: rootSymbol, BehaviorModels: models, StylePackage: &style, LibraryScope: scope, Capture: parts, Annotations: annotations, SymbolDrawings: symbolDrawings, ExportSelectionBox: &exportSelectionBox, SelectionBoxes: boxSnapshot, ExportSymbols: exportSymbols}, resourceDir)
+	files, report := convert(convertInput{Netlist: electrical, Drawing: drawing, Orders: orders, SymbolLibraries: symbolLibraries, Top: cellName, Hierarchy: &hierarchy, Split: split, Scale: &scale, Dialect: dialect, NameMaps: maps, RootSymbol: rootSymbol, BehaviorModels: models, StylePackage: &style, LibraryScope: scope, Capture: parts, Annotations: annotations, SymbolDrawings: symbolDrawings, ExportSelectionBox: &exportSelectionBox, SelectionBoxes: boxSnapshot, ExportSymbols: exportSymbols}, resourceDir)
 	report["schematic_views"], report["symbol_views"] = schematicViews, symbolViews
 	if parts != nil {
 		parts.Notes = report["notes"].([]string)
