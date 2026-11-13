@@ -71,3 +71,22 @@ func TestInvisibleDisplayBecomesHiddenText(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+// A PDK expansion group is wired at one pin of each terminal: in its symbol
+// only that pin takes the group's pin name, so no name is defined twice.
+func TestExpansionGroupNamesOnePinOfATerminalDrawnTwice(t *testing.T) {
+	cells, _ := readEDIF(blockDrawing)
+	c := cells[cellKey{"work", "blk"}]
+	terminals, names := map[string]string{}, map[string]string{}
+	for i, p := range c.PortOrder {
+		terminals[p] = quote("p" + strconvI(i+1))
+		names[p] = expandedPin(i)
+	}
+	notes := []string{}
+	text := symbolDefinitionNamed(c, "%s", terminals, names, 10, &notes)
+	vdd := names[c.Groups["vdd"][0]]
+	if strings.Count(text, "%"+vdd+" = ") != 1 || !strings.Contains(text, "%"+vdd+` = (0, -2) @PIN(terminal="p3")`) ||
+		!strings.Contains(text, `(0, 2) @PIN(terminal="p3")`) {
+		t.Fatal(text)
+	}
+}

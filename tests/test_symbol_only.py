@@ -44,12 +44,14 @@ class SymbolOnlyTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, entry+'\n'+result.stdout+result.stderr)
                 self.assertTrue(clean_check(result.stdout+result.stderr), entry+'\n'+result.stdout+result.stderr)
 
-    def calling(self, dialect, captures, callee='OnlySymbol'):
-        """The portless bench of the fixtures, with an instance of callee."""
+    def calling(self, dialect, captures, callee='OnlySymbol', master=('work', 'OnlySymbol')):
+        """The portless bench of the fixtures, with an instance of callee that
+        draws the cell master."""
         captures = copy.deepcopy(captures)
         bench = next(c for c in captures if c.get('Cell') == 'bench')
         bench['Template'] += 'I9 (A 0) %s\n' % callee if dialect == 'spectre' else 'XI9 A 0 %s\n' % callee
         bench['Calls'] = sorted(set(bench.get('Calls') or []) | {callee})
+        bench['Masters'] = (bench.get('Masters') or []) + [dict(Library=master[0], Cell=master[1])]
         return captures
 
     def test_cell_exports_write_no_separate_symbol_package(self):
@@ -106,6 +108,17 @@ class SymbolOnlyTests(unittest.TestCase):
                 self.assertNotIn(name, result['files']['bench.'+EXTENSION[dialect]])
                 self.assertEqual(result['report']['symbol_only_files'],
                                  [dict(library='work', cell='OnlySymbol', file=None, defined_by_view=stopped[-1]['StopView'])])
+
+    def test_a_model_of_the_same_name_does_not_include_the_empty_subcircuit(self):
+        # A device of another library netlisted as OnlySymbol: a model or
+        # primitive of that name, which the empty subcircuit must not shadow.
+        for dialect in ('spectre', 'cdl'):
+            with self.subTest(dialect=dialect):
+                name = 'OnlySymbol.'+EXTENSION[dialect]
+                captures = self.calling(dialect, self.helper.fixtures(dialect), master=('pdk', 'OnlySymbol'))
+                files = call(op='library', library='work', dialect=dialect, captures=captures)['files']
+                self.assertIn(name, files)
+                self.assertNotIn(name, files['bench.'+EXTENSION[dialect]])
 
     def test_cdf_terminal_order_orders_the_subcircuit_ports(self):
         for order, header in ((['MINUS', 'PLUS'], 'subckt only MINUS PLUS'), (['MINUS', 'X'], 'subckt only PLUS MINUS')):

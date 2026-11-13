@@ -15,6 +15,8 @@ type libraryDefinition struct {
 	Root                      bool
 	Calls                     []string
 	SourcePorts               []string `json:",omitempty"`
+	// Masters are the cells of the definition's instances.
+	Masters []cellKey `json:",omitempty"`
 }
 type librarySymbol struct{ Library, Cell, Definition string }
 type libraryCapture struct {
@@ -25,8 +27,10 @@ type libraryCapture struct {
 	ModelReferences                         []string
 	ExportSelectionBox                      *bool          `json:",omitempty"`
 	SymbolLibraries                         []libraryInput `json:",omitempty"`
-	// Calls are the subcircuits that the top of a portless entry calls.
-	Calls []string `json:",omitempty"`
+	// Calls are the subcircuits that the top of a portless entry calls, and
+	// Masters the cells of its instances.
+	Calls   []string  `json:",omitempty"`
+	Masters []cellKey `json:",omitempty"`
 	// A symbol-only cell: the view the netlister stops at, if any, and the
 	// terminal order and fixed model name of its CDF.
 	StopView  string   `json:",omitempty"`
@@ -54,7 +58,7 @@ func captureConversion(out *libraryCapture, keys []string, selected stringSet, b
 			for _, p := range b.Ports {
 				ports = append(ports, c.Ports[portID(c, p, out.Dialect, maps[b.Name]["net"])])
 			}
-			out.Definitions = append(out.Definitions, libraryDefinition{Library: c.Library, Cell: c.Name, Name: b.Name, Body: rendered[key], Root: key == topkey, Calls: blockCalls(b, out.Dialect), SourcePorts: ports})
+			out.Definitions = append(out.Definitions, libraryDefinition{Library: c.Library, Cell: c.Name, Name: b.Name, Body: rendered[key], Root: key == topkey, Calls: blockCalls(b, out.Dialect), SourcePorts: ports, Masters: instanceMasters(c)})
 		}
 		symbols[cellKey{c.Library, c.Name}] = c
 		for _, ins := range c.Instances {
@@ -63,6 +67,7 @@ func captureConversion(out *libraryCapture, keys []string, selected stringSet, b
 	}
 	if b := blocks[topkey]; b != nil && !rootSub {
 		out.Calls = blockCalls(b, out.Dialect)
+		out.Masters = instanceMasters(source[topkey])
 	}
 	if exported != nil {
 		symbols[cellKey{exported.Library, exported.Name}] = exported
@@ -82,6 +87,34 @@ func captureConversion(out *libraryCapture, keys []string, selected stringSet, b
 	for _, key := range names {
 		out.Symbols = append(out.Symbols, publicSymbol(symbols[key], scale, notes))
 	}
+}
+
+// instanceMasters are the cells that the instances of a cell draw, sorted.
+func instanceMasters(c *cell) []cellKey {
+	seen, out := map[cellKey]bool{}, []cellKey{}
+	for _, ins := range c.Instances {
+		if !seen[ins.Master] {
+			seen[ins.Master] = true
+			out = append(out, ins.Master)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Library+"\x00"+out[i].Cell < out[j].Library+"\x00"+out[j].Cell
+	})
+	return out
+}
+
+// callsEmpty tells whether a call of a block reaches the empty subcircuit of a
+// symbol-only cell: the name matches and an instance of the block draws that
+// very cell. A model, primitive or subcircuit of another library that has the
+// same name is not shadowed by the empty one.
+func callsEmpty(masters []cellKey, cell cellKey) bool {
+	for _, m := range masters {
+		if m.Library == cell.Library && strings.EqualFold(m.Cell, cell.Cell) {
+			return true
+		}
+	}
+	return false
 }
 
 var signatureTokens = rx(`"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|(?:\\.|[^\s"'\\])+`)
@@ -419,7 +452,7 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split bool
 	}
 	// Mode subcircuit: an empty subcircuit for each symbol-only cell that no
 	// view of the netlister defines, and that no definition shares the name of.
-	empty := map[string]string{}
+	empty, emptyCells := map[string]string{}, map[string]cellKey{}
 	symbolOnlyFiles := []map[string]any{}
 	if mode.Kind == "subcircuit" {
 		for _, part := range only {
@@ -438,6 +471,7 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split bool
 			filename := register(source)
 			files[filename] = carrier + " RNL cell " + source.Library + "/" + source.Cell + "\n" + cellHeader(carrier, filename, libraries) + emptySubcircuit(symbol, cellPorts(part, symbol), dialect, carrier)
 			empty[normalize(source.Cell, dialect)] = filename
+			emptyCells[normalize(source.Cell, dialect)] = source
 			entry["file"], entry["subcircuit"] = filename, source.Cell
 			symbolOnlyFiles = append(symbolOnlyFiles, entry)
 		}
@@ -457,7 +491,7 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split bool
 		for _, call := range definitionCalls(def, dialect) {
 			if child, ok := definitions[normalize(call, dialect)]; ok {
 				dependencies[source][register(cellKey{child.Library, child.Cell})] = true
-			} else if filename, ok := empty[normalize(call, dialect)]; ok {
+			} else if filename, ok := empty[normalize(call, dialect)]; ok && callsEmpty(def.Masters, emptyCells[normalize(call, dialect)]) {
 				dependencies[source][filename] = true
 			}
 		}
@@ -492,7 +526,7 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split bool
 				required[paths[cellKey{def.Library, def.Cell}]] = true
 			}
 			for _, call := range part.Calls {
-				if _, ok := definitions[normalize(call, dialect)]; !ok && empty[normalize(call, dialect)] != "" {
+				if _, ok := definitions[normalize(call, dialect)]; !ok && empty[normalize(call, dialect)] != "" && callsEmpty(part.Masters, emptyCells[normalize(call, dialect)]) {
 					required[empty[normalize(call, dialect)]] = true
 				}
 			}

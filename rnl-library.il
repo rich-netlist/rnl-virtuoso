@@ -129,6 +129,15 @@ procedure(rnlShowCIWExport()
 procedure(rnlStartLibraryExport(lib destination hierarchy split scale @optional (format "spectre") (external nil) (notify t) (schematicViews "schematic") (symbolViews "symbol") (exportSelectionBox t) (autoCheckSave t) (symbolLibraries nil) (symbolOnlyCells "subcircuit") (symbolPackageName ""))
   let((library tasks skipped work schematicList symbolList selected)
     when(rnlActiveJob || rnlActiveBatch error("An RNL export is already running.\n"))
+    ; Check the arguments before the library, so that a bad one is reported
+    ; whatever library is named.
+    unless(member(symbolOnlyCells list("subcircuit" "package"))
+      error("symbolOnlyCells must be \"subcircuit\" or \"package\".\n"))
+    unless(symbolPackageName symbolPackageName = "")
+    unless(stringp(symbolPackageName) && (symbolPackageName == "" || rexMatchp("^[a-z0-9][a-z0-9-]*$" symbolPackageName))
+      error("symbolPackageName must use lower-case letters, digits and -.\n"))
+    when(symbolPackageName != "" && symbolOnlyCells != "package"
+      error("symbolPackageName requires symbolOnlyCells \"package\".\n"))
     library = ddGetObj(lib)
     unless(library error("Library %s was not found.\n" lib))
     unless(destination && destination != "" && scale && scale > 0
@@ -139,13 +148,6 @@ procedure(rnlStartLibraryExport(lib destination hierarchy split scale @optional 
     schematicList = rnlViewList(schematicViews "schematicViews")
     symbolList = rnlViewList(symbolViews "symbolViews")
     symbolLibraries = rnlSymbolLibraryList(symbolLibraries)
-    unless(member(symbolOnlyCells list("subcircuit" "package"))
-      error("symbolOnlyCells must be \"subcircuit\" or \"package\".\n"))
-    unless(symbolPackageName symbolPackageName = "")
-    unless(stringp(symbolPackageName) && (symbolPackageName == "" || rexMatchp("^[a-z0-9][a-z0-9-]*$" symbolPackageName))
-      error("symbolPackageName must use lower-case letters, digits and -.\n"))
-    when(symbolPackageName != "" && symbolOnlyCells != "package"
-      error("symbolPackageName requires symbolOnlyCells \"package\".\n"))
     foreach(cell library->cells
       cond(
         ((selected = rnlFindView(lib cell->name schematicList)) tasks = cons(list(cell->name selected "schematic") tasks))

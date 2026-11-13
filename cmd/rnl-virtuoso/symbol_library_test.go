@@ -129,3 +129,48 @@ func TestMappingMustMatchItsPackage(t *testing.T) {
 		loadSymbolLibrary(libraryInput{File: "parts.rnl", Text: text, Mapping: `{"schema": 1, "package": {"name": "parts", "version": "1.0"}, "cells": [{"library": "l", "cell": "c", "symbol": "MISSING"}]}`})
 	})
 }
+
+// Pins that the package names 1, 2 and 3, and a mapping whose pairs leave the
+// first node of an instance unpaired: the instance keeps its EDIF symbol
+// instead of binding the pins by position.
+func TestAnUnpairedNodeKeepsTheEDIFSymbol(t *testing.T) {
+	pkg := `@RNL(type="header") { @VERSION("0.4"); @PACKAGE(name="p", version="1") }
+@RNL {
+  $R3 = @DEFINE-SYMBOL {
+    (0, 3) @PIN(terminal=1);
+    (0, -3) @PIN(terminal=2);
+    (3, 0) @PIN(terminal=3)
+  }
+}`
+	mapping := `{"schema": 1, "package": {"name": "p", "version": "1"}, "cells": [{"library": "L", "cell": "c", "symbol": "R3", "pins": [["PLUS", "1"], ["MINUS", "2"], ["B", "3"]]}]}`
+	lib := loadSymbolLibrary(libraryInput{File: "p.rnl", Text: pkg, Mapping: mapping})
+	c := lib.match(cellKey{"L", "c"}, "R0", "m", "spectre", []string{"SUB", "PLUS", "MINUS"})
+	if !reflect.DeepEqual(c.Terminals, []string{"", "1", "2"}) {
+		t.Fatalf("%#v", c.Terminals)
+	}
+	// The leaf's first node, PLUS, has no pair.
+	text, report := convertLeaf(t, "L", "c", "m", []libraryInput{{File: "p.rnl", Text: pkg,
+		Mapping: `{"schema": 1, "package": {"name": "p", "version": "1"}, "cells": [{"library": "L", "cell": "c", "symbol": "R3", "pins": [["MINUS", "2"], ["B", "3"]]}]}`}})
+	if strings.Contains(text, "$R3") || !strings.Contains(text, `#"R0" @SET-SYMBOL %symbol_0`) {
+		t.Fatal(text)
+	}
+	if !reflect.DeepEqual(report["unmapped_cells"], []string{"L/c"}) {
+		t.Fatal(report["unmapped_cells"])
+	}
+}
+
+func TestMappingChecksAlignmentPinsAndPortGlyphs(t *testing.T) {
+	text := sprintf(twoPinPackage, "parts", "PART", "PART")
+	mapping := func(extra string) string {
+		return `{"schema": 1, "package": {"name": "parts", "version": "1.0"}, ` + extra + `}`
+	}
+	rejects(t, "Invalid alignment pins", func() {
+		loadSymbolLibrary(libraryInput{File: "parts.rnl", Text: text, Mapping: mapping(`"cells": [{"library": "l", "cell": "c", "symbol": "PART", "align_pins": [0]}]`)})
+	})
+	// Port wires end at %port_N::pin; $PART names its pins p and n.
+	rejects(t, "no pin named pin", func() {
+		loadSymbolLibrary(libraryInput{File: "parts.rnl", Text: text, Mapping: mapping(`"cells": [], "ports": {"input": "PART"}`)})
+	})
+	glyph := strings.Replace(text, "%p = (0, 3)", "%pin = (0, 3)", 1)
+	loadSymbolLibrary(libraryInput{File: "parts.rnl", Text: glyph, Mapping: mapping(`"cells": [], "ports": {"input": "PART"}`)})
+}

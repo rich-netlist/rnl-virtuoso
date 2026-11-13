@@ -30,7 +30,8 @@ named `<package file without .rnl>.virtuoso.json`:
 - `terminals`: the terminal names that each symbol with named pins binds, in node
   order; the converter writes them as `@SET-SYMBOL(terminals=[…])`;
 - `symbols`: the 18 changed symbol interfaces, with their compensation;
-- `ports`: the glyphs copied for input and output schematic pins.
+- `ports`: the glyphs copied for input and output schematic pins; each names
+  its pin `%pin`, where the port's wires end.
 
 Its
 `package_to_source` is the compensation applied to the **new package's local

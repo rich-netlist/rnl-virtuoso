@@ -70,7 +70,7 @@ type symbolChoice struct {
 	Library   *symbolLibrary
 	Rank      int
 	Symbol    string
-	Terminals []string // symbol terminal names in node order; nil binds by position
+	Terminals []string // symbol terminal names in node order, "" where none is paired; nil binds by position
 	Rule      orientationRule
 	Mode      string
 }
@@ -131,6 +131,7 @@ func loadMapping(text string, lib *symbolLibrary) *libraryMapping {
 			fail("Symbol mapping of %s names %s/%s with a symbol the package does not define: %s", lib.File, c.Library, c.Cell, c.Symbol)
 		}
 		checkTerminalNames(c.Symbol, c.Terminals)
+		checkAlignPins(c.Library+"/"+c.Cell, c.Align)
 		if c.Correction != "" {
 			if _, ok := matrices[c.Correction]; !ok {
 				fail("Invalid package orientation for %s/%s", c.Library, c.Cell)
@@ -141,9 +142,15 @@ func loadMapping(text string, lib *symbolLibrary) *libraryMapping {
 		if (kind != "input" && kind != "output") || !lib.Defined[name] {
 			fail("Invalid port glyph %s=%s in the symbol mapping of %s", kind, name, lib.File)
 		}
+		// Port wires end at the glyph's pin by its name, %port_N::pin.
+		if !glyphPin.MatchString(packageSymbolDefinition(lib.Text, name, "$"+name)) {
+			fail("Port glyph $%s of %s has no pin named pin (%%pin = (x, y) @PIN(...))", name, lib.File)
+		}
 	}
 	return &m
 }
+
+var glyphPin = rx(`(^|[\s{;])%pin\s*=`)
 
 func checkTerminalNames(symbol string, names []string) {
 	seen := stringSet{}
@@ -279,7 +286,7 @@ func (l *symbolLibrary) match(source cellKey, name, model, dialect string, nodes
 			}
 			if c.Pins != nil {
 				// Pairs name each terminal of the cell; a terminal without a pair
-				// leaves the list short, so the instance keeps its EDIF symbol.
+				// gets no name, so the instance keeps its EDIF symbol.
 				names = []string{}
 				for _, node := range nodes {
 					found := ""
@@ -287,9 +294,6 @@ func (l *symbolLibrary) match(source cellKey, name, model, dialect string, nodes
 						if strings.EqualFold(pair[0], node) {
 							found = pair[1]
 						}
-					}
-					if found == "" {
-						break
 					}
 					names = append(names, found)
 				}

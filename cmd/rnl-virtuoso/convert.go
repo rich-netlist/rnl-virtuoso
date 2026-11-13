@@ -544,7 +544,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 						key = strings.ToLower(names[i])
 					}
 					p, ok := pins[key]
-					if !ok {
+					if !ok || key == "" {
 						complete = false
 					}
 					destination = append(destination, p)

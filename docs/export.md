@@ -101,9 +101,11 @@ The common output directory contains:
   - `subcircuit` (default): `<cell>.scs` / `.sp` holds an empty subcircuit of
     the cell's name with the symbol as its block symbol. Its ports follow the
     cell's CDF terminal order when that names the symbol's terminals, else the
-    order of the symbol's pins. A portless top whose netlist calls the cell
-    includes the file; subcircuit files include nothing, and their instances of
-    the cell keep a local copy of its symbol. A cell that the netlister stops at
+    order of the symbol's pins. A portless top with an instance of the cell
+    includes the file; a call of the same name by an instance of another cell,
+    such as a model or primitive, does not. Subcircuit files include nothing,
+    and their instances of the cell keep a local copy of its symbol. A cell
+    that the netlister stops at
     (a `spectre`, `veriloga`, `veriloga_ans` or `auCdl` view) is defined by that
     view, such as a Verilog-A module or a device in a model file, and gets no
     file; the report names the view.

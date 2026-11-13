@@ -318,13 +318,18 @@ func symbolDefinitionNamed(c *cell, id string, terminals, pinNames map[string]st
 		}
 		at := c.Pins[members[0]]
 		// A terminal drawn at several pins gets one named pin for each
-		// (RNL 0.4, 9.2.4); wires reach each of them by name.
+		// (RNL 0.4, 9.2.4); wires reach each of them by name. A PDK
+		// expansion group is wired at the last pin of a terminal (c.Pins),
+		// so only that one takes its name; the others bind the terminal
+		// unnamed.
 		if locations := c.PinSets[port]; len(locations) > 1 {
 			n := occurrence[port]
 			occurrence[port]++
 			at = locations[n]
 			if local == "" {
 				local = "%" + multiPinName(groupIndex(c, port), n) + " = "
+			} else if n != len(locations)-1 {
+				local = ""
 			}
 		}
 		body = append(body, local+pt(scaled(at, scale))+" @PIN(terminal="+value+")")
@@ -379,22 +384,29 @@ func loadRules(text string) map[string]orientationRule {
 		if _, ok := matrices[r.Correction]; !ok {
 			fail("Invalid package orientation for %s", name)
 		}
-		if r.Pins != nil {
-			seen := map[int]bool{}
-			if len(r.Pins) == 0 {
-				fail("Invalid alignment pins for %s", name)
-			}
-			for _, p := range r.Pins {
-				if p < 1 || seen[p] {
-					fail("Invalid alignment pins for %s", name)
-				}
-				seen[p] = true
-			}
-		}
+		checkAlignPins(name, r.Pins)
 		out[name] = r
 	}
 	return out
 }
+
+// checkAlignPins accepts no list, or a list of distinct pin numbers from 1.
+func checkAlignPins(name string, pins []int) {
+	if pins == nil {
+		return
+	}
+	seen := map[int]bool{}
+	if len(pins) == 0 {
+		fail("Invalid alignment pins for %s", name)
+	}
+	for _, p := range pins {
+		if p < 1 || seen[p] {
+			fail("Invalid alignment pins for %s", name)
+		}
+		seen[p] = true
+	}
+}
+
 func compose(outer, inner string) string {
 	x := transform(transform(point{1, 0}, inner, point{}), outer, point{})
 	y := transform(transform(point{0, 1}, inner, point{}), outer, point{})
