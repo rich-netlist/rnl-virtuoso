@@ -215,7 +215,10 @@ func drawRoutes(c *cell, endpoints []endpoint, netmap map[string]string, scale f
 		references[p][key] = r
 		return r
 	}
-	wire := func(nets stringSet, vertices []string) string {
+	// A bus wire carries its bits in the order of the name it is drawn for,
+	// such as BOT<10:0>: the route's bits, or the terminal's for a wire between
+	// two terminals. Bits outside that order follow in the order of the cell.
+	wire := func(nets stringSet, order []string, vertices []string) string {
 		vs := []string{}
 		for _, v := range vertices {
 			if len(vs) == 0 || v != vs[len(vs)-1] {
@@ -225,18 +228,30 @@ func drawRoutes(c *cell, endpoints []endpoint, netmap map[string]string, scale f
 		if len(vs) < 2 {
 			return ""
 		}
-		ordered := sortedSet(nets)
-		sort.SliceStable(ordered, func(i, j int) bool {
-			a, ok := netOrder[ordered[i]]
+		ordered, placed := []string{}, stringSet{}
+		for _, n := range order {
+			if nets[n] && !placed[n] {
+				ordered, placed[n] = append(ordered, n), true
+			}
+		}
+		rest := []string{}
+		for _, n := range sortedSet(nets) {
+			if !placed[n] {
+				rest = append(rest, n)
+			}
+		}
+		sort.SliceStable(rest, func(i, j int) bool {
+			a, ok := netOrder[rest[i]]
 			if !ok {
 				a = len(netOrder)
 			}
-			b, ok := netOrder[ordered[j]]
+			b, ok := netOrder[rest[j]]
 			if !ok {
 				b = len(netOrder)
 			}
 			return a < b
 		})
+		ordered = append(ordered, rest...)
 		actual := []string{}
 		for _, n := range ordered {
 			v, ok := netmap[n]
@@ -290,7 +305,7 @@ func drawRoutes(c *cell, endpoints []endpoint, netmap map[string]string, scale f
 			nets := set(e.Nets)
 			for _, other := range attached {
 				if other.Ref != e.Ref && intersect(nets, set(other.Nets)) {
-					wire(nets, []string{e.Ref, reference(p, nets)})
+					wire(nets, e.Nets, []string{e.Ref, reference(p, nets)})
 					break
 				}
 			}
@@ -306,7 +321,7 @@ func drawRoutes(c *cell, endpoints []endpoint, netmap map[string]string, scale f
 			for _, e := range terminals[p] {
 				nets := set(e.Nets)
 				if len(nets) == len(bits[index]) && superset(nets, bits[index]) {
-					wire(nets, []string{e.Ref, reference(p, nets)})
+					wire(nets, route.Bits, []string{e.Ref, reference(p, nets)})
 				}
 			}
 		}
@@ -339,7 +354,7 @@ func drawRoutes(c *cell, endpoints []endpoint, netmap map[string]string, scale f
 			for _, p := range expanded {
 				vertices = append(vertices, reference(p, bits[index]))
 			}
-			owners = append(owners, wire(bits[index], vertices))
+			owners = append(owners, wire(bits[index], route.Bits, vertices))
 		}
 		for _, display := range route.Labels {
 			label := route.Name
