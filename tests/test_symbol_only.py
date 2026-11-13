@@ -11,7 +11,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parent/'support'))
 
 from fixtures import drawing, netlist, spectre_netlist, clean_check
-from go_backend import call, cell_json, convert
+from go_backend import call, cell_json, convert, symbol_library
 from rnl_export import edif, resources, ExportError
 import test_library
 
@@ -158,6 +158,27 @@ class SymbolOnlyTests(unittest.TestCase):
                 self.assertNotIn('OnlySymbol.'+EXTENSION[dialect], files)
                 self.assertNotIn('OnlySymbol.', files['bench.'+EXTENSION[dialect]])
                 self.assertIn('$WORK_ONLYSYMBOL = @DEFINE-SYMBOL', files['work.rnl'])
+
+    def test_a_generated_package_is_a_symbol_library(self):
+        """Two steps, as for a PDK: export the symbol-only cells as a package, then
+        give the package and its mapping to another export as a symbol library."""
+        part = symbol_only('analogLib', 'res', ['PLUS', 'MINUS'])
+        first = call(op='library', library='analogLib', dialect='spectre', captures=[part],
+                     symbol_only_cells='package', symbol_package='pdk-analog')['files']
+        library = dict(file='pdk-analog.rnl', text=first['pdk-analog.rnl'], mapping=first['pdk-analog.virtuoso.json'])
+        default = symbol_library(resources.read('eda-symbol.rnl'))
+        for dialect in ('spectre', 'cdl'):
+            with self.subTest(dialect=dialect):
+                answer = call(netlist=spectre_netlist() if dialect == 'spectre' else netlist(), drawing=drawing(),
+                              orders=[dict(library='analogLib', cell='res', ports=['PLUS', 'MINUS'])],
+                              symbol_libraries=[library, default], top='top', hierarchy=True, dialect=dialect)
+                files, report = answer['files'], answer['report']
+                entry = report['entry']
+                self.assertIn('@SET-SYMBOL(terminals=["PLUS", "MINUS"]) $ANALOGLIB_RES', files[entry])
+                self.assertIn('@USE-PACKAGE(name="pdk-analog", version="0.1", path="pdk-analog.rnl")', files[entry])
+                self.assertEqual(report['symbol_libraries'][0]['mode'], 'mapping')
+                self.assertEqual(report['unmapped_cells'], [])
+                self.check(files, [entry])
 
 
 if __name__ == '__main__':

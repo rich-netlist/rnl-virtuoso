@@ -79,6 +79,8 @@ unrelated interactive/bridge startup to work around an unexplained failure.
 - `--symbol-only-cells package` (library only) writes the cells without schematic
   as one symbol package with a mapping file, `--symbol-package-name` naming it;
   the default `subcircuit` writes an empty subcircuit with its symbol for each.
+  For a PDK: export its library this way once (name `pdk-<lib>`), then give the
+  package to `--symbol-library` when exporting designs, if the user wants it.
 - Boolean flags use `--flag=false`, not `--flag false`. Keep source writes off
   unless authorized. A headless process cannot export another session's unsaved edits.
 - stdout is one JSON result. stderr gives the log path, or native messages with

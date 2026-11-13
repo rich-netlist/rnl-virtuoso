@@ -84,6 +84,11 @@ its descendants once; ported files have no native includes. Keep all generated
 files together. Native model/Verilog-A references remain external. This command
 exports a design; it does not simulate it.
 
+To draw a PDK's devices with its own symbols, export the PDK library once with
+`--symbol-only-cells package --symbol-package-name pdk-<lib>`, then pass the
+resulting package to `--symbol-library` when exporting designs; see
+[PDK symbols](export.md#pdk-symbols).
+
 ## Completion, logs and automation
 
 The command blocks through native export and final library merge. stdout contains

@@ -125,6 +125,20 @@ The common output directory contains:
   cell's file, or `null` and the view that defines it), `symbol_package` (name,
   version, file, mapping and symbols), model references, notes and skipped cells.
 
+### PDK symbols
+
+A PDK's device cells have symbols and no schematics. To draw their instances with
+the PDK's own symbols, export in two steps:
+
+1. Export the PDK library with **One symbol package** and a name such as
+   `pdk-<lib>`, for example `rnl-virtuoso export --lib myPDK --out pdk-symbols
+   --symbol-only-cells package --symbol-package-name pdk-mypdk
+   --auto-check-save=false`. The output holds `pdk-mypdk.rnl` and
+   `pdk-mypdk.virtuoso.json`.
+2. Export the design with that package first among the symbol libraries, and
+   `eda-symbol` after it if `analogLib` cells should keep its symbols:
+   `--symbol-library pdk-symbols/pdk-mypdk.rnl --symbol-library
+   <install>/resources/eda-symbol.rnl`. Keep the mapping file beside the package.
 
 The queue runs one native job at a time. Results are published together only
 after all cells have been attempted and the merge succeeds. Existing output
