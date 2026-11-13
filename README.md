@@ -9,7 +9,9 @@ netlist and drawing without rewriting device statements.
 - Preserve hierarchy, custom block symbols, placement, orientation, wires, buses and drawn arrays.
 - Export subcircuits in one file, separate files, or just the current level.
 - Schematics with ports become subcircuits; portless schematics remain top-level circuits.
-- Reference `eda-symbol` and `eda-style` separately, with an editable orientation table.
+- Write RNL 0.4: name the standard collection `rnl-std-all` 0.4 and reference `eda-symbol`
+  and `eda-style` 0.2 separately, with an editable orientation table. Open the result with a
+  viewer or checker that reads RNL 0.4; version 0.9.6 is the last that writes RNL 0.3.
 - Whole-library exports share deduplicated definitions and an optional reusable symbol package,
   with optional referenced external cells and support for symbol-only cells.
 
@@ -20,7 +22,7 @@ then extract it on the Virtuoso host:
 
 ```sh
 mkdir -p ~/tools
-tar -xzf rnl-virtuoso-0.9.6-linux-amd64.tar.gz -C ~/tools
+tar -xzf rnl-virtuoso-0.10.0-linux-amd64.tar.gz -C ~/tools
 ```
 
 In the CIW, load the entry point once:
@@ -110,14 +112,15 @@ live-session connection, checks for a compatible installation, and asks before
 installing or upgrading at an agreed location. No other agent skill or specific
 bridge client is required. The skill contains no exporter or bridge assets;
 new installations fetch the latest release from this repository and verify its
-checksum and capabilities. Version 0.9.5 includes all interfaces described here.
+checksum and capabilities. Version 0.9.5 includes all interfaces described here;
+version 0.10.0 writes RNL 0.4 through the same interfaces.
 
 ## Build and test
 
 Building requires Go 1.22+ and Python 3.8+ on the development machine only:
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.9.6-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.10.0-linux-amd64.tar.gz
 python scripts/test.py
 ```
 

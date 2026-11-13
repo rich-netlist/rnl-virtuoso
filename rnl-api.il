@@ -4,7 +4,7 @@ unless(boundp('rnlAPIJobs) rnlAPIJobs = makeTable('rnlAPIJobs nil))
 unless(boundp('rnlLastExportId) rnlLastExportId = nil)
 
 procedure(rnlExporterInfo()
-  list(list("api_version" 1) list("tool_version" "0.9.6")
+  list(list("api_version" 1) list("tool_version" "0.10.0")
     list("blocking_export" t) list("output_workspace" t)
     list("install_directory" rnlInstallDirectory)
     list("busy" if(rnlActiveJob || rnlActiveBatch then t else nil))

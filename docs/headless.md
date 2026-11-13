@@ -45,9 +45,9 @@ modified and no alias is evaluated. Only trusted environment scripts should be
 selected: they execute as the invoking user.
 
 If a site alias loads environments and then launches `virtuoso &`, use its
-`source` files here rather than executing the alias. For example, the verified
-`ic6_sui` alias on thu-sui uses `/home/cshrc/.cshrc.cadence.sui` and
-`/home/cshrc/.cshrc.mentor25.sui`. Verify the current site definition before reuse.
+`source` files here rather than executing the alias: pass each C shell script it
+sources with `--env-csh`, in the alias's order. Verify the current site definition
+before reuse.
 
 After setup, the launcher enters the specified project and clears inherited
 external-display/session bindings. It uses `-nograph -nocdsinit`; Cadence provides

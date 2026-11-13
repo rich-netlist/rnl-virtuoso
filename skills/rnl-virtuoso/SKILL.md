@@ -52,6 +52,8 @@ edits. Do not save source edits merely to make them visible without authorizatio
 
 At the confirmed installation, inspect `bin/rnl-virtuoso -version` and its docs.
 Version 0.9.5 introduced the headless CLI, `blocking_export` and `output_workspace`.
+Version 0.10.0 writes RNL 0.4 (0.9.x wrote RNL 0.3); check exports with an RNL
+toolkit or viewer that reads 0.4.
 For new installations or authorized upgrades, discover the latest stable release
 rather than pinning this minimum version. For headless mode require `bin/rnl-virtuoso export --help` to succeed; a version
 string or API version alone does not prove the subcommand exists. In a live
