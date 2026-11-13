@@ -24,9 +24,22 @@ the schematic-editor entry. No editor window is required.
 Export runs in the background. The CIW reports progress; a modeless message
 shows the output location or error. Output contains `<schematic-cell-name>.scs` (Spectre)
 or `<schematic-cell-name>.sp` (CDL), optional
-`<cell-name>.scs`/`.sp` files, external-library directories, `eda-symbol.rnl` and `eda-style.rnl` (both package version 0.1), and
-`export-report.json`. Their RNL language version is 0.3; both packages are
-referenced explicitly in every netlist file header.
+`<cell-name>.scs`/`.sp` files, external-library directories, `eda-symbol.rnl` and `eda-style.rnl` (both package version 0.2), and
+`export-report.json`. Their RNL language version is 0.4, so they need a viewer or
+checker that reads RNL 0.4. Every netlist file header names the standard
+collection `rnl-std-all` 0.4, drops its automatic fill with an empty
+`rnl-std-fill` (the drawing already holds the source's wires, ports and markers),
+and references both EDA packages, one package per line:
+
+```spectre
+// @RNL(type="header") {
+//   @VERSION("0.4");
+//   @USE-PACKAGE(name="rnl-std-all", version="0.4");
+//   @USE-PACKAGE(name="rnl-std-fill") {};
+//   @USE-PACKAGE(name="eda-symbol", version="0.2", path="eda-symbol.rnl");
+//   @USE-PACKAGE(name="eda-style", version="0.2", path="eda-style.rnl")
+// }
+```
 The entry filename uses the exported schematic cell's name and case in every
 mode, including portless schematics; the report and completion message give that path.
 Separate files use source cell names and case: cells in the selected library
@@ -52,19 +65,15 @@ native hierarchy and model references.
 Unsafe filenames or case-insensitive file/directory collisions stop the export
 rather than overwrite a file or invent a different name.
 When the current cell has a saved view matching the symbol list, its native EDIF is also
-converted. The symbol is embedded in the current subcircuit (when it has ports)
-and can be included in the optional `symbols.rnl` collection. The **Export
-symbols.rnl separately** setting (`?exportSymbols`, default `nil`, since 0.9.4)
-controls that additional package only. `cell-symbol.rnl` is no longer generated.
-Combined and separate single-cell exports use the same option, including portless
-cells with a symbol. Native EDIF symbol capture and embedded schematic symbols
-are preserved when the setting is off.
+converted. The symbol is embedded in the current subcircuit when it has ports.
+Since 0.10.0 no separate symbol collection is written: `?exportSymbols` and
+`symbols.rnl` are gone, and `cell-symbol.rnl` was dropped before them.
 Keep the directory together when opening or copying the result.
 
 ## Whole-library export
 
 Choose **Library** in the CIW form. All cells matching the schematic view list are exported;
-cells matching only the symbol list are exported as reusable symbols. Cells with neither
+cells matching only the symbol list are symbol-only cells (below). Cells with neither
 view are skipped and listed in `library-report.json`. The exporter reads saved
 views. By default, stale schematic connectivity is checked and saved in the
 source design (including current edits); disable **Automatically Check & Save
@@ -87,18 +96,51 @@ The common output directory contains:
   are relative to each file, including files inside these directories.
   Portless entries include their required descendants only; unrelated cells and
   other portless testbenches are never included.
-- `<symbol-only-cell>.rnl`: each library cell without a schematic is always saved
-  as its own reusable symbol package `virtuoso/<library>/<cell>` version `0.1`,
-  with symbol `$"library/cell"`. Foreign primary symbol-only cells, if present,
-  follow the same library subdirectory layout. These files do not depend on the
-  optional collection setting.
-- Optional `symbols.rnl` (default off): package `virtuoso-library/<library>` version `0.1`, with reusable
-  symbols named `$"library/cell"`, including symbol-only cells and referenced
-  interfaces. For example: `@USE-PACKAGE(name="virtuoso-library/myLib", version="0.1", path="symbols.rnl")`.
-- Shared `eda-symbol.rnl`, `eda-style.rnl` and `library-report.json`. The report
-  maps source cells, native subcircuit names, entry paths, symbol-only files and exported symbols,
-  and records `export_symbols`, the optional `symbol_file` (null when disabled),
-  `symbol_only_files`, model references, notes and skipped cells.
+- Symbol-only cells, as **Cells without schematic** / `?symbolOnlyCells` /
+  `--symbol-only-cells` chooses (0.10.0+):
+  - `subcircuit` (default): `<cell>.scs` / `.sp` holds an empty subcircuit of
+    the cell's name with the symbol as its block symbol. Its ports follow the
+    cell's CDF terminal order when that names the symbol's terminals, else the
+    order of the symbol's pins. A portless top with an instance of the cell
+    includes the file; a call of the same name by an instance of another cell,
+    such as a model or primitive, does not. Subcircuit files include nothing,
+    and their instances of the cell keep a local copy of its symbol. A cell
+    that the netlister stops at
+    (a `spectre`, `veriloga`, `veriloga_ans` or `auCdl` view) is defined by that
+    view, such as a Verilog-A module or a device in a model file, and gets no
+    file; the report names the view.
+  - `package`: one package `<name>.rnl` (RNL 0.4, version `0.1`) holds the symbols
+    of all symbol-only cells, named `LIBRARY_CELL` in capitals, and the mapping
+    file `<name>.virtuoso.json` beside it maps each cell to its symbol, every
+    terminal to the pin of the same name. A cell whose CDF gives a fixed model
+    name also gets a `@DEVICE` with its terminal order and a `model=` rule in the
+    package, for readers without the mapping. The name is `?symbolPackageName` /
+    `--symbol-package-name`, by default the library name in lower case with
+    other characters than letters, digits and `-` written as `-`. The symbol-only
+    cells are exported first, and the library's other cells use the package as
+    their first symbol library.
+- Shared `eda-style.rnl`, the symbol libraries (by default `eda-symbol.rnl`) and
+  `library-report.json`; a library of symbol-only cells exported as a package
+  needs neither of the first two. The report maps source cells, native
+  subcircuit names, entry paths and the symbol-only cells, and records
+  `symbol_libraries`, `symbol_only_cells` (the mode), `symbol_only_files` (each
+  cell's file, or `null` and the view that defines it), `symbol_package` (name,
+  version, file, mapping and symbols), model references, notes and skipped cells.
+
+### PDK symbols
+
+A PDK's device cells have symbols and no schematics. To draw their instances with
+the PDK's own symbols, export in two steps:
+
+1. Export the PDK library with **One symbol package** and a name such as
+   `pdk-<lib>`, for example `rnl-virtuoso export --lib myPDK --out pdk-symbols
+   --symbol-only-cells package --symbol-package-name pdk-mypdk
+   --auto-check-save=false`. The output holds `pdk-mypdk.rnl` and
+   `pdk-mypdk.virtuoso.json`.
+2. Export the design with that package first among the symbol libraries, and
+   `eda-symbol` after it if `analogLib` cells should keep its symbols:
+   `--symbol-library pdk-symbols/pdk-mypdk.rnl --symbol-library
+   <install>/resources/eda-symbol.rnl`. Keep the mapping file beside the package.
 
 The queue runs one native job at a time. Results are published together only
 after all cells have been attempted and the merge succeeds. Existing output
@@ -237,7 +279,11 @@ mapping. Missing or extra members still fail.
 - Preflight follows the selected stop view and skips `nlAction=ignore/stop`
   markers such as ground and no-connect instead of requiring their schematic
   views to be checked and saved. A no-connect at a wire end is retained as a
-  figure on that wire point; a marker on a device pin uses `$NO_CONNECT`.
+  figure on that wire point; a marker on a device pin uses `$NO_CONNECT`. Both
+  carry their positions, as do junction dots, so they are drawn without a solver.
+  In RNL 0.4 a no-connect mark names the terminal it leaves open: a marker on an
+  instance's bus pin is written once for each terminal it covers, and a scalar
+  marker on one bit of a bus pin names that bit's terminal.
   For a parameterized symbol, preflight checks its saved supermaster rather
   than rejecting the transient generated submaster as an unsaved user edit.
   Instances explicitly marked `nlAction=ignore` are omitted as in the native
@@ -252,30 +298,53 @@ mapping. Missing or extra members still fail.
   recorded in the export report. Model files remain external; copying the RNL
   bundle does not make a portable simulation deck. Ordinary `veriloga` takes
   precedence over `veriloga_ans` when both exist.
-- Common `analogLib` primitives use `eda-symbol`. Package orientation changes
+- Leaf instances take their symbols from the **symbol libraries**: RNL packages
+  given in priority order (`?symbolLibraries`, `--symbol-library`, or the forms'
+  **Symbol libraries** field). The default list holds only the bundled
+  `eda-symbol`; a given list replaces it. Each library used is copied into the
+  export and referenced in every header, the highest priority last, so its names
+  win (RNL 0.4, 16.2). Which Virtuoso cell a symbol draws is exporter
+  configuration, not RNL (16.4): a mapping file beside the package,
+  `<package>.virtuoso.json`, lists library/cell to symbol, the terminal names the
+  symbol binds in node order, and any orientation compensation. A library without
+  one is matched by its own `@DEVICE` terminal names and rules of the form
+  `# @SELECT-INSTANCE(model=…) => @SET-SYMBOL $X`, by the instance's native model
+  name, without orientation compensation. The first library by priority that maps
+  an instance gives its symbol; instances that no library maps keep their EDIF
+  symbol and are listed under `unmapped_cells` in the report. RNL 0.4 has no
+  package-qualified names: a chosen symbol whose name a library of higher priority
+  also defines is copied into the level as a `%` definition, with a warning in the
+  report's `warnings`.
+  The bundled `eda-symbol` maps common `analogLib` primitives. Its pins bind the terminal
+  names of the standard series 0.4, so the exporter writes them in CDF node order,
+  such as `#"R0" @SET-SYMBOL(terminals=["p", "n"]) $RESISTOR`: the instance binds
+  by position whatever terminal names its host gives it, and the same statement
+  stays valid with the standard symbols. Package orientation changes
   are compensated before the source orientation is applied, then the origin is
   adjusted to align the pins. Wire ends reference the current terminal directly;
   interior EDIF route vertices are retained. Other primitives use their EDIF symbol,
   with CDF terminal order.
-  The exported Spectre copy of `eda-symbol` omits SPICE instance-letter rules:
-  an instance named `I0` keeps its cell symbol, while `isource` still selects a
-  current source by model. CDL copies keep the SPICE letter rules.
+  The SPICE instance-letter rules of `eda-symbol` are in a record for SPICE
+  sections only, so both formats ship the same package copy: in Spectre an
+  instance named `I0` keeps its cell symbol, while `isource` still selects a
+  current source by model.
 - Cadence EDIF Out can omit all but one native selection box. A read-only
   `selection-boxes.sx` snapshot preserves every selection shape from the selected
   symbol view. With **Export selection box** enabled, their union supplies one
   enclosing rectangle; symbol outlines, pin markers, labels and the cellview bbox
   do not expand it. With the option disabled, explicit boxes are omitted and RNL
   computes the non-text graphic extent. This applies to root/child symbols,
-  symbol-only cells and reusable symbol packages.
+  symbol-only cells and generated symbol packages.
 - Exported custom symbols contain geometry, layout/text size and `@PIN`s with
   unknown direction omitted. They contain no generated pin squares or fixed
   colors, line widths or style assignments. Presentation and optional pin marks
   come from the separately referenced `eda-style` package. Replace that header
   reference to apply another style.
-- [symbol-orientations.json](../resources/symbol-orientations.json) is
-  the editable table for all 18 documented symbol changes. Its transforms use
-  RNL/EDIF matrix conventions, including `MY` for negating x. The configuration
-  and pinned package snapshots are described in [resource notes](../resources/README.md).
+- [eda-symbol.virtuoso.json](../resources/eda-symbol.virtuoso.json) is the
+  editable mapping of the bundled library, including the 18 documented symbol
+  changes. Its transforms use RNL/EDIF matrix conventions, including `MY` for
+  negating x. The mapping format and pinned package snapshots are described in
+  [resource notes](../resources/README.md).
 - A child symbol is embedded in its own subcircuit definition with `# @SET-SYMBOL`.
   This also applies to separate files and library exports: the parent uses the
   child's default symbol. In current-level mode, or when an external child is
@@ -292,6 +361,8 @@ mapping. Missing or extra members still fail.
 - Net labels attach to the nearest drawn wire segment of that EDIF net, including
   bus labels and deduplicated routes. Their original position, rotation, alignment
   and text size are preserved. A label without a drawn path attaches to its net.
+  A display that EDIF marks invisible (`visible false`) keeps its content and
+  position as a hidden text, `textvisible=false`, which takes no room.
 - Free schematic notes remain RNL annotations. EDIF note figures are converted,
   and a read-only snapshot supplements non-electrical shapes on the schematic's
   `text` layer that Cadence EDIF Out omits. Lines, paths, rectangles, polygons,
@@ -304,7 +375,9 @@ mapping. Missing or extra members still fail.
   so replacing `eda-symbol` with the standard symbols remains valid;
   inout or unspecified
   directions retain `$IO_PORT_SYMBOL`. All keep their original pin coordinates
-  and orientation. Repeated schematic port markers on the same logical terminal
+  and orientation. Grounds, supplies and ports are usages, which have no
+  terminals in RNL 0.4: wires end at the pin of their symbol, such as
+  `%port_0::pin`, and port names use the text key `netname`. Repeated schematic port markers on the same logical terminal
   are exported individually, preserving each placement and wire attachment
   without adding electrical ports. A bus has a pin-only multi-net anchor for wire connectivity
   and a visible `$IO_PORT` marker for its shape and range label. This lets the
@@ -324,10 +397,12 @@ mapping. Missing or extra members still fail.
 
 ## Current boundaries
 
-Repeated schematic port markers are supported. Multiple physical pins of the
-same terminal in a symbol are not: RNL 0.3 gives each terminal one pin, with
-later definitions overriding earlier ones. Such symbol pins still collapse to
-one connection location.
+Repeated schematic port markers are supported. A custom EDIF symbol that draws
+one terminal at several pins keeps each pin (RNL 0.4 allows several pins per
+terminal): such pins are named `pin_<group>_<n>` in the symbol, and each source
+wire ends at the pin it touches, such as `#"I0"::pin_3_2`. Iterated instances,
+package symbols and alternative symbol views keep one connection location per
+terminal.
 
 This version targets saved hierarchies with configurable schematic/symbol view lists.
 Config views, configurable simulator stop views, HSPICE output,

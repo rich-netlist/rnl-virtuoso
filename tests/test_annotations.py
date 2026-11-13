@@ -9,15 +9,12 @@ from fixtures import drawing, primitive_drawing, spectre_netlist
 import test_symbols
 from test_symbols import BINARY, PACKAGE
 from go_backend import convert
-
-
-@unittest.skipIf(os.environ.get('RNL_EXPORT_BACKEND') == 'python', 'Annotation fixes use the Go backend')
 class AnnotationTests(unittest.TestCase):
     def export(self, source=None, **options):
         if source is None:
             source, _ = primitive_drawing('res', [(0, 3), (0, -3)], 'R0')
         return convert('// Library name: work\n// Cell name: top\nX0 (N1 N2) resistor r=1k\n',
-                       source, {('analogLib', 'res'): ['P1', 'P2']}, PACKAGE, 'top', dialect='spectre', **options)[0]
+                       source, {('analogLib', 'res'): ['PLUS', 'MINUS']}, PACKAGE, 'top', dialect='spectre', **options)[0]
 
     def problem(self, files, title='top'):
         if not BINARY.is_file():

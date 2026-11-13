@@ -1,11 +1,16 @@
-/* eda-style 0.1.
-   Universal IC schematic visual style package for RNL 0.3.
-   Applies Virtuoso-style green hairline symbol strokes (`linewidth=0, linecolor="#00cc66"`),
-   red symbol texts (`textcolor="#ff0000"`), solid red 0.8x0.8 terminal squares on all pins
-   via `@SELECT-TERMINAL`, solid red port polygons, hairline wires (`linewidth=0`), and a
-   Virtuoso-like monoline font (`Lucida Console, Monaco, DejaVu Sans Mono, Consolas, monospace`).
-   Can be used standalone or paired with `eda-symbol` 0.1. */
-@RNL(type="header") { @VERSION("0.3"); @PACKAGE(name="eda-style", version="0.1")}
+/* eda-style 0.2.
+   Universal IC schematic visual style package for RNL 0.4.
+   Applies green hairline symbol strokes (`linewidth=0, linecolor="#00cc66"`),
+   red symbol texts (`textcolor="#ff0000"`), solid red 0.8x0.8 terminal squares on the pins of
+   instances, grounds and supplies via `@SELECT-PIN`, solid red port polygons, hairline wires
+   (`linewidth=0`), and a monospaced font (`Lucida Console, Monaco, DejaVu Sans Mono, Consolas, monospace`).
+   Its rules write `recursive=true`, so they reach every level below the one that uses the package.
+   Can be used standalone or paired with `eda-symbol` 0.2. */
+@RNL(type="header") {
+  @VERSION("0.4");
+  @PACKAGE(name="eda-style", version="0.2");
+  @USE-PACKAGE(name="rnl-std-basic", version="0.4")
+}
 
 /* ---------------------------------------------------------------- Default EDA styles and pin square rules */
 @RNL {
@@ -21,31 +26,33 @@
   $note = @DEFINE-STYLE(textcolor="#555555", size=0.9) {};
   $grey = @DEFINE-STYLE(linecolor="#9a9a9a", textcolor="#9a9a9a") {};
 
-  # @SELECT-INSTANCE => @SET-STYLE $symbol;
-  # @SELECT-USAGE => @SET-STYLE $symbol;
-  # @SELECT-LABEL => @SET-STYLE $symbol;
-  # @SELECT-NET => @SELECT-LABEL => @SET-STYLE $base;
-  # @SELECT-WIRE => @SELECT-LABEL => @SET-STYLE $base;
-  # @SELECT-USAGE $JUNCTION => @SET-STYLE $base;
-  # @SELECT-USAGE $CURRENT_ARROW => @SET-STYLE $base;
-  # @SELECT-USAGE $IO_PORT => @SET-STYLE $port;
-  # @SELECT-INSTANCE(model="ipin*") => @SET-STYLE $port;
-  # @SELECT-INSTANCE(model="opin*") => @SET-STYLE $port;
-  # @SELECT-INSTANCE(model="io_port*") => @SET-STYLE $port;
-  # @SELECT-WIRE => @SET-STYLE $base;
-  # @SELECT-ANNOTATION => @SET-STYLE $base;
-  # @SELECT-WIRE(bus=true) => @SET-STYLE $bus;
-  # @SELECT-WIRE => @LAYER("bottom");
+  # @SELECT-INSTANCE(recursive=true) => @SET-STYLE $symbol;
+  # @SELECT-USAGE(recursive=true) => @SET-STYLE $symbol;
+  # @SELECT-LABEL(recursive=true) => @SET-STYLE $symbol;
+  # @SELECT-NET(recursive=true) => @SELECT-LABEL => @SET-STYLE $base;
+  # @SELECT-WIRE(recursive=true) => @SELECT-LABEL => @SET-STYLE $base;
+  # @SELECT-USAGE(recursive=true) $JUNCTION => @SET-STYLE $base;
+  # @SELECT-USAGE(recursive=true) $CURRENT_ARROW => @SET-STYLE $base;
+  # @SELECT-USAGE(recursive=true) $IO_PORT => @SET-STYLE $port;
+  # @SELECT-INSTANCE(model="ipin*", recursive=true) => @SET-STYLE $port;
+  # @SELECT-INSTANCE(model="opin*", recursive=true) => @SET-STYLE $port;
+  # @SELECT-INSTANCE(model="io_port*", recursive=true) => @SET-STYLE $port;
+  # @SELECT-WIRE(recursive=true) => @SET-STYLE $base;
+  # @SELECT-ANNOTATION(recursive=true) => @SET-STYLE $base;
+  # @SELECT-WIRE(bus=true, recursive=true) => @SET-STYLE $bus;
+  # @SELECT-WIRE(recursive=true) => @LAYER("bottom");
 
-  /* Automatic red terminal square on all pins via @SELECT-TERMINAL (applies to user-defined symbols too) */
-  $PIN_SQUARE = @DEFINE(roles=[["t", ["terminal", "usage", "point"]]]) {
-    ?t::position @RECTANGLE(width=0.8, height=0.8, fill="fillcolor", fillcolor="#ff0000", linestyle="none") => @LAYER("top")
+  /* Automatic red terminal square on the pins of instances (user-defined symbols too) and of grounds and
+     supplies. Port models draw a solid red polygon instead. A file adds pins to $PIN_SQUARE_SET or
+     removes them from it before the square rule takes effect. */
+  $PIN_SQUARE = @DEFINE(roles=[["t", "pin"]]) {
+    ?t @RECTANGLE(width=0.8, height=0.8, fill="fillcolor", fillcolor="#ff0000", linestyle="none") => @LAYER("top")
   };
-  $PIN_TERMINAL_SET = # @SELECT-TERMINAL;
-  # @SELECT-USAGE $GROUND => @ADD-TO $PIN_TERMINAL_SET;
-  # @SELECT-USAGE $SUPPLY => @ADD-TO $PIN_TERMINAL_SET;
-  # @SELECT-TERMINAL(model="ipin*") => @REMOVE-FROM $PIN_TERMINAL_SET;
-  # @SELECT-TERMINAL(model="opin*") => @REMOVE-FROM $PIN_TERMINAL_SET;
-  # @SELECT-TERMINAL(model="io_port*") => @REMOVE-FROM $PIN_TERMINAL_SET;
-  $PIN_SQUARE @ATTACH $PIN_TERMINAL_SET
+  $PIN_SQUARE_SET = # @SELECT-INSTANCE(recursive=true) => @SELECT-PIN;
+  # @SELECT-USAGE(recursive=true) $GROUND => @SELECT-PIN => @ADD-TO $PIN_SQUARE_SET;
+  # @SELECT-USAGE(recursive=true) $SUPPLY => @SELECT-PIN => @ADD-TO $PIN_SQUARE_SET;
+  # @SELECT-INSTANCE(model="ipin*", recursive=true) => @SELECT-PIN => @REMOVE-FROM $PIN_SQUARE_SET;
+  # @SELECT-INSTANCE(model="opin*", recursive=true) => @SELECT-PIN => @REMOVE-FROM $PIN_SQUARE_SET;
+  # @SELECT-INSTANCE(model="io_port*", recursive=true) => @SELECT-PIN => @REMOVE-FROM $PIN_SQUARE_SET;
+  $PIN_SQUARE @ATTACH $PIN_SQUARE_SET
 }

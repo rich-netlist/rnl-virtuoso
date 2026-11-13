@@ -3,27 +3,10 @@ package main
 import (
 	"encoding/json"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 )
-
-// Instance letters describe device types only in SPICE. Spectre permits any
-// instance name, including I0 for a subcircuit. Keep the pinned geometry and
-// model/type rules, but omit the snapshot's SPICE-only section for Spectre.
-func symbolPackage(text, dialect string) string {
-	if dialect != "spectre" {
-		return text
-	}
-	start := strings.Index(text, "  /* SPICE element letter rules */")
-	if start < 0 {
-		return text
-	}
-	end := strings.Index(text[start:], "  /* Spectre & Virtuoso")
-	if end < 0 {
-		fail("Cannot locate the end of the SPICE symbol rules")
-	}
-	return text[:start] + "  /* SPICE instance-letter rules omitted for this Spectre export. */\n" + text[start+end:]
-}
 
 func strconvI(i int) string { return strconv.Itoa(i) }
 func quote(s string) string {
@@ -55,12 +38,12 @@ func literal(s string) string {
 	return b.String()
 }
 
-var standard = map[string]string{"res": "RESISTOR", "cap": "CAPACITOR", "ind": "INDUCTOR", "vdc": "VOLTAGE_SOURCE", "vsource": "VOLTAGE_SOURCE", "vsin": "VSIN", "vpulse": "VPULSE", "idc": "CURRENT_SOURCE", "isource": "CURRENT_SOURCE", "isin": "ISIN", "ipulse": "IPULSE", "vcvs": "VCVS_4TERM", "vccs": "VCCS_4TERM", "switch": "VOLTAGE_CONTROLLED_SWITCH", "nmos": "NMOS", "nmos4": "NMOS_4TERM", "pmos": "PMOS", "pmos4": "PMOS_4TERM", "npn": "NPN", "pnp": "PNP", "diode": "DIODE"}
-
 func packagePins(text string) map[string]map[string]point {
-	starts := rx(`\$([A-Z][A-Z_0-9]*)\s*=\s*@DEFINE-SYMBOL\b`).FindAllStringSubmatchIndex(text, -1)
+	starts := rx(`\$([A-Za-z_][A-Za-z_0-9]*|"(?:[^"]|"")*")\s*=\s*@DEFINE-SYMBOL\b`).FindAllStringSubmatchIndex(text, -1)
 	out := map[string]map[string]point{}
-	pattern := rx(`\(\s*([-+\d.]+)\s*,\s*([-+\d.]+)\s*\)\s*@PIN\(terminal\s*=\s*(\d+|"[^"]+")`)
+	// A pin binds a terminal number, a name, or (RNL 0.4) a list of names, such
+	// as the members of a bus terminal: each of them is drawn at that pin.
+	pattern := rx(`\(\s*([-+\d.]+)\s*,\s*([-+\d.]+)\s*\)\s*@PIN\(terminal\s*=\s*(\d+|"(?:[^"]|"")+"|\[[^\]]*\])`)
 	for i, m := range starts {
 		end := len(text)
 		if i+1 < len(starts) {
@@ -68,17 +51,19 @@ func packagePins(text string) map[string]map[string]point {
 		}
 		pins := map[string]point{}
 		for _, p := range pattern.FindAllStringSubmatch(text[m[1]:end], -1) {
-			pins[strings.ToLower(strings.Trim(p[3], `"`))] = point{decimal(p[1]), decimal(p[2])}
+			for _, name := range stringList(strings.Trim(p[3], "[]")) {
+				pins[strings.ToLower(name)] = point{decimal(p[1]), decimal(p[2])}
+			}
 		}
 		out[text[m[2]:m[3]]] = pins
 	}
 	return out
 }
 
-// Directional ports have no separate symbol in rnl-std 0.3. Copy the two
+// Directional ports have no separate symbol in the standard series. Copy the two
 // self-contained EDA glyphs locally so removing eda-symbol later is still valid.
 func packageSymbolDefinition(text, name, id string) string {
-	m := rx(`\$` + name + `\s*=\s*(@DEFINE-SYMBOL\b)`).FindStringSubmatchIndex(text)
+	m := rx(`\$` + regexp.QuoteMeta(name) + `\s*=\s*(@DEFINE-SYMBOL\b)`).FindStringSubmatchIndex(text)
 	if m == nil {
 		fail("Missing port symbol %s in the EDA package", name)
 	}
@@ -142,6 +127,9 @@ func textStatement(value string, display node, scale float64, owner, key string,
 	if o == "R90" || o == "R270" || o == "MXR90" || o == "MYR90" {
 		params = append(params, "rotate=90")
 	}
+	if hiddenDisplay(display) {
+		params = append(params, "textvisible=false")
+	}
 	if key != "" {
 		params = append(params, "key="+quote(key))
 	}
@@ -150,6 +138,35 @@ func textStatement(value string, display node, scale float64, owner, key string,
 	}
 	return pt(at) + " @TEXT(" + strings.Join(params, ", ") + ")"
 }
+
+// The name of the n-th pin of a port group drawn at several pins.
+func multiPinName(group, n int) string { return "pin_" + strconvI(group+1) + "_" + strconvI(n+1) }
+
+func groupIndex(c *cell, port string) int {
+	for i, k := range c.GroupOrder {
+		if k == port {
+			return i
+		}
+	}
+	fail("EDIF symbol pin has no port group")
+	return -1
+}
+
+// An EDIF display marked invisible stays in the drawing as a hidden text: its
+// content and position remain, it takes no room and is not drawn (RNL 0.4, 9.3).
+func hiddenDisplay(display node) bool {
+	for _, v := range walk(display, "visible") {
+		if len(v.list) < 2 {
+			continue
+		}
+		value := v.at(1)
+		if strings.EqualFold(value.atom, "false") || tag(value) == "false" {
+			return true
+		}
+	}
+	return false
+}
+
 func graphics(n node, scale float64) []string {
 	out := []string{}
 	for _, item := range n.list {
@@ -203,12 +220,22 @@ func graphics(n node, scale float64) []string {
 	return out
 }
 func symbolDefinition(c *cell, id string, terminals map[string]string, scale float64, notes *[]string) string {
+	return symbolDefinitionNamed(c, id, terminals, nil, scale, notes)
+}
+
+// symbolDefinitionNamed also gives the pins of the listed ports a local name,
+// such as the pins of a usage, which are reached by name (RNL 0.4, 9.2.4).
+func symbolDefinitionNamed(c *cell, id string, terminals, pinNames map[string]string, scale float64, notes *[]string) string {
 	if chosen := c.ExportSymbol; chosen != nil {
-		mapping := map[string]string{}
+		mapping, names := map[string]string{}, map[string]string{}
 		for p, name := range chosen.Ports {
-			mapping[p] = terminals[portID(c, name, "spectre", nil)]
+			original := portID(c, name, "spectre", nil)
+			mapping[p] = terminals[original]
+			if n, ok := pinNames[original]; ok {
+				names[p] = n
+			}
 		}
-		return symbolDefinition(chosen, id, mapping, scale, notes)
+		return symbolDefinitionNamed(chosen, id, mapping, names, scale, notes)
 	}
 	if !c.Symbol.group {
 		fail("No EDIF symbol geometry for %s/%s", c.Library, c.Name)
@@ -266,6 +293,7 @@ func symbolDefinition(c *cell, id string, terminals map[string]string, scale flo
 			body = append(body, textStatement(value, first(kd, "display"), scale, "?", k, true))
 		}
 	}
+	occurrence := map[string]int{}
 	for _, pin := range children(c.Symbol, "portimplementation") {
 		port := strings.ToLower(ident(pin.at(1)))
 		members := c.Groups[port]
@@ -284,7 +312,27 @@ func symbolDefinition(c *cell, id string, terminals map[string]string, scale flo
 		if len(values) > 1 {
 			value = "[" + strings.Join(values, ", ") + "]"
 		}
-		body = append(body, pt(scaled(c.Pins[members[0]], scale))+" @PIN(terminal="+value+")")
+		local := ""
+		if n := pinNames[members[0]]; n != "" {
+			local = "%" + n + " = "
+		}
+		at := c.Pins[members[0]]
+		// A terminal drawn at several pins gets one named pin for each
+		// (RNL 0.4, 9.2.4); wires reach each of them by name. A PDK
+		// expansion group is wired at the last pin of a terminal (c.Pins),
+		// so only that one takes its name; the others bind the terminal
+		// unnamed.
+		if locations := c.PinSets[port]; len(locations) > 1 {
+			n := occurrence[port]
+			occurrence[port]++
+			at = locations[n]
+			if local == "" {
+				local = "%" + multiPinName(groupIndex(c, port), n) + " = "
+			} else if n != len(locations)-1 {
+				local = ""
+			}
+		}
+		body = append(body, local+pt(scaled(at, scale))+" @PIN(terminal="+value+")")
 		if pin.at(1).group {
 			for _, d := range children(pin.at(1), "display") {
 				label := c.Labels[port]
@@ -321,7 +369,7 @@ func loadRules(text string) map[string]orientationRule {
 	if e := json.Unmarshal([]byte(text), &data); e != nil {
 		fail("Unsupported symbol orientation configuration: %s", e)
 	}
-	if data.Schema != 1 || len(data.Package) != 2 || data.Package["name"] != "eda-symbol" || data.Package["version"] != "0.1" {
+	if data.Schema != 1 || len(data.Package) != 2 || data.Package["name"] == "" || data.Package["version"] == "" {
 		fail("Unsupported symbol orientation configuration")
 	}
 	if data.Symbols == nil {
@@ -336,22 +384,29 @@ func loadRules(text string) map[string]orientationRule {
 		if _, ok := matrices[r.Correction]; !ok {
 			fail("Invalid package orientation for %s", name)
 		}
-		if r.Pins != nil {
-			seen := map[int]bool{}
-			if len(r.Pins) == 0 {
-				fail("Invalid alignment pins for %s", name)
-			}
-			for _, p := range r.Pins {
-				if p < 1 || seen[p] {
-					fail("Invalid alignment pins for %s", name)
-				}
-				seen[p] = true
-			}
-		}
+		checkAlignPins(name, r.Pins)
 		out[name] = r
 	}
 	return out
 }
+
+// checkAlignPins accepts no list, or a list of distinct pin numbers from 1.
+func checkAlignPins(name string, pins []int) {
+	if pins == nil {
+		return
+	}
+	seen := map[int]bool{}
+	if len(pins) == 0 {
+		fail("Invalid alignment pins for %s", name)
+	}
+	for _, p := range pins {
+		if p < 1 || seen[p] {
+			fail("Invalid alignment pins for %s", name)
+		}
+		seen[p] = true
+	}
+}
+
 func compose(outer, inner string) string {
 	x := transform(transform(point{1, 0}, inner, point{}), outer, point{})
 	y := transform(transform(point{0, 1}, inner, point{}), outer, point{})

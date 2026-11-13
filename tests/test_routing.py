@@ -6,16 +6,12 @@ import re
 import sys
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'tests/reference'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'tests/support'))
 from rnl_export import edif, resources
-from rnl_export.convert import convert
 from rnl_export.edif import Cell, Net
-from rnl_export.routing import draw_routes
-from fixtures import primitive_drawing
+from fixtures import primitive_drawing, ports
 import test_symbols
-
-if os.environ.get('RNL_EXPORT_BACKEND', 'go') == 'go':
-    from go_backend import convert, draw_routes
+from go_backend import convert, draw_routes
 
 
 class RouteTests(unittest.TestCase):
@@ -73,7 +69,7 @@ class RouteTests(unittest.TestCase):
             contents.append(repeated)
             def serialize(node):
                 return '('+' '.join(serialize(n) for n in node)+')' if isinstance(node, list) else json.dumps(node)
-            files, _ = convert('// Fixture\n// Library name: work\n// Cell name: top\nX0 (N1 N2 N3 N4) relay\n', serialize(tree), {('analogLib', 'switch'): ['P1', 'P2', 'P3', 'P4']}, resources.read('eda-symbol.rnl'), 'top', dialect='spectre')
+            files, _ = convert('// Fixture\n// Library name: work\n// Cell name: top\nX0 (N1 N2 N3 N4) relay\n', serialize(tree), {('analogLib', 'switch'): ports('switch', 4)}, resources.read('eda-symbol.rnl'), 'top', dialect='spectre')
             for packages in ('eda', 'standard', 'standard-with-eda-style'):
                 with self.subTest(orientation=frame, packages=packages):
                     drawing = dict(files)

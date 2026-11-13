@@ -65,6 +65,8 @@ func testJSON(dir string) {
 		Request             string
 		Library             string
 		Captures            []libraryCapture
+		SymbolOnlyCells     string `json:"symbol_only_cells"`
+		SymbolPackage       string `json:"symbol_package"`
 	}
 	out := map[string]any{}
 	message := guarded(func() {
@@ -78,7 +80,7 @@ func testJSON(dir string) {
 			convert(req.convertInput, dir)
 			out["capture"] = capture
 		case "library":
-			files, report := assembleLibrary(req.Captures, req.Library, req.Dialect, req.Split, req.ExportSymbols, dir)
+			files, report := assembleLibrary(req.Captures, req.Library, req.Dialect, req.Split, parseSymbolOnlyMode(req.SymbolOnlyCells, req.SymbolPackage, req.Library), dir)
 			out["files"], out["report"] = files, report
 		case "", "convert":
 			files, report := convert(req.convertInput, dir)
@@ -104,7 +106,7 @@ func testJSON(dir string) {
 		case "rules":
 			text := req.Text
 			if text == "" {
-				text = resource(dir, "symbol-orientations.json")
+				text = resource(dir, "eda-symbol.virtuoso.json")
 			}
 			out["rules"] = loadRules(text)
 		case "interfaces":

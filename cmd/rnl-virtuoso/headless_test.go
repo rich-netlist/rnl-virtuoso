@@ -26,7 +26,7 @@ func TestHeadlessOptionsAndConfig(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if !o.External || !o.Hierarchy || !o.AutoCheckSave || o.Symbols || o.Output != filepath.Join(base, "result") || len(o.EnvCSH) != 1 || o.EnvCSH[0] != envFile || o.Virtuoso != "custom-virtuoso" {
+	if !o.External || !o.Hierarchy || !o.AutoCheckSave || o.SymbolOnlyCells != "subcircuit" || o.Output != filepath.Join(base, "result") || len(o.EnvCSH) != 1 || o.EnvCSH[0] != envFile || o.Virtuoso != "custom-virtuoso" {
 		t.Fatalf("bad options: %+v", o)
 	}
 	override := filepath.Join(base, "override.csh")
@@ -54,6 +54,13 @@ func TestHeadlessDriverEscapesInputAndStatus(t *testing.T) {
 	}
 	if strings.Contains(text, "hiRegTimer") || !strings.Contains(text, "?wait t)") {
 		t.Fatal("driver should use blocking API")
+	}
+	if strings.Contains(text, "?symbolLibraries") {
+		t.Fatal("the default symbol libraries need no keyword")
+	}
+	o.SymbolLibraries = cshFiles{"/libs/pdk.rnl", "/libs/a \"b\".rnl"}
+	if libraries := headlessDriver(o); !strings.Contains(libraries, `?symbolLibraries list("/libs/pdk.rnl" `+skillString(`/libs/a "b".rnl`)+`) ?wait t)`) {
+		t.Fatal("symbol libraries not passed in order:\n", libraries)
 	}
 	// Parse the driver with the SKILL string lexer to prove quoted user data remains one token.
 	n := parse("("+text+")", true)

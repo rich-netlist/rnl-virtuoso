@@ -24,16 +24,18 @@ func (s *cshFiles) String() string     { return strings.Join(*s, ", ") }
 func (s *cshFiles) Set(v string) error { *s = append(*s, v); return nil }
 
 type headlessConfig struct {
-	EnvCSH   []string `json:"env_csh"`
-	Virtuoso string   `json:"virtuoso"`
+	EnvCSH          []string `json:"env_csh"`
+	Virtuoso        string   `json:"virtuoso"`
+	SymbolLibraries []string `json:"symbol_libraries"`
 }
 type headlessOptions struct {
-	Project, Library, Cell, Output, Logs, Install, Virtuoso                               string
-	Config, Format, FileMode, View, SchematicViews, SymbolViews                           string
-	EnvCSH                                                                                cshFiles
-	Hierarchy, External, AutoCheckSave, SelectionBox, Symbols, CDSInit, Verbose, NoConfig bool
-	Scale                                                                                 float64
-	Timeout                                                                               time.Duration
+	Project, Library, Cell, Output, Logs, Install, Virtuoso                      string
+	Config, Format, FileMode, View, SchematicViews, SymbolViews                  string
+	SymbolOnlyCells, SymbolPackageName                                           string
+	EnvCSH, SymbolLibraries                                                      cshFiles
+	Hierarchy, External, AutoCheckSave, SelectionBox, CDSInit, Verbose, NoConfig bool
+	Scale                                                                        float64
+	Timeout                                                                      time.Duration
 }
 
 func expandHeadlessPath(value, base string) (string, error) {
@@ -62,6 +64,7 @@ func parseHeadlessOptions(args []string, exe string, stderr io.Writer) (headless
 	fs.StringVar(&o.Install, "install-dir", "", "Exporter installation (default: executable's parent installation)")
 	fs.StringVar(&o.Virtuoso, "virtuoso", "virtuoso", "Virtuoso executable name or path")
 	fs.Var(&o.EnvCSH, "env-csh", "Source this C shell environment file before launch; repeatable, overrides config")
+	fs.Var(&o.SymbolLibraries, "symbol-library", "RNL symbol library package (.rnl), highest priority first; repeatable, overrides config (default: bundled eda-symbol)")
 	fs.StringVar(&o.Config, "config", "", "Environment JSON (default: ~/.config/rnl-virtuoso/config.json or XDG_CONFIG_HOME)")
 	fs.BoolVar(&o.NoConfig, "no-config", false, "Ignore the automatic environment config")
 	fs.StringVar(&o.Format, "format", "spectre", "spectre or cdl")
@@ -73,7 +76,8 @@ func parseHeadlessOptions(args []string, exe string, stderr io.Writer) (headless
 	fs.BoolVar(&o.External, "external", false, "Include foreign cells (default: true for cell, false for library)")
 	fs.BoolVar(&o.AutoCheckSave, "auto-check-save", true, "Check and save stale source schematics; use =false for read-only export")
 	fs.BoolVar(&o.SelectionBox, "selection-box", true, "Use native symbol selection boxes")
-	fs.BoolVar(&o.Symbols, "symbols", false, "Also emit symbols.rnl")
+	fs.StringVar(&o.SymbolOnlyCells, "symbol-only-cells", "subcircuit", "Cells with a symbol and no schematic: subcircuit (an empty subcircuit with the symbol each) or package (one symbol package with a mapping file) (library only)")
+	fs.StringVar(&o.SymbolPackageName, "symbol-package-name", "", "Name of the symbol package of --symbol-only-cells package (default: the library name in lower case) (library only)")
 	fs.Float64Var(&o.Scale, "scale", 10, "EDIF units per RNL unit")
 	fs.DurationVar(&o.Timeout, "timeout", 30*time.Minute, "Maximum whole-run duration (e.g. 30m, 2h); 0 disables")
 	fs.BoolVar(&o.CDSInit, "cdsinit", false, "Allow .cdsinit startup; default skips it")
@@ -100,6 +104,15 @@ func parseHeadlessOptions(args []string, exe string, stderr io.Writer) (headless
 	}
 	if o.Cell == "" && (seen["hierarchy"] || seen["file-mode"] || seen["view"]) {
 		return o, errors.New("--hierarchy, --file-mode and --view require --cell")
+	}
+	if o.Cell != "" && (seen["symbol-only-cells"] || seen["symbol-package-name"]) {
+		return o, errors.New("--symbol-only-cells and --symbol-package-name apply to a library export; omit --cell")
+	}
+	if o.SymbolOnlyCells != "subcircuit" && o.SymbolOnlyCells != "package" {
+		return o, errors.New("--symbol-only-cells must be subcircuit or package")
+	}
+	if seen["symbol-package-name"] && o.SymbolOnlyCells != "package" {
+		return o, errors.New("--symbol-package-name requires --symbol-only-cells package")
 	}
 	if !seen["external"] {
 		o.External = o.Cell != ""
@@ -157,6 +170,15 @@ func parseHeadlessOptions(args []string, exe string, stderr io.Writer) (headless
 					o.EnvCSH = append(o.EnvCSH, p)
 				}
 			}
+			if len(o.SymbolLibraries) == 0 {
+				for _, p := range cfg.SymbolLibraries {
+					p, e = expandHeadlessPath(p, filepath.Dir(o.Config))
+					if e != nil {
+						return o, e
+					}
+					o.SymbolLibraries = append(o.SymbolLibraries, p)
+				}
+			}
 			if !seen["virtuoso"] && cfg.Virtuoso != "" {
 				o.Virtuoso = cfg.Virtuoso
 				if strings.ContainsAny(o.Virtuoso, "/\\") {
@@ -206,7 +228,13 @@ func parseHeadlessOptions(args []string, exe string, stderr io.Writer) (headless
 			return o, err
 		}
 	}
-	for _, v := range append([]string{o.Library, o.Cell, o.Project, o.Output, o.Logs, o.Install, o.Virtuoso, o.View, o.SchematicViews, o.SymbolViews}, o.EnvCSH...) {
+	for i, p := range o.SymbolLibraries {
+		o.SymbolLibraries[i], err = expandHeadlessPath(p, cwd)
+		if err != nil {
+			return o, err
+		}
+	}
+	for _, v := range append(append([]string{o.Library, o.Cell, o.Project, o.Output, o.Logs, o.Install, o.Virtuoso, o.View, o.SchematicViews, o.SymbolViews}, o.EnvCSH...), o.SymbolLibraries...) {
 		for _, ch := range v {
 			if ch < 32 || ch == 127 {
 				return o, errors.New("names and paths must not contain control characters")
@@ -244,7 +272,21 @@ func headlessDriver(o headlessOptions) string {
 	}
 	call += " ?format " + q(o.Format) + " ?external " + b(o.External) + " ?scale " + strconv.FormatFloat(o.Scale, 'g', -1, 64) +
 		" ?schematicViews " + q(o.SchematicViews) + " ?symbolViews " + q(o.SymbolViews) + " ?autoCheckSave " + b(o.AutoCheckSave) +
-		" ?exportSelectionBox " + b(o.SelectionBox) + " ?exportSymbols " + b(o.Symbols) + " ?wait t)"
+		" ?exportSelectionBox " + b(o.SelectionBox)
+	if o.Cell == "" {
+		call += " ?symbolOnlyCells " + q(o.SymbolOnlyCells)
+		if o.SymbolPackageName != "" {
+			call += " ?symbolPackageName " + q(o.SymbolPackageName)
+		}
+	}
+	if len(o.SymbolLibraries) > 0 {
+		libraries := []string{}
+		for _, p := range o.SymbolLibraries {
+			libraries = append(libraries, q(p))
+		}
+		call += " ?symbolLibraries list(" + strings.Join(libraries, " ") + ")"
+	}
+	call += " ?wait t)"
 	return "let((result status port state rnlPreparedOutput)\n" +
 		"  result = errset(progn(\n    load(" + q(filepath.Join(o.Install, "rnl-virtuoso.il")) + ")\n" +
 		"    unless(cadr(assoc(\"blocking_export\" rnlExporterInfo())) error(\"This installation lacks blocking export support.\\n\"))\n" +

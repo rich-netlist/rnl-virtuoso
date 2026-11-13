@@ -9,8 +9,8 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent/'reference'))
-from fixtures import drawing, spectre_netlist, netlist, marker_drawing
+sys.path.insert(0, str(Path(__file__).resolve().parent/'support'))
+from fixtures import drawing, spectre_netlist, netlist, marker_drawing, clean_check
 from go_backend import call, cell_json
 from rnl_export import ExportError, edif, resources
 
@@ -28,9 +28,6 @@ def with_dependencies(files, entry):
         if name.endswith(extension) and ported.search(files[name]):
             text += ('include ' if spectre else '.include ')+json.dumps(name)+'\n'
     return dict(files, **{caller: text}), caller
-
-
-@unittest.skipIf(os.environ.get('RNL_EXPORT_BACKEND') == 'python', 'Shared-library export is a Go backend extension')
 class LibraryTests(unittest.TestCase):
     def capture(self, native, source, top, dialect='spectre', **options):
         return call(op='capture', library='work', netlist=native, drawing=source, top=top,
@@ -75,7 +72,7 @@ class LibraryTests(unittest.TestCase):
                     (root/actual).write_text(context[actual], encoding='utf-8')
                 result = subprocess.run([binary, 'check', str(root/actual)], capture_output=True, text=True, encoding='utf-8')
                 self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
-                self.assertIn('0 errors, 0 warnings', result.stdout+result.stderr)
+                self.assertTrue(clean_check(result.stdout+result.stderr), result.stdout+result.stderr)
 
     def external_inputs(self, dialect, library='other', native_name='Leaf_native_2', top='top', portless=False):
         tree = edif.parse(drawing())
@@ -133,7 +130,7 @@ class LibraryTests(unittest.TestCase):
             prefix = '' if dialect == 'spectre' else '.'
             for split in (False, True):
                 with self.subTest(dialect=dialect, split=split):
-                    result = call(op='library', library='work', dialect=dialect, split=split, captures=captures, export_symbols=True)
+                    result = call(op='library', library='work', dialect=dialect, split=split, captures=captures)
                     files, report = result['files'], result['report']
                     self.assertEqual(len(report['definitions']), 6)
                     self.assertEqual(len(report['entries']), 5)
@@ -154,11 +151,11 @@ class LibraryTests(unittest.TestCase):
                             self.assertEqual(text.count(prefix+'include '+json.dumps(path)+'\n'), 1)
                         if entry['cell'] in ('top', 'second', 'third'):
                             self.assertNotIn(prefix+'include ', text)
-                    self.check(files, [e['file'] for e in report['entries']]+['symbols.rnl'])
+                    self.check(files, [e['file'] for e in report['entries']]+['OnlySymbol.'+extension])
 
     def test_unsafe_or_colliding_library_directories_are_rejected(self):
         capture = self.external_fixture('spectre')
-        for directory in ('..', '.', '../escape', 'bad\\dir', 'trailing.', 'trailing ', 'symbols.rnl', 'top.scs'):
+        for directory in ('..', '.', '../escape', 'bad\\dir', 'trailing.', 'trailing ', 'eda-style.rnl', 'top.scs'):
             bad = copy.deepcopy(capture)
             next(d for d in bad['Definitions'] if d['Library'] == 'other')['Library'] = directory
             with self.subTest(directory=directory), self.assertRaisesRegex(ExportError, 'Unsafe|conflicts|Conflicting'):
@@ -172,23 +169,23 @@ class LibraryTests(unittest.TestCase):
             captures = self.fixtures(dialect)
             for split in (False, True):
                 with self.subTest(dialect=dialect, split=split):
-                    result = call(op='library', library='work', dialect=dialect, split=split, captures=captures, export_symbols=True)
+                    result = call(op='library', library='work', dialect=dialect, split=split, captures=captures)
                     files, report = result['files'], result['report']
                     self.assertEqual(len(report['definitions']), 2)
                     self.assertEqual(len(report['entries']), 4)
                     self.assertFalse([n for n in files if n.startswith('netlists/')])
-                    self.assertEqual(files['symbols.rnl'].count('$"work/OnlySymbol" ='), 1)
                     extension = 'scs' if dialect == 'spectre' else 'sp'
+                    self.assertEqual(files['OnlySymbol.'+extension].count('%block_symbol = @DEFINE-SYMBOL'), 1)
                     host = '#"I0"' if dialect == 'spectre' else '#"XI0"'
                     self.assertNotIn(host+' @SET-SYMBOL', files['top.'+extension])
                     self.assertIn('# @SET-SYMBOL %block_symbol', files['leaf.'+extension])
                     self.assertNotIn(('subckt ' if dialect == 'spectre' else '.SUBCKT ')+'bench', files['bench.'+extension])
-                    self.check(files, [e['file'] for e in report['entries']]+['symbols.rnl'])
-            only = call(op='library', library='work', dialect=dialect, split=False, captures=[captures[-1]], export_symbols=True)
+                    self.check(files, [e['file'] for e in report['entries']]+['OnlySymbol.'+extension])
+            only = call(op='library', library='work', dialect=dialect, split=False, captures=[captures[-1]])
             self.assertEqual(only['report']['entries'], [])
             self.assertEqual(only['report']['definitions'], [])
             self.assertFalse([name for name in only['files'] if name.startswith('netlists/')])
-            self.check(only['files'], ['symbols.rnl'])
+            self.check(only['files'], ['OnlySymbol.'+('scs' if dialect == 'spectre' else 'sp')])
 
     def test_conflicting_native_names_and_electrical_definitions_are_not_swallowed(self):
         captures = self.fixtures('spectre')[:2]

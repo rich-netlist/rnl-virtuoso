@@ -5,9 +5,6 @@ import unittest
 from fixtures import drawing, netlist, spectre_netlist
 import test_symbols
 from go_backend import convert
-
-
-@unittest.skipIf(os.environ.get('RNL_EXPORT_BACKEND') == 'python', 'Port directions use the Go backend')
 class PortTests(unittest.TestCase):
     def export(self, array=False, frame='R0', directions=('INPUT', 'OUTPUT'), dialect='spectre', repeated=False):
         source = drawing(array)
@@ -59,7 +56,8 @@ class PortTests(unittest.TestCase):
         for title in ('top', 'leaf'):
             entry = 'top.scs' if 'top.scs' in files else 'top.sp'
             level = test_symbols.SymbolTests().dump(files, title, entry)
-            self.assertEqual(len(level['wires']), 4)  # Two source stubs and coincident pin contacts.
+            # Two source stubs and coincident pin contacts, and a wire to each bus port's tag.
+            self.assertEqual(len(level['wires']), 6 if array else 4)
             self.assertFalse(level['flylines'])
             for index, (name, expected, x) in enumerate(zip(('A', 'B'), symbols, (0, 6))):
                 anchor_id = '%%port_%d' % index
@@ -80,7 +78,7 @@ class PortTests(unittest.TestCase):
                     pin_symbol = level['symbols'][anchor['symbol']]
                     self.assertFalse(pin_symbol['prims'])
                     self.assertFalse(pin_symbol['nested'])
-                    self.assertEqual(pin_symbol['pins'][0]['terminals'], ['1', '2'])
+                    self.assertEqual(pin_symbol['pins'][0]['terminals'], ['p', 'p1'])  # The anchor's roles, by name.
                     self.assertEqual(anchor['at'], marker['at'])
                     self.assertFalse(anchor['texts'])
 
@@ -115,7 +113,7 @@ class PortTests(unittest.TestCase):
                         files['top.scs'] = re.sub(r'^//\s*@USE-PACKAGE\(name="eda-style".*\n', '', files['top.scs'], flags=re.M)
                     for title in ('top', 'leaf'):
                         level = test_symbols.SymbolTests().dump(files, title)
-                        self.assertEqual(len(level['wires']), 4)
+                        self.assertEqual(len(level['wires']), 6 if array else 4)
                         self.assertFalse(level['flylines'])
                         for i, expected in enumerate(('input_port_symbol', 'output_port_symbol')):
                             marker = next(item for item in level['items'] if item['id'] == '%%port_%d%s' % (i, '_marker' if array else ''))

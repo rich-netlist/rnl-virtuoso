@@ -45,9 +45,9 @@ modified and no alias is evaluated. Only trusted environment scripts should be
 selected: they execute as the invoking user.
 
 If a site alias loads environments and then launches `virtuoso &`, use its
-`source` files here rather than executing the alias. For example, the verified
-`ic6_sui` alias on thu-sui uses `/home/cshrc/.cshrc.cadence.sui` and
-`/home/cshrc/.cshrc.mentor25.sui`. Verify the current site definition before reuse.
+`source` files here rather than executing the alias: pass each C shell script it
+sources with `--env-csh`, in the alias's order. Verify the current site definition
+before reuse.
 
 After setup, the launcher enters the specified project and clears inherited
 external-display/session bindings. It uses `-nograph -nocdsinit`; Cadence provides
@@ -70,7 +70,9 @@ Run `rnl-virtuoso export --help` for the full list. Boolean flags use
 | `--schematic-views`, `--symbol-views` | `schematic`, `symbol`; quoted space-separated lists in priority order |
 | `--auto-check-save` | `true`, matching GUI/API; **use `--auto-check-save=false` for read-only export** |
 | `--selection-box` | `true`, union of native selection boxes |
-| `--symbols` | `false`, optional extra `symbols.rnl` collection |
+| `--symbol-library` | Bundled `eda-symbol`; repeat for several `.rnl` symbol libraries, highest priority first. Config key `symbol_libraries` |
+| `--symbol-only-cells` | `subcircuit`: each cell without schematic becomes an empty subcircuit with its symbol; `package`: one symbol package with a mapping file. Library only |
+| `--symbol-package-name` | Name of that package; default the library name in lower case. Library only, with `package` |
 | `--scale` | `10`, positive finite EDIF units per RNL unit |
 | `--timeout` | `30m` for the entire run; e.g. `2h`, or `0` for no deadline |
 | `--logs` | Default `.rnl/launcher` inside output; custom paths must stay below output/.rnl, outside reserved work/tmp directories |
@@ -81,6 +83,11 @@ Run `rnl-virtuoso export --help` for the full list. Boolean flags use
 its descendants once; ported files have no native includes. Keep all generated
 files together. Native model/Verilog-A references remain external. This command
 exports a design; it does not simulate it.
+
+To draw a PDK's devices with its own symbols, export the PDK library once with
+`--symbol-only-cells package --symbol-package-name pdk-<lib>`, then pass the
+resulting package to `--symbol-library` when exporting designs; see
+[PDK symbols](export.md#pdk-symbols).
 
 ## Completion, logs and automation
 

@@ -37,8 +37,7 @@ func TestRipperMemberConnectivityAndBusGraphics(t *testing.T) {
 
 func TestEmptyPortedSchematicAndExplicitParentParameters(t *testing.T) {
 	drawing := testEDIF(`(cell top (view schematic (interface (port A)) (contents (net A (joined (portRef A))))))`)
-	pkg := resource(testResources(), "eda-symbol.rnl")
-	files, _ := convert(convertInput{Top: "top", Dialect: "spectre", Drawing: drawing, Netlist: "// Library name: work\n// Cell name: top\n// View name: schematic\n", Package: pkg}, testResources())
+	files, _ := convert(convertInput{Top: "top", Dialect: "spectre", Drawing: drawing, Netlist: "// Library name: work\n// Cell name: top\n// View name: schematic\n"}, testResources())
 	if !strings.Contains(files["top.scs"], "subckt top A\n") || !strings.Contains(files["top.scs"], "ends top") {
 		t.Fatal(files)
 	}
@@ -61,14 +60,14 @@ func TestParameterMergeRetainsNativeDeclarationAndRejectsChangedBody(t *testing.
 		return libraryCapture{Dialect: "spectre", Definitions: []libraryDefinition{d}}
 	}
 	for _, parts := range [][]libraryCapture{{part(root), part(child)}, {part(child), part(root)}} {
-		files, _ := assembleLibrary(parts, "work", "spectre", true, false, testResources())
+		files, _ := assembleLibrary(parts, "work", "spectre", true, symbolOnlyMode{Kind: "subcircuit"}, testResources())
 		if !strings.Contains(files["leaf.scs"], "parameters gain=2") || !strings.Contains(files["leaf.scs"], "subckt leaf A B") {
 			t.Fatal(files)
 		}
 	}
 	child.Body = strings.Replace(child.Body, "r=gain", "r=2*gain", 1)
 	rejects(t, "Conflicting native", func() {
-		assembleLibrary([]libraryCapture{part(root), part(child)}, "work", "spectre", true, false, testResources())
+		assembleLibrary([]libraryCapture{part(root), part(child)}, "work", "spectre", true, symbolOnlyMode{Kind: "subcircuit"}, testResources())
 	})
 	child.Body = root.Body
 	root.Body = strings.Replace(root.Body, "R0", "parameters gain=3\nR0", 1)
@@ -91,7 +90,7 @@ func TestNoConnAtWireEndWithMultipleDevices(t *testing.T) {
    (figure wire (path (pointList (pt 0 0) (pt 10 0) (pt 20 0))))
    (figure wire (path (pointList (pt 10 0) (pt 10 -10)))))
   (net B (joined (portRef n (instanceRef R0)) (portRef n (instanceRef R1)))))))`)
-	files, _ := convert(convertInput{Top: "top", Dialect: "spectre", Drawing: drawing, Netlist: "R0 (A B) resistor r=1\nR1 (A B) resistor r=2\n", Package: resource(testResources(), "eda-symbol.rnl"), Orders: []orderEntry{{"work", "resistor", []string{"p", "n"}}}}, testResources())
+	files, _ := convert(convertInput{Top: "top", Dialect: "spectre", Drawing: drawing, Netlist: "R0 (A B) resistor r=1\nR1 (A B) resistor r=2\n", Orders: []orderEntry{{"work", "resistor", []string{"p", "n"}}}}, testResources())
 	if !strings.Contains(files["top.scs"], "@SET-SYMBOL $NO_CONNECT_SYMBOL") || !strings.Contains(files["top.scs"], "R1 (A B) resistor r=2") {
 		t.Fatal(files)
 	}
@@ -149,7 +148,7 @@ func TestEmptyRootUsesVerifiedSourcePortsForNativeRenaming(t *testing.T) {
 	b.Root = false
 	b.Body = "subckt leaf A_0\nends leaf\n"
 	parts := []libraryCapture{{Dialect: "spectre", Definitions: []libraryDefinition{a, b}}}
-	files, _ := assembleLibrary(parts, "work", "spectre", true, false, testResources())
+	files, _ := assembleLibrary(parts, "work", "spectre", true, symbolOnlyMode{Kind: "subcircuit"}, testResources())
 	if !strings.Contains(files["leaf.scs"], "subckt leaf A_0\n") {
 		t.Fatal(files)
 	}
@@ -170,7 +169,7 @@ func TestUnusedSyntheticRootParametersMerge(t *testing.T) {
 	root.Root = true
 	root.Body = strings.Replace(child.Body, "R0", "parameters gain unused\nR0", 1)
 	for _, pair := range [][2]libraryDefinition{{root, child}, {child, root}} {
-		files, _ := assembleLibrary([]libraryCapture{{Dialect: "spectre", Definitions: []libraryDefinition{pair[0]}}, {Dialect: "spectre", Definitions: []libraryDefinition{pair[1]}}}, "work", "spectre", true, false, testResources())
+		files, _ := assembleLibrary([]libraryCapture{{Dialect: "spectre", Definitions: []libraryDefinition{pair[0]}}, {Dialect: "spectre", Definitions: []libraryDefinition{pair[1]}}}, "work", "spectre", true, symbolOnlyMode{Kind: "subcircuit"}, testResources())
 		if strings.Contains(files["leaf.scs"], "parameters gain") {
 			t.Fatal("unused synthetic declarations survived native child selection")
 		}

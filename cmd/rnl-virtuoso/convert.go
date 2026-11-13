@@ -30,31 +30,32 @@ func loadOrders(text string) map[cellKey][]string {
 }
 
 type convertInput struct {
-	ExportSymbols      bool                       `json:"export_symbols"`
-	Netlist            string                     `json:"netlist"`
-	Drawing            string                     `json:"drawing"`
-	Orders             []orderEntry               `json:"orders"`
-	Package            string                     `json:"package"`
-	Top                string                     `json:"top"`
-	Hierarchy          *bool                      `json:"hierarchy"`
-	Split              bool                       `json:"split"`
-	Scale              *float64                   `json:"scale"`
-	Dialect            string                     `json:"dialect"`
-	NameMaps           map[string]nameMap         `json:"name_maps"`
-	RootSymbol         *string                    `json:"root_symbol"`
-	BehaviorModels     map[string][]string        `json:"behavior_models"`
-	StylePackage       *string                    `json:"style_package"`
-	OrientationRules   map[string]orientationRule `json:"orientation_rules"`
-	Standard           map[string]string          `json:"standard"`
-	LibraryScope       string                     `json:"library_scope"`
-	Capture            *libraryCapture            `json:"-"`
-	Annotations        string                     `json:"annotations"`
-	SymbolDrawings     []symbolDrawing            `json:"symbol_drawings"`
-	ExportSelectionBox *bool                      `json:"export_selection_box"`
-	SelectionBoxes     string                     `json:"selection_boxes"`
+	Netlist            string              `json:"netlist"`
+	Drawing            string              `json:"drawing"`
+	Orders             []orderEntry        `json:"orders"`
+	SymbolLibraries    []libraryInput      `json:"symbol_libraries"`
+	Top                string              `json:"top"`
+	Hierarchy          *bool               `json:"hierarchy"`
+	Split              bool                `json:"split"`
+	Scale              *float64            `json:"scale"`
+	Dialect            string              `json:"dialect"`
+	NameMaps           map[string]nameMap  `json:"name_maps"`
+	RootSymbol         *string             `json:"root_symbol"`
+	BehaviorModels     map[string][]string `json:"behavior_models"`
+	StylePackage       *string             `json:"style_package"`
+	LibraryScope       string              `json:"library_scope"`
+	Capture            *libraryCapture     `json:"-"`
+	Annotations        string              `json:"annotations"`
+	SymbolDrawings     []symbolDrawing     `json:"symbol_drawings"`
+	ExportSelectionBox *bool               `json:"export_selection_box"`
+	SelectionBoxes     string              `json:"selection_boxes"`
 }
 
 type symbolDrawing struct{ Library, Cell, Drawing string }
+
+// One terminal of an instance's bus pin. In RNL 0.4 a no-connect mark names
+// the terminal it leaves open (12.6), so a bus pin is marked member by member.
+type busMember struct{ Net, Ref string }
 
 func normalize(s, dialect string) string {
 	if dialect == "cdl" {
@@ -95,9 +96,24 @@ func portID(c *cell, spelling, dialect string, names map[string]string) string {
 	}
 	return id
 }
-func header(carrier string) string {
-	return strings.ReplaceAll("* @RNL(type=\"header\") {\n*   @VERSION(\"0.3\");\n*   @USE-PACKAGE(name=\"eda-symbol\", version=\"0.1\", path=\"eda-symbol.rnl\");\n*   @USE-PACKAGE(name=\"eda-style\", version=\"0.1\", path=\"eda-style.rnl\")\n* }\n", "*", carrier)
+
+// RNL 0.4 uses no package implicitly: the header names the standard collection,
+// drops its automatic fill (the drawing already holds every wire, port and
+// marker of the source schematic), then the symbol libraries, the highest
+// priority last, and the style package. One package per line, so a reader can
+// replace or remove one of them.
+const rnlVersion = "0.4"
+
+func header(carrier string, libraries []*symbolLibrary) string {
+	lines := append(append([]string{`@VERSION("` + rnlVersion + `")`, `@USE-PACKAGE(name="rnl-std-all", version="0.4")`, `@USE-PACKAGE(name="rnl-std-fill") {}`}, libraryHeaderLines(libraries)...), `@USE-PACKAGE(name="eda-style", version="0.2", path="eda-style.rnl")`)
+	return carrier + " @RNL(type=\"header\") {\n" + carrier + "   " + strings.Join(lines, ";\n"+carrier+"   ") + "\n" + carrier + " }\n"
 }
+
+// A usage has no terminals in RNL 0.4 (12.1): wires end at a named pin of its symbol.
+func usagePin(usage, pin string) string { return usage + "::" + pin }
+
+// The pins of a PDK expansion group's symbol are named, never like its roles p1..pn.
+func expandedPin(i int) string { return "pin_" + strconvI(i+1) }
 func record(ss []string, carrier string) string {
 	body := strings.Join(ss, ";\n")
 	out := carrier + ` @RNL(author="rnl-virtuoso") {` + "\n"
@@ -174,21 +190,14 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 	if dialect != "cdl" && dialect != "spectre" {
 		fail("Unsupported native netlist format: %s", dialect)
 	}
-	in.Package = symbolPackage(in.Package, dialect)
 	hierarchy := in.Hierarchy == nil || *in.Hierarchy
 	style := resource(resourceDir, "eda-style.rnl")
 	if in.StylePackage != nil {
 		style = *in.StylePackage
 	}
-	rules := in.OrientationRules
-	if rules == nil {
-		rules = loadRules(resource(resourceDir, "symbol-orientations.json"))
-	}
-	standards := packagePins(in.Package)
-	standardNames := standard
-	if in.Standard != nil {
-		standardNames = in.Standard
-	}
+	libraries := loadSymbolLibraries(in.SymbolLibraries, resourceDir)
+	unmapped, warnings := stringSet{}, []string{}
+	librarySymbolsByLevel := map[string]map[string]string{}
 	orders := map[cellKey][]string{}
 	for _, row := range in.Orders {
 		ports := []string{}
@@ -356,7 +365,10 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 			}
 		}
 		endpoints := []endpoint{}
+		busMembers := map[string][]busMember{}
 		localSymbols := map[string]string{}
+		librarySymbolsByLevel[key] = map[string]string{}
+		copies := librarySymbolsByLevel[key]
 		expandedTypes := map[int]string{}
 		expandedCount := 0
 		var symbolCell *cell
@@ -507,40 +519,80 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 				stats["bundles"]++
 			}
 			xy, outputOrient := scaled(ins.XY, scale), ins.Orient
-			symbol := ""
-			if master.Library == "analogLib" && child == nil && group == nil && master.ExportSymbol == nil {
-				symbol = standardNames[strings.ToLower(master.Name)]
+			// A leaf instance takes the symbol of the first symbol library, by
+			// priority, that maps its cell; otherwise its own EDIF symbol.
+			var choice *symbolChoice
+			if child == nil && group == nil && master.ExportSymbol == nil {
+				nodes := []string{}
+				for _, p := range order {
+					nodes = append(nodes, master.Ports[p])
+				}
+				choice = chooseSymbol(libraries, ins.Master, words[0], nativeModel(words, dialect), dialect, nodes)
 			}
 			var destination []point
-			if pins, ok := standards[symbol]; symbol != "" && ok {
-				aliases := map[string]string{"d": "1", "g": "2", "s": "3", "b": "4", "c": "1", "e": "3", "p": "1", "n": "2", "a": "1", "k": "2"}
-				numeric := map[string]point{}
-				for p, pos := range pins {
-					k := p
-					if a, ok := aliases[p]; ok {
-						k = a
-					}
-					numeric[k] = pos
-				}
-				complete := true
+			var names []string
+			reference := ""
+			if choice != nil {
+				// A symbol with named pins binds them in node order through
+				// SET-SYMBOL terminals= (11.3), whatever names the host gives.
+				names = choice.Terminals
+				pins := choice.Library.Pins[choice.Symbol]
+				complete := len(names) == 0 || len(order) <= len(names)
 				for i := range order {
-					p, ok := numeric[strconvI(i+1)]
-					if !ok {
+					key := strconvI(i + 1)
+					if len(names) > 0 && i < len(names) {
+						key = strings.ToLower(names[i])
+					}
+					p, ok := pins[key]
+					if !ok || key == "" {
 						complete = false
 					}
 					destination = append(destination, p)
 				}
 				if !complete {
 					destination = nil
+					notes = append(notes, "Symbol library "+choice.Library.Name+" gives "+ins.Master.Library+"/"+ins.Master.Cell+" the symbol $"+choice.Symbol+", but its pins do not bind every terminal of the instance; the EDIF symbol is kept")
 				}
+				reference = "$" + choice.Symbol
+				if other := hiddenBy(libraries, choice); destination != nil && other != nil {
+					// RNL 0.4 has no package-qualified names (16.2): a symbol whose
+					// name a library of higher priority also defines is copied into
+					// the level.
+					copyKey := choice.Library.File + "\x00" + choice.Symbol
+					if id, ok := copies[copyKey]; ok {
+						reference = id
+					} else if text, ok := localCopy(choice.Library, choice.Symbol, "%library_symbol_"+strconvI(len(copies))); ok {
+						reference = "%library_symbol_" + strconvI(len(copies))
+						copies[copyKey] = reference
+						ss = append(ss, text)
+						warnings = append(warnings, "Symbol $"+choice.Symbol+" of "+choice.Library.Name+" is also defined by "+other.Name+", which has priority; it is copied into "+c.Library+"/"+c.Name)
+					} else {
+						destination = nil
+						warnings = append(warnings, "Symbol $"+choice.Symbol+" of "+choice.Library.Name+" is also defined by "+other.Name+" and includes other symbols, so it cannot be copied; "+ins.Master.Library+"/"+ins.Master.Cell+" keeps its EDIF symbol")
+					}
+				}
+				if destination != nil && choice.Mode == "rules" {
+					notes = append(notes, "Drawn by the rules of symbol library "+choice.Library.Name+", without orientation compensation: "+ins.Master.Library+"/"+ins.Master.Cell)
+				}
+			}
+			if child == nil && group == nil && master.ExportSymbol == nil && destination == nil {
+				unmapped[ins.Master.Library+"/"+ins.Master.Cell] = true
 			}
 			if destination != nil {
 				src := []point{}
 				for _, p := range order {
 					src = append(src, scaled(master.Pins[p], scale))
 				}
-				xy, outputOrient = place(symbol, src, destination, ins.Orient, xy, rules)
-				ss = append(ss, host+" @SET-SYMBOL $"+symbol)
+				xy, outputOrient = place(choice.Symbol, src, destination, ins.Orient, xy, map[string]orientationRule{choice.Symbol: choice.Rule})
+				assignment := " @SET-SYMBOL " + reference
+				if len(names) > 0 {
+					quoted := []string{}
+					for _, n := range names[:len(order)] {
+						quoted = append(quoted, quote(n))
+					}
+					assignment = " @SET-SYMBOL(terminals=[" + strings.Join(quoted, ", ") + "]) " + reference
+				}
+				ss = append(ss, host+assignment)
 				stats["standard_symbols"]++
 				// Exported children supply their own block symbols in every file mode.
 				// Only leaves and omitted child definitions need a local interface.
@@ -560,7 +612,14 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 							mapping[p] = quote("p" + strconvI(i+1))
 						}
 					}
-					ss = append(ss, symbolDefinition(master, sid, mapping, scale, &notes))
+					var pinNames map[string]string
+					if group != nil {
+						pinNames = map[string]string{}
+						for i, p := range order {
+							pinNames[p] = expandedPin(i)
+						}
+					}
+					ss = append(ss, symbolDefinitionNamed(master, sid, mapping, pinNames, scale, &notes))
 					stats["custom_symbols"]++
 				}
 				ss = append(ss, host+" @SET-SYMBOL "+sid)
@@ -573,7 +632,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 			if ins.Bundle != "" {
 				ss = append(ss, host+" @TEXT("+quote(literal(ins.BundleName))+`, key="name")`)
 			}
-			for _, portGroup := range master.GroupOrder {
+			for gi, portGroup := range master.GroupOrder {
 				ports := master.Groups[portGroup]
 				p := ports[0]
 				i := -1
@@ -592,7 +651,26 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 				}
 				terminalRef := host + ":" + strconvI(i+1)
 				if group != nil {
-					terminalRef = host + ":p" + strconvI(i+1)
+					terminalRef = usagePin(host, expandedPin(i))
+				}
+				if group == nil && ins.Bundle == "" && len(ports) > 1 {
+					for _, port := range ports {
+						for j, k := range order {
+							if k == port {
+								busMembers[terminalRef] = append(busMembers[terminalRef], busMember{connections[terminal{strings.ToLower(ins.ID), port}], host + ":" + strconvI(j+1)})
+								break
+							}
+						}
+					}
+				}
+				// The EDIF symbol draws this terminal at several pins: each pin is
+				// a wire end of its own, reached by its name.
+				if locations := master.PinSets[portGroup]; len(locations) > 1 && group == nil && ins.Bundle == "" && destination == nil && master.ExportSymbol == nil {
+					for n, location := range locations {
+						at := transform(scaled(location, scale), ins.Orient, scaled(ins.XY, scale))
+						endpoints = append(endpoints, endpoint{unique(bits), at, usagePin(host, multiPinName(gi, n))})
+					}
+					continue
 				}
 				endpoints = append(endpoints, endpoint{unique(bits), original, terminalRef})
 			}
@@ -643,10 +721,37 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 						}
 					}
 				}
+				// A scalar mark on one bit of an instance's bus pin leaves that
+				// terminal open; RNL 0.4 names it (12.6).
+				if len(targets) == 0 && len(markerBits) == 1 {
+					for _, e := range endpoints {
+						if e.At != at {
+							continue
+						}
+						for _, m := range busMembers[e.Ref] {
+							if m.Net == markerBits[0] {
+								targets = append(targets, m.Ref)
+							}
+						}
+					}
+				}
 				if len(targets) == 1 {
-					ss = append(ss, "$NO_CONNECT @ATTACH "+targets[0]+" => @ORIENT("+quote(ins.Orient)+")")
+					marks := []string{targets[0]}
+					// A whole bus pin left open is one mark per terminal, drawn
+					// one over another at that pin.
+					if members := busMembers[targets[0]]; len(members) > 0 {
+						marks = nil
+						for _, m := range members {
+							if set(markerBits)[m.Net] {
+								marks = append(marks, m.Ref)
+							}
+						}
+					}
+					for _, mark := range marks {
+						ss = append(ss, "$NO_CONNECT @ATTACH "+mark+" => @PLACE"+pt(at)+" => @ORIENT("+quote(ins.Orient)+")")
+					}
 				} else {
-					ss = append(ss, sid+" = "+pt(at), "$FIGURE @ATTACH "+sid+" => @SET-SYMBOL $NO_CONNECT_SYMBOL => @ORIENT("+quote(ins.Orient)+")")
+					ss = append(ss, sid+" = "+pt(at), "$FIGURE @ATTACH "+sid+" => @SET-SYMBOL $NO_CONNECT_SYMBOL => @PLACE"+pt(at)+" => @ORIENT("+quote(ins.Orient)+")")
 					endpoints = append(endpoints, endpoint{markerBits, at, sid})
 				}
 				continue
@@ -656,7 +761,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 				kind = "GROUND"
 			}
 			ss = append(ss, sid+" = $"+kind+" @ATTACH "+ref("&", netmap[original])+" => @PLACE"+pt(at)+" => @ORIENT("+quote(ins.Orient)+")")
-			endpoints = append(endpoints, endpoint{[]string{original}, at, sid + ":p"})
+			endpoints = append(endpoints, endpoint{[]string{original}, at, usagePin(sid, "pin")})
 		}
 		portSymbols := stringSet{}
 		for index, placement := range c.PortPlacements {
@@ -691,11 +796,21 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 			case "OUTPUT":
 				glyph, symbol = "OPIN", "%output_port_symbol"
 			}
+			var glyphLibrary *symbolLibrary
+			if symbol != "" {
+				kind := "input"
+				if direction == "OUTPUT" {
+					kind = "output"
+				}
+				if glyphLibrary, glyph = portGlyph(libraries, kind); glyphLibrary == nil {
+					symbol = ""
+				}
+			}
 			if symbol != "" && !portSymbols[symbol] {
-				ss = append(ss, packageSymbolDefinition(in.Package, glyph, symbol))
+				ss = append(ss, packageSymbolDefinition(glyphLibrary.Text, glyph, symbol))
 				portSymbols[symbol] = true
 			}
-			definition, args, term := "$IO_PORT", netsRef(bits, netmap), ":p"
+			definition, args, term := "$IO_PORT", netsRef(bits, netmap), usagePin(sid, "pin")
 			if len(bits) > 1 {
 				definition = "%bus_port_type_" + strconvI(index)
 				roles, terms, names := []string{}, []string{}, []string{}
@@ -705,19 +820,25 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 						role += "" + strconvI(i)
 					}
 					roles = append(roles, `["`+role+`", "net"]`)
-					terms = append(terms, strconvI(i+1))
+					terms = append(terms, quote(role))
 					names = append(names, ref("&", netmap[n]))
 				}
-				// A multi-net anchor supplies the electrical bus pin. A separate
-				// IO_PORT supplies the visible marker, so any theme's IO_PORT
-				// style rules apply without copying colors into the drawing.
-				ss = append(ss, definition+" = @DEFINE(roles=["+strings.Join(roles, ", ")+"]) {}", definition+"_symbol = @DEFINE-SYMBOL {(0, 0) @PIN(terminal=["+strings.Join(terms, ", ")+"])}", netsRef(bits, netmap)+" @REMOVE-FROM $PORT_FILL_SET")
-				args, term = strings.Join(names, " "), ":1"
+				// A multi-net anchor supplies the electrical bus pin: its one pin
+				// binds every role by name (11.3). A separate IO_PORT supplies the
+				// visible marker, so any theme's IO_PORT style rules apply without
+				// copying colors into the drawing.
+				ss = append(ss, definition+" = @DEFINE(roles=["+strings.Join(roles, ", ")+"]) {}", definition+"_symbol = @DEFINE-SYMBOL {%pin = (0, 0) @PIN(terminal=["+strings.Join(terms, ", ")+"])}")
+				args = strings.Join(names, " ")
 			}
 			ss = append(ss, sid+" = "+definition+" @ATTACH "+args+" => @PLACE"+pt(at)+" => @ORIENT("+quote(placement.Orient)+")")
 			if len(bits) > 1 {
 				marker = sid + "_marker"
 				ss = append(ss, sid+" @SET-SYMBOL "+definition+"_symbol", marker+" = $IO_PORT @ATTACH "+ref("&", netmap[bits[0]])+" => @PLACE"+pt(at)+" => @ORIENT("+quote(placement.Orient)+")")
+			}
+			if len(bits) > 1 {
+				// The tag is drawn on its own usage; a wire joins its pin to the
+				// anchor's, or the net would be drawn in two parts.
+				ss = append(ss, "{"+ref("&", netmap[bits[0]])+`} @WIRE(mode="straight") {`+usagePin(marker, "pin")+" "+term+"}")
 			}
 			if symbol != "" {
 				ss = append(ss, marker+" @SET-SYMBOL "+symbol)
@@ -726,9 +847,9 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 				if len(bits) == 1 && placement.Label == "" {
 					label = netmap[bits[0]]
 				}
-				ss = append(ss, marker+" @TEXT("+quote(literal(label))+`, key="name")`)
+				ss = append(ss, marker+" @TEXT("+quote(literal(label))+`, key="netname")`)
 			}
-			endpoints = append(endpoints, endpoint{bits, at, sid + term})
+			endpoints = append(endpoints, endpoint{bits, at, term})
 		}
 		// Native netlisting drops explicitly ignored instrumentation. A net
 		// connected only to such instances has no electrical counterpart either.
@@ -790,9 +911,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 		}
 	}
 	if dialect == "spectre" && rootSub {
-		escape := func(s string) string {
-			return rx(`^[0-9]|[^a-zA-Z0-9_]`).ReplaceAllStringFunc(s, func(s string) string { return `\` + s })
-		}
+		escape := spectreName
 		ps := []string{}
 		for _, p := range root.Ports {
 			ps = append(ps, escape(p))
@@ -819,7 +938,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 	files := map[string]string{}
 	entry := netlistFilename(in.Top, extension)
 	parts := in.Capture
-	if (in.Split || in.ExportSymbols) && parts == nil {
+	if in.Split && parts == nil {
 		parts = &libraryCapture{Library: rootCell.Library, Cell: rootCell.Name, Dialect: dialect}
 	}
 	if parts != nil {
@@ -848,31 +967,29 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 	template = append(template, strings.Join(lines[cursor:], ""))
 	native := strings.Join(out, "")
 	firstLine, rest, _ := strings.Cut(native, "\n")
-	files[entry] = firstLine + "\n" + header(carrier) + rest
+	files[entry] = firstLine + "\n" + header(carrier, libraries) + rest
 	var cellIndex any
 	if parts != nil {
 		first, rest, _ := strings.Cut(strings.Join(template, ""), "\n")
-		parts.Entry, parts.Template = entry, first+"\n"+header(carrier)+rest
+		parts.Entry, parts.Template = entry, first+"\n"+header(carrier, libraries)+rest
+		parts.SymbolLibraries = libraryRecords(in.SymbolLibraries, libraries)
 		if in.Split {
 			var layout map[string]any
-			files, layout = assembleLibrary([]libraryCapture{*parts}, rootCell.Library, dialect, true, in.ExportSymbols, resourceDir)
+			files, layout = assembleLibrary([]libraryCapture{*parts}, rootCell.Library, dialect, true, symbolOnlyMode{Kind: "subcircuit"}, resourceDir)
 			cellIndex = layout["definitions"]
 		}
 	}
-	files["eda-symbol.rnl"], files["eda-style.rnl"] = in.Package, style
-	var symbolFile any
-	if in.ExportSymbols {
-		packageText, _ := reusableSymbolPackage("virtuoso-library/"+rootCell.Library, parts.Symbols)
-		files["symbols.rnl"] = packageText
-		symbolFile = "symbols.rnl"
+	for _, l := range libraries {
+		files[l.File] = l.Text
 	}
+	files["eda-style.rnl"] = style
 	notes = unique(notes)
 	sort.Strings(notes)
 	kind := "top"
 	if rootSub {
 		kind = "subcircuit"
 	}
-	return files, map[string]any{"export_symbols": in.ExportSymbols, "export_selection_box": boxPolicy.native, "entry": entry, "top": root.Name, "root_kind": kind, "symbol_file": symbolFile, "statistics": stats, "notes": notes, "definitions": cellIndex}
+	return files, map[string]any{"symbol_libraries": libraryReport(libraries), "unmapped_cells": sortedSet(unmapped), "warnings": unique(warnings), "export_selection_box": boxPolicy.native, "entry": entry, "top": root.Name, "root_kind": kind, "statistics": stats, "notes": notes, "definitions": cellIndex}
 }
 
 func netlistFilename(name, extension string) string {

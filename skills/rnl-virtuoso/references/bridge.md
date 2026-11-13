@@ -69,8 +69,14 @@ Pass optional controls only when the installed exporter supports them:
   `?view` overrides the selected cell's top view.
 - 0.9.1+: `?exportSelectionBox t` (default): union of native selection boxes;
   `nil` uses non-text graphic extent.
-- 0.9.4+: `?exportSymbols nil` (default): omit the extra `symbols.rnl` collection;
-  `t` adds it without changing embedded symbols.
+- 0.9.4 to 0.9.6: `?exportSymbols` added an optional `symbols.rnl`; 0.10.0 removed
+  both.
+- 0.10.0+: `?symbolLibraries list("/path/pdk.rnl" …)`: RNL symbol libraries,
+  highest priority first; `nil` (default) uses the bundled `eda-symbol`. Pass
+  only package paths the user names; a `<package>.virtuoso.json` beside a
+  package maps Virtuoso cells to its symbols.
+- 0.10.0+, library only: `?symbolOnlyCells "subcircuit"` (default) or `"package"`
+  for cells without schematic, and `?symbolPackageName` for the package name.
 - If `rnlExporterInfo()` reports `blocking_export` true, `?wait t` returns final
   status and `rnlExportWait(id)` waits for an existing job. Use this only if the
   transport supports a call lasting the entire export; asynchronous polling

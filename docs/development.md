@@ -12,8 +12,8 @@
 | `cmd/rnl-virtuoso/` | Pure Go backend, parsers, geometry, routing and native job tests |
 | `resources/` | Editable package snapshots and orientation corrections |
 | `scripts/` | Archive builder and test driver; development tools only |
-| `tests/` | Original synthetic fixtures and shared regression assertions |
-| `tests/reference/` | Python reference implementation; never shipped or launched by SKILL |
+| `tests/` | Original synthetic fixtures and regression assertions against the Go backend |
+| `tests/support/` | Python fixture helpers (EDIF reader, resources, symbol table); never shipped or launched by SKILL |
 
 The backend inherits Virtuoso's environment and invokes its native `si` and
 `edifout` tools. Request files are inert S-expressions. Spectre/CDL statements
@@ -33,7 +33,8 @@ reuse lint
 ```
 
 The test driver builds the host test executable and the static Linux executable,
-then runs the shared fixture tests against Python and Go. An RNL CLI with bus
+then runs the fixture tests against the Go backend. The former Python reference
+backend is retired; its parser cases are Go unit tests. An RNL CLI with bus
 bundle symbol support is required for the checker/rendering assertions; use
 `--rnl` or `RNL_BIN`. Without it, those assertions are reported as skipped.
 Real PDK/design exports are not test fixtures and must not be committed.
@@ -64,11 +65,10 @@ Repeated port markers retain each position, orientation and wire attachment;
 their native electrical statements must remain unchanged.
 Note fixtures also check dashed strokes and compatibility with older snapshots.
 
-To run the shared assertions separately after building:
+To run the fixture assertions separately after building:
 
 ```sh
-RNL_EXPORT_BACKEND=go python -m unittest discover -s tests -v
-RNL_EXPORT_BACKEND=python python -m unittest discover -s tests -v
+python -m unittest discover -s tests -v
 ```
 
 The Go binary exposes `--test-json` for the offline test driver. SKILL uses the
@@ -86,15 +86,15 @@ and library export using headless standard input, with source writes disabled.
 Also run real cell and library
 exports through the bridge, polling in separate calls: check native completion,
 partial-library failures, retained earlier job IDs and absence of API dialogs.
-The API regression was exercised on IC6.1.8 at `thu-sui:65038` with a hierarchical
-cell and its library. Private source names and outputs are not shipped as fixtures.
+The API regression was exercised on IC6.1.8 with a hierarchical cell and its
+library. Private source names, hosts and outputs are not shipped as fixtures.
 
 Validate `skills/rnl-virtuoso` with the skill-creator validator. Its installation
 branch must require prior consent; compatible existing installs must be reused.
 The runtime archive ships `rnl-api.il` and its docs, not agent skills or a bridge.
 
 ```sh
-python scripts/package.py dist/rnl-virtuoso-0.9.6-linux-amd64.tar.gz
+python scripts/package.py dist/rnl-virtuoso-0.10.0-linux-amd64.tar.gz
 ```
 
 Use `--go /path/to/go` or `--backend /path/to/prebuilt-linux-executable` if needed.

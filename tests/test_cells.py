@@ -38,9 +38,6 @@ def diamond_captures(dialect='spectre'):
     for child in children:
         child['Root'] = False
     return [capture('A', [a, leaf]), capture('B', [b, leaf]), capture('bench', children, devices)]
-
-
-@unittest.skipIf(os.environ.get('RNL_EXPORT_BACKEND') == 'python', 'Per-cell layout is a Go backend extension')
 class PerCellTests(unittest.TestCase):
     def check(self, files, entries):
         test_library.LibraryTests(methodName='runTest').check(files, entries)

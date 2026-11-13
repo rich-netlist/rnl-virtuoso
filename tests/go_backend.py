@@ -9,7 +9,6 @@ import subprocess
 from types import SimpleNamespace
 
 from rnl_export import ExportError
-from rnl_export.symbols import STANDARD
 
 ROOT = Path(__file__).resolve().parents[1]
 BINARY = Path(os.environ.get('RNL_EXPORT_BIN', ROOT/'target'/('rnl-virtuoso.exe' if os.name == 'nt' else 'rnl-virtuoso')))
@@ -27,11 +26,18 @@ def call(**request):
     return answer
 
 
-def convert(netlist, drawing, orders, package, top, hierarchy=True, split=False, scale=10.0, **options):
+def symbol_library(package, extra_cells=()):
+    """The default symbol library with this package text, plus extra cell mappings."""
+    mapping = json.loads((RESOURCES/'eda-symbol.virtuoso.json').read_text(encoding='utf-8'))
+    mapping['cells'] += [dict(library=library, cell=cell, symbol=symbol) for library, cell, symbol in extra_cells]
+    return dict(file='eda-symbol.rnl', text=package, mapping=json.dumps(mapping))
+
+
+def convert(netlist, drawing, orders, package, top, hierarchy=True, split=False, scale=10.0, extra_cells=(), **options):
     answer = call(netlist=netlist, drawing=drawing,
                   orders=[dict(library=k[0], cell=k[1], ports=v) for k, v in orders.items()],
-                  package=package, top=top, hierarchy=hierarchy, split=split, scale=scale,
-                  standard=STANDARD, **options)
+                  symbol_libraries=[symbol_library(package, extra_cells)], top=top, hierarchy=hierarchy, split=split,
+                  scale=scale, **options)
     return answer['files'], answer['report']
 
 

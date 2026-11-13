@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -16,6 +15,8 @@ type libraryDefinition struct {
 	Root                      bool
 	Calls                     []string
 	SourcePorts               []string `json:",omitempty"`
+	// Masters are the cells of the definition's instances.
+	Masters []cellKey `json:",omitempty"`
 }
 type librarySymbol struct{ Library, Cell, Definition string }
 type libraryCapture struct {
@@ -24,7 +25,17 @@ type libraryCapture struct {
 	Symbols                                 []librarySymbol
 	Notes                                   []string
 	ModelReferences                         []string
-	ExportSelectionBox                      *bool `json:",omitempty"`
+	ExportSelectionBox                      *bool          `json:",omitempty"`
+	SymbolLibraries                         []libraryInput `json:",omitempty"`
+	// Calls are the subcircuits that the top of a portless entry calls, and
+	// Masters the cells of its instances.
+	Calls   []string  `json:",omitempty"`
+	Masters []cellKey `json:",omitempty"`
+	// A symbol-only cell: the view the netlister stops at, if any, and the
+	// terminal order and fixed model name of its CDF.
+	StopView  string   `json:",omitempty"`
+	TermOrder []string `json:",omitempty"`
+	Model     string   `json:",omitempty"`
 }
 
 func publicSymbol(c *cell, scale float64, notes *[]string) librarySymbol {
@@ -47,12 +58,16 @@ func captureConversion(out *libraryCapture, keys []string, selected stringSet, b
 			for _, p := range b.Ports {
 				ports = append(ports, c.Ports[portID(c, p, out.Dialect, maps[b.Name]["net"])])
 			}
-			out.Definitions = append(out.Definitions, libraryDefinition{Library: c.Library, Cell: c.Name, Name: b.Name, Body: rendered[key], Root: key == topkey, Calls: blockCalls(b, out.Dialect), SourcePorts: ports})
+			out.Definitions = append(out.Definitions, libraryDefinition{Library: c.Library, Cell: c.Name, Name: b.Name, Body: rendered[key], Root: key == topkey, Calls: blockCalls(b, out.Dialect), SourcePorts: ports, Masters: instanceMasters(c)})
 		}
 		symbols[cellKey{c.Library, c.Name}] = c
 		for _, ins := range c.Instances {
 			symbols[ins.Master] = cells[ins.Master]
 		}
+	}
+	if b := blocks[topkey]; b != nil && !rootSub {
+		out.Calls = blockCalls(b, out.Dialect)
+		out.Masters = instanceMasters(source[topkey])
 	}
 	if exported != nil {
 		symbols[cellKey{exported.Library, exported.Name}] = exported
@@ -72,6 +87,34 @@ func captureConversion(out *libraryCapture, keys []string, selected stringSet, b
 	for _, key := range names {
 		out.Symbols = append(out.Symbols, publicSymbol(symbols[key], scale, notes))
 	}
+}
+
+// instanceMasters are the cells that the instances of a cell draw, sorted.
+func instanceMasters(c *cell) []cellKey {
+	seen, out := map[cellKey]bool{}, []cellKey{}
+	for _, ins := range c.Instances {
+		if !seen[ins.Master] {
+			seen[ins.Master] = true
+			out = append(out, ins.Master)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Library+"\x00"+out[i].Cell < out[j].Library+"\x00"+out[j].Cell
+	})
+	return out
+}
+
+// callsEmpty tells whether a call of a block reaches the empty subcircuit of a
+// symbol-only cell: the name matches and an instance of the block draws that
+// very cell. A model, primitive or subcircuit of another library that has the
+// same name is not shadowed by the empty one.
+func callsEmpty(masters []cellKey, cell cellKey) bool {
+	for _, m := range masters {
+		if m.Library == cell.Library && strings.EqualFold(m.Cell, cell.Cell) {
+			return true
+		}
+	}
+	return false
 }
 
 var signatureTokens = rx(`"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|(?:\\.|[^\s"'\\])+`)
@@ -254,9 +297,13 @@ func relativeNetlistPath(from, to string) string {
 	return filepath.ToSlash(path)
 }
 
-func cellHeader(carrier, filename string) string {
-	text := header(carrier)
-	for _, name := range []string{"eda-symbol.rnl", "eda-style.rnl"} {
+func cellHeader(carrier, filename string, libraries []*symbolLibrary) string {
+	text := header(carrier, libraries)
+	names := []string{"eda-style.rnl"}
+	for _, l := range libraries {
+		names = append(names, l.File)
+	}
+	for _, name := range names {
 		text = strings.ReplaceAll(text, quote(name), quote(relativeNetlistPath(filename, name)))
 	}
 	return text
@@ -272,7 +319,7 @@ func libraryDirectory(name string) string {
 	return name
 }
 
-func assembleLibrary(parts []libraryCapture, library, dialect string, split, exportSymbols bool, resourceDir string) (map[string]string, map[string]any) {
+func assembleLibrary(parts []libraryCapture, library, dialect string, split bool, mode symbolOnlyMode, resourceDir string) (map[string]string, map[string]any) {
 	carrier, extension, prefix := "*", "sp", "."
 	if dialect == "spectre" {
 		carrier, extension, prefix = "//", "scs", ""
@@ -330,7 +377,34 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split, exp
 		notes = append(notes, part.Notes...)
 		modelReferences = append(modelReferences, part.ModelReferences...)
 	}
-	files := map[string]string{"eda-symbol.rnl": symbolPackage(resource(resourceDir, "eda-symbol.rnl"), dialect), "eda-style.rnl": resource(resourceDir, "eda-style.rnl")}
+	// Every converted cell of a library export uses the same symbol libraries.
+	var inputs []libraryInput
+	converted := false
+	for _, part := range parts {
+		if part.Entry == "" && len(part.Definitions) == 0 {
+			continue
+		}
+		if converted && jsonText(part.SymbolLibraries) != jsonText(inputs) {
+			fail("Library cells were converted with different symbol libraries")
+		}
+		inputs, converted = part.SymbolLibraries, true
+	}
+	libraries := loadSymbolLibraries(inputs, resourceDir)
+	files := map[string]string{}
+	only := symbolOnlyParts(parts)
+	var symbolPackage any
+	if mode.Kind == "package" && len(only) > 0 {
+		// The cells converted after the symbol-only cells used this package.
+		text, mapping, index := generatedSymbolLibrary(mode.Package, only)
+		file := mode.Package + ".rnl"
+		for _, l := range libraries {
+			if strings.EqualFold(l.File, file) && l.Text != text {
+				fail("Symbol library %s would be written as %s, the file of the generated symbol package", l.Name, file)
+			}
+		}
+		files[file], files[mode.Package+".virtuoso.json"] = text, mapping
+		symbolPackage = map[string]any{"name": mode.Package, "version": generatedPackageVersion, "file": file, "mapping": mode.Package + ".virtuoso.json", "symbols": index}
+	}
 	names := []string{}
 	for key := range definitions {
 		names = append(names, key)
@@ -339,7 +413,13 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split, exp
 	paths := map[cellKey]string{}
 	owners := map[string]cellKey{}
 	directories := map[string]string{}
-	reserved := stringSet{"eda-symbol.rnl": true, "eda-style.rnl": true, "symbols.rnl": true, "library-report.json": true}
+	reserved := stringSet{"eda-style.rnl": true, "library-report.json": true}
+	for _, l := range libraries {
+		reserved[strings.ToLower(l.File)] = true
+	}
+	for name := range files {
+		reserved[strings.ToLower(name)] = true
+	}
 	// Netlist files and primary symbol-only files share collision checks.
 	registerFile := func(source cellKey, extension string) string {
 		filename := netlistFilename(source.Cell, extension)
@@ -370,6 +450,32 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split, exp
 		paths[source] = filename
 		return filename
 	}
+	// Mode subcircuit: an empty subcircuit for each symbol-only cell that no
+	// view of the netlister defines, and that no definition shares the name of.
+	empty, emptyCells := map[string]string{}, map[string]cellKey{}
+	symbolOnlyFiles := []map[string]any{}
+	if mode.Kind == "subcircuit" {
+		for _, part := range only {
+			source, symbol := cellKey{part.Library, part.Cell}, part.Symbols[0]
+			entry := map[string]any{"library": source.Library, "cell": source.Cell, "file": nil}
+			if _, ok := definitions[normalize(source.Cell, dialect)]; part.StopView != "" || ok {
+				if part.StopView != "" {
+					entry["defined_by_view"] = part.StopView
+				} else {
+					def := definitions[normalize(source.Cell, dialect)]
+					entry["defined_by_subcircuit"] = def.Library + "/" + def.Cell
+				}
+				symbolOnlyFiles = append(symbolOnlyFiles, entry)
+				continue
+			}
+			filename := register(source)
+			files[filename] = carrier + " RNL cell " + source.Library + "/" + source.Cell + "\n" + cellHeader(carrier, filename, libraries) + emptySubcircuit(symbol, cellPorts(part, symbol), dialect, carrier)
+			empty[normalize(source.Cell, dialect)] = filename
+			emptyCells[normalize(source.Cell, dialect)] = source
+			entry["file"], entry["subcircuit"] = filename, source.Cell
+			symbolOnlyFiles = append(symbolOnlyFiles, entry)
+		}
+	}
 	groups := map[cellKey]string{}
 	dependencies := map[cellKey]stringSet{}
 	roots := map[cellKey]libraryCapture{}
@@ -385,6 +491,8 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split, exp
 		for _, call := range definitionCalls(def, dialect) {
 			if child, ok := definitions[normalize(call, dialect)]; ok {
 				dependencies[source][register(cellKey{child.Library, child.Cell})] = true
+			} else if filename, ok := empty[normalize(call, dialect)]; ok && callsEmpty(def.Masters, emptyCells[normalize(call, dialect)]) {
+				dependencies[source][filename] = true
 			}
 		}
 		index = append(index, map[string]string{"library": def.Library, "cell": def.Cell, "subcircuit": def.Name, "file": destination})
@@ -416,6 +524,11 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split, exp
 			required := stringSet{}
 			for _, def := range part.Definitions {
 				required[paths[cellKey{def.Library, def.Cell}]] = true
+			}
+			for _, call := range part.Calls {
+				if _, ok := definitions[normalize(call, dialect)]; !ok && empty[normalize(call, dialect)] != "" && callsEmpty(part.Masters, emptyCells[normalize(call, dialect)]) {
+					required[empty[normalize(call, dialect)]] = true
+				}
 			}
 			// A cell file can contain multiple native context variants. Include
 			// dependencies of every stored variant, even if another root supplied it.
@@ -449,62 +562,43 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split, exp
 	for source, body := range groups {
 		filename := paths[source]
 		if _, ok := roots[source]; !ok {
-			files[filename] = carrier + " RNL cell " + source.Library + "/" + source.Cell + "\n" + cellHeader(carrier, filename) + withoutNativeIncludes(body, dialect)
+			files[filename] = carrier + " RNL cell " + source.Library + "/" + source.Cell + "\n" + cellHeader(carrier, filename, libraries) + withoutNativeIncludes(body, dialect)
 		}
 	}
-	symbolOnlyFiles := []map[string]string{}
-	symbolOnlySeen := map[cellKey]bool{}
-	for _, part := range parts {
-		if part.Entry != "" || len(part.Definitions) != 0 {
-			continue
-		}
-		source := cellKey{part.Library, part.Cell}
-		if symbolOnlySeen[source] {
-			continue
-		}
-		symbol, ok := symbols[source.Library+"/"+source.Cell]
-		if !ok {
-			continue
-		}
-		filename := registerFile(source, "rnl")
-		packageName := "virtuoso/" + source.Library + "/" + source.Cell
-		document, _ := reusableSymbolPackage(packageName, []librarySymbol{symbol})
-		files[filename] = document
-		symbolOnlySeen[source] = true
-		symbolOnlyFiles = append(symbolOnlyFiles, map[string]string{"library": source.Library, "cell": source.Cell, "file": filename, "package": packageName})
-	}
-	sort.Slice(symbolOnlyFiles, func(i, j int) bool { return symbolOnlyFiles[i]["file"] < symbolOnlyFiles[j]["file"] })
 	for key, directory := range directories {
 		if _, ok := owners[key]; ok || reserved[key] {
 			fail("Library directory %s conflicts with an output file", directory)
 		}
 	}
-	allSymbols := []librarySymbol{}
-	for _, symbol := range symbols {
-		allSymbols = append(allSymbols, symbol)
-	}
-	packageText, symbolNames := reusableSymbolPackage("virtuoso-library/"+library, allSymbols)
-	var symbolFile any
-	if exportSymbols {
-		files["symbols.rnl"] = packageText
-		symbolFile = "symbols.rnl"
+	// The netlist files use the style and the symbol libraries; a library of
+	// symbol-only cells exported as a package needs neither.
+	if len(owners) > 0 {
+		files["eda-style.rnl"] = resource(resourceDir, "eda-style.rnl")
+		for _, l := range libraries {
+			files[l.File] = l.Text
+		}
 	}
 	notes = unique(notes)
 	sort.Strings(notes)
 	modelReferences = unique(modelReferences)
 	sort.Strings(modelReferences)
-	return files, map[string]any{"version": version, "backend": "go", "kind": "library", "export_selection_box": selectionSetting == nil || *selectionSetting, "file_mode": "per-cell", "library": library, "format": dialect, "entries": entryIndex, "definitions": index, "symbols": symbolNames, "export_symbols": exportSymbols, "symbol_file": symbolFile, "symbol_only_files": symbolOnlyFiles, "notes": notes, "behavior_model_references": modelReferences}
+	return files, map[string]any{"version": version, "backend": "go", "kind": "library", "export_selection_box": selectionSetting == nil || *selectionSetting, "file_mode": "per-cell", "library": library, "format": dialect, "entries": entryIndex, "definitions": index, "symbol_libraries": libraryReport(libraries), "symbol_only_cells": mode.Kind, "symbol_only_files": symbolOnlyFiles, "symbol_package": symbolPackage, "notes": notes, "behavior_model_references": modelReferences}
 }
 
 func runLibraryMerge(request string, fields []node, resourceDir string) map[string]any {
-	if len(fields) != 9 && len(fields) != 10 && len(fields) != 11 && len(fields) != 12 {
+	// v4 adds the mode of the symbol-only cells and the name of their package;
+	// v3 had a flag for symbols.rnl, which is no longer written.
+	kind, name := "", ""
+	if len(fields) == 13 && fields[0].atom == "rnl-library-merge-v4" {
+		kind, name = fields[11].atom, fields[12].atom
+		fields = fields[:11]
+	} else if len(fields) == 12 && fields[0].atom == "rnl-library-merge-v3" {
+		fields = fields[:11]
+	} else if len(fields) != 9 && len(fields) != 10 && len(fields) != 11 || fields[0].atom == "rnl-library-merge-v4" {
 		fail("Invalid library merge request")
 	}
-	exportSymbols := false
-	if len(fields) == 12 {
-		exportSymbols = requestBoolean(fields[11])
-	}
 	library, output, dialect, split := fields[2].atom, fields[3].atom, fields[4].atom, fields[5].atom == "t"
+	mode := parseSymbolOnlyMode(kind, name, library)
 	if dialect != "spectre" && dialect != "cdl" {
 		fail("Invalid library netlist format")
 	}
@@ -512,15 +606,7 @@ func runLibraryMerge(request string, fields []node, resourceDir string) map[stri
 		fail("Library output directory must be absolute")
 	}
 	validateExportWorkspace(output, filepath.Dir(request))
-	parts := []libraryCapture{}
-	for _, path := range fields[6].list {
-		var part libraryCapture
-		if err := json.Unmarshal([]byte(readText(path.atom)), &part); err != nil {
-			fail("Invalid library parts: %s", err)
-		}
-		parts = append(parts, part)
-	}
-	files, report := assembleLibrary(parts, library, dialect, split, exportSymbols, resourceDir)
+	files, report := assembleLibrary(readParts(fields[6].list), library, dialect, split, mode, resourceDir)
 	report["include_external_cells"], report["include_hierarchy"] = fields[7].atom == "t", fields[8].atom == "t"
 	skipped := []string{}
 	if len(fields) >= 10 {
@@ -540,7 +626,7 @@ func runLibraryMerge(request string, fields []node, resourceDir string) map[stri
 		}
 	}
 	sort.Slice(failed, func(i, j int) bool { return failed[i]["cell"] < failed[j]["cell"] })
-	report["failed_cells"], report["complete"], report["successful_cells"] = failed, len(failed) == 0, len(parts)
+	report["failed_cells"], report["complete"], report["successful_cells"] = failed, len(failed) == 0, len(fields[6].list)
 	report["output_directory"], report["work_directory"] = output, filepath.Dir(request)
 	staging, err := os.MkdirTemp(filepath.Dir(request), "stage-")
 	if err != nil {
@@ -570,6 +656,17 @@ func runLibraryMerge(request string, fields []node, resourceDir string) map[stri
 func runSymbolJob(request string, fields []node) map[string]any {
 	view, schematics, symbols := "symbol", []string{"schematic"}, []string{"symbol"}
 	exportSelectionBox, snapshot := true, ""
+	// v4 adds what the CDF and the views say of the cell: the view that the
+	// netlister stops at ("" for none), the terminal order and the model name.
+	stopView, termOrder, model := "", []string{}, ""
+	if len(fields) == 16 && fields[0].atom == "rnl-symbol-job-v4" {
+		stopView, model = fields[13].atom, fields[15].atom
+		for _, t := range fields[14].list {
+			termOrder = append(termOrder, t.atom)
+		}
+		fields = fields[:13]
+		fields[0] = atom("rnl-symbol-job-v3")
+	}
 	if len(fields) == 13 && fields[0].atom == "rnl-symbol-job-v3" {
 		exportSelectionBox = requestBoolean(fields[12])
 		if exportSelectionBox {
@@ -609,7 +706,7 @@ func runSymbolJob(request string, fields []node) map[string]any {
 	}
 	notes := []string{}
 	symbol := publicSymbol(c, scale, &notes)
-	part := libraryCapture{Library: library, Cell: cellName, Dialect: dialect, Symbols: []librarySymbol{symbol}, Notes: notes, ExportSelectionBox: &exportSelectionBox}
+	part := libraryCapture{Library: library, Cell: cellName, Dialect: dialect, Symbols: []librarySymbol{symbol}, Notes: notes, ExportSelectionBox: &exportSelectionBox, StopView: stopView, TermOrder: termOrder, Model: model}
 	writeText(filepath.Join(work, "library-parts.json"), jsonText(part))
 	return map[string]any{"library": library, "cell": cellName, "kind": "symbol"}
 }
