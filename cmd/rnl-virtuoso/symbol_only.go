@@ -168,7 +168,7 @@ func generatedSymbolLibrary(name string, parts []libraryCapture) (string, string
 			symbol = packageSymbolName(s) + "_" + strconvI(n)
 		}
 		used[symbol] = true
-		definitions = append(definitions, renamedDefinition(s.Definition, "$"+symbol))
+		definitions = append(definitions, strings.ReplaceAll(renamedDefinition(s.Definition, "$"+symbol), "\n", "\n  "))
 		pins := [][2]string{}
 		for _, p := range symbolPorts(s.Definition) {
 			pins = append(pins, [2]string{p, p})
