@@ -41,7 +41,9 @@ func literal(s string) string {
 func packagePins(text string) map[string]map[string]point {
 	starts := rx(`\$([A-Za-z_][A-Za-z_0-9]*|"(?:[^"]|"")*")\s*=\s*@DEFINE-SYMBOL\b`).FindAllStringSubmatchIndex(text, -1)
 	out := map[string]map[string]point{}
-	pattern := rx(`\(\s*([-+\d.]+)\s*,\s*([-+\d.]+)\s*\)\s*@PIN\(terminal\s*=\s*(\d+|"[^"]+")`)
+	// A pin binds a terminal number, a name, or (RNL 0.4) a list of names, such
+	// as the members of a bus terminal: each of them is drawn at that pin.
+	pattern := rx(`\(\s*([-+\d.]+)\s*,\s*([-+\d.]+)\s*\)\s*@PIN\(terminal\s*=\s*(\d+|"(?:[^"]|"")+"|\[[^\]]*\])`)
 	for i, m := range starts {
 		end := len(text)
 		if i+1 < len(starts) {
@@ -49,7 +51,9 @@ func packagePins(text string) map[string]map[string]point {
 		}
 		pins := map[string]point{}
 		for _, p := range pattern.FindAllStringSubmatch(text[m[1]:end], -1) {
-			pins[strings.ToLower(strings.Trim(p[3], `"`))] = point{decimal(p[1]), decimal(p[2])}
+			for _, name := range stringList(strings.Trim(p[3], "[]")) {
+				pins[strings.ToLower(name)] = point{decimal(p[1]), decimal(p[2])}
+			}
 		}
 		out[text[m[2]:m[3]]] = pins
 	}

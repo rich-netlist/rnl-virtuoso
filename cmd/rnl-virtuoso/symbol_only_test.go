@@ -139,3 +139,18 @@ func TestHeadlessSymbolOnlyOptions(t *testing.T) {
 		}
 	}
 }
+
+func TestLibrarySymbolsWithBusPins(t *testing.T) {
+	part := onlyPart("myLib", "logic", libraryCapture{})
+	part.Symbols[0].Definition = `$"myLib/logic" = @DEFINE-SYMBOL {(0, 0) @PIN(terminal=["D<1>", "D<0>"]); (4, 0) @PIN(terminal="Q"); (4, 2) @PIN(terminal="say ""hi""")}`
+	text, mapping, _ := generatedSymbolLibrary("bus", []libraryCapture{part})
+	lib := loadSymbolLibrary(libraryInput{File: "bus.rnl", Text: text, Mapping: mapping})
+	want := map[string]point{"d<1>": {0, 0}, "d<0>": {0, 0}, "q": {4, 0}, `say "hi"`: {4, 2}}
+	if !reflect.DeepEqual(lib.Pins["MYLIB_LOGIC"], want) {
+		t.Fatal(lib.Pins)
+	}
+	choice := lib.match(cellKey{"myLib", "logic"}, "I0", "logic", "spectre", []string{"Q", "D<1>", "D<0>", `say "hi"`})
+	if choice == nil || !reflect.DeepEqual(choice.Terminals, []string{"Q", "D<1>", "D<0>", `say "hi"`}) {
+		t.Fatal(choice)
+	}
+}
