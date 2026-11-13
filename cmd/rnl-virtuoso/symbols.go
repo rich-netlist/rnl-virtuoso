@@ -124,6 +124,9 @@ func textStatement(value string, display node, scale float64, owner, key string,
 	if o == "R90" || o == "R270" || o == "MXR90" || o == "MYR90" {
 		params = append(params, "rotate=90")
 	}
+	if hiddenDisplay(display) {
+		params = append(params, "textvisible=false")
+	}
 	if key != "" {
 		params = append(params, "key="+quote(key))
 	}
@@ -132,6 +135,34 @@ func textStatement(value string, display node, scale float64, owner, key string,
 	}
 	return pt(at) + " @TEXT(" + strings.Join(params, ", ") + ")"
 }
+// The name of the n-th pin of a port group drawn at several pins.
+func multiPinName(group, n int) string { return "pin_" + strconvI(group+1) + "_" + strconvI(n+1) }
+
+func groupIndex(c *cell, port string) int {
+	for i, k := range c.GroupOrder {
+		if k == port {
+			return i
+		}
+	}
+	fail("EDIF symbol pin has no port group")
+	return -1
+}
+
+// An EDIF display marked invisible stays in the drawing as a hidden text: its
+// content and position remain, it takes no room and is not drawn (RNL 0.4, 9.3).
+func hiddenDisplay(display node) bool {
+	for _, v := range walk(display, "visible") {
+		if len(v.list) < 2 {
+			continue
+		}
+		value := v.at(1)
+		if strings.EqualFold(value.atom, "false") || tag(value) == "false" {
+			return true
+		}
+	}
+	return false
+}
+
 func graphics(n node, scale float64) []string {
 	out := []string{}
 	for _, item := range n.list {
@@ -258,6 +289,7 @@ func symbolDefinitionNamed(c *cell, id string, terminals, pinNames map[string]st
 			body = append(body, textStatement(value, first(kd, "display"), scale, "?", k, true))
 		}
 	}
+	occurrence := map[string]int{}
 	for _, pin := range children(c.Symbol, "portimplementation") {
 		port := strings.ToLower(ident(pin.at(1)))
 		members := c.Groups[port]
@@ -280,7 +312,18 @@ func symbolDefinitionNamed(c *cell, id string, terminals, pinNames map[string]st
 		if n := pinNames[members[0]]; n != "" {
 			local = "%" + n + " = "
 		}
-		body = append(body, local+pt(scaled(c.Pins[members[0]], scale))+" @PIN(terminal="+value+")")
+		at := c.Pins[members[0]]
+		// A terminal drawn at several pins gets one named pin for each
+		// (RNL 0.4, 9.2.4); wires reach each of them by name.
+		if locations := c.PinSets[port]; len(locations) > 1 {
+			n := occurrence[port]
+			occurrence[port]++
+			at = locations[n]
+			if local == "" {
+				local = "%" + multiPinName(groupIndex(c, port), n) + " = "
+			}
+		}
+		body = append(body, local+pt(scaled(at, scale))+" @PIN(terminal="+value+")")
 		if pin.at(1).group {
 			for _, d := range children(pin.at(1), "display") {
 				label := c.Labels[port]

@@ -252,6 +252,9 @@ mapping. Missing or extra members still fail.
   views to be checked and saved. A no-connect at a wire end is retained as a
   figure on that wire point; a marker on a device pin uses `$NO_CONNECT`. Both
   carry their positions, as do junction dots, so they are drawn without a solver.
+  In RNL 0.4 a no-connect mark names the terminal it leaves open: a marker on an
+  instance's bus pin is written once for each terminal it covers, and a scalar
+  marker on one bit of a bus pin names that bit's terminal.
   For a parameterized symbol, preflight checks its saved supermaster rather
   than rejecting the transient generated submaster as an unsaved user edit.
   Instances explicitly marked `nlAction=ignore` are omitted as in the native
@@ -311,6 +314,8 @@ mapping. Missing or extra members still fail.
 - Net labels attach to the nearest drawn wire segment of that EDIF net, including
   bus labels and deduplicated routes. Their original position, rotation, alignment
   and text size are preserved. A label without a drawn path attaches to its net.
+  A display that EDIF marks invisible (`visible false`) keeps its content and
+  position as a hidden text, `textvisible=false`, which takes no room.
 - Free schematic notes remain RNL annotations. EDIF note figures are converted,
   and a read-only snapshot supplements non-electrical shapes on the schematic's
   `text` layer that Cadence EDIF Out omits. Lines, paths, rectangles, polygons,
@@ -345,10 +350,12 @@ mapping. Missing or extra members still fail.
 
 ## Current boundaries
 
-Repeated schematic port markers are supported. Multiple physical pins of the
-same terminal in a symbol are not exported yet: RNL 0.4 allows several pins per
-terminal, but the converter reads one connection location per terminal, so such
-symbol pins still collapse to one.
+Repeated schematic port markers are supported. A custom EDIF symbol that draws
+one terminal at several pins keeps each pin (RNL 0.4 allows several pins per
+terminal): such pins are named `pin_<group>_<n>` in the symbol, and each source
+wire ends at the pin it touches, such as `#"I0"::pin_3_2`. Iterated instances,
+package symbols and alternative symbol views keep one connection location per
+terminal.
 
 This version targets saved hierarchies with configurable schematic/symbol view lists.
 Config views, configurable simulator stop views, HSPICE output,

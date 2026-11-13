@@ -373,6 +373,9 @@ type cell struct {
 	Groups                map[string][]string
 	Labels                map[string]string
 	Pins                  map[string]point
+	// Every connection location of each port group, in the order of the
+	// symbol's portImplementations: a terminal may be drawn at several pins.
+	PinSets               map[string][]point
 	Symbol                node
 	Instances             []*instance
 	Nets, Routes          []*net
@@ -389,7 +392,7 @@ type cell struct {
 }
 
 func newCell(lib, n, id string) *cell {
-	return &cell{Library: lib, Name: n, ID: id, Ports: map[string]string{}, Groups: map[string][]string{}, Labels: map[string]string{}, Pins: map[string]point{}, Directions: map[string]string{}}
+	return &cell{Library: lib, Name: n, ID: id, Ports: map[string]string{}, Groups: map[string][]string{}, Labels: map[string]string{}, Pins: map[string]point{}, PinSets: map[string][]point{}, Directions: map[string]string{}}
 }
 func readEDIF(text string) (map[cellKey]*cell, []*cell) {
 	tree := parse(text, false)
@@ -471,6 +474,7 @@ func readEDIF(text string) (map[cellKey]*cell, []*cell) {
 						for _, member := range c.Groups[key] {
 							c.Pins[member] = ps[0]
 						}
+						c.PinSets[key] = append(c.PinSets[key], ps[0])
 					}
 				}
 				for _, contents := range children(view, "contents") {

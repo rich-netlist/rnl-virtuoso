@@ -56,6 +56,10 @@ type convertInput struct {
 
 type symbolDrawing struct{ Library, Cell, Drawing string }
 
+// One terminal of an instance's bus pin. In RNL 0.4 a no-connect mark names
+// the terminal it leaves open (12.6), so a bus pin is marked member by member.
+type busMember struct{ Net, Ref string }
+
 func normalize(s, dialect string) string {
 	if dialect == "cdl" {
 		return strings.ToLower(s)
@@ -375,6 +379,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 			}
 		}
 		endpoints := []endpoint{}
+		busMembers := map[string][]busMember{}
 		localSymbols := map[string]string{}
 		expandedTypes := map[int]string{}
 		expandedCount := 0
@@ -606,7 +611,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 			if ins.Bundle != "" {
 				ss = append(ss, host+" @TEXT("+quote(literal(ins.BundleName))+`, key="name")`)
 			}
-			for _, portGroup := range master.GroupOrder {
+			for gi, portGroup := range master.GroupOrder {
 				ports := master.Groups[portGroup]
 				p := ports[0]
 				i := -1
@@ -626,6 +631,25 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 				terminalRef := host + ":" + strconvI(i+1)
 				if group != nil {
 					terminalRef = usagePin(host, expandedPin(i))
+				}
+				if group == nil && ins.Bundle == "" && len(ports) > 1 {
+					for _, port := range ports {
+						for j, k := range order {
+							if k == port {
+								busMembers[terminalRef] = append(busMembers[terminalRef], busMember{connections[terminal{strings.ToLower(ins.ID), port}], host + ":" + strconvI(j+1)})
+								break
+							}
+						}
+					}
+				}
+				// The EDIF symbol draws this terminal at several pins: each pin is
+				// a wire end of its own, reached by its name.
+				if locations := master.PinSets[portGroup]; len(locations) > 1 && group == nil && ins.Bundle == "" && destination == nil && master.ExportSymbol == nil {
+					for n, location := range locations {
+						at := transform(scaled(location, scale), ins.Orient, scaled(ins.XY, scale))
+						endpoints = append(endpoints, endpoint{unique(bits), at, usagePin(host, multiPinName(gi, n))})
+					}
+					continue
 				}
 				endpoints = append(endpoints, endpoint{unique(bits), original, terminalRef})
 			}
@@ -676,8 +700,35 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 						}
 					}
 				}
+				// A scalar mark on one bit of an instance's bus pin leaves that
+				// terminal open; RNL 0.4 names it (12.6).
+				if len(targets) == 0 && len(markerBits) == 1 {
+					for _, e := range endpoints {
+						if e.At != at {
+							continue
+						}
+						for _, m := range busMembers[e.Ref] {
+							if m.Net == markerBits[0] {
+								targets = append(targets, m.Ref)
+							}
+						}
+					}
+				}
 				if len(targets) == 1 {
-					ss = append(ss, "$NO_CONNECT @ATTACH "+targets[0]+" => @PLACE"+pt(at)+" => @ORIENT("+quote(ins.Orient)+")")
+					marks := []string{targets[0]}
+					// A whole bus pin left open is one mark per terminal, drawn
+					// one over another at that pin.
+					if members := busMembers[targets[0]]; len(members) > 0 {
+						marks = nil
+						for _, m := range members {
+							if set(markerBits)[m.Net] {
+								marks = append(marks, m.Ref)
+							}
+						}
+					}
+					for _, mark := range marks {
+						ss = append(ss, "$NO_CONNECT @ATTACH "+mark+" => @PLACE"+pt(at)+" => @ORIENT("+quote(ins.Orient)+")")
+					}
 				} else {
 					ss = append(ss, sid+" = "+pt(at), "$FIGURE @ATTACH "+sid+" => @SET-SYMBOL $NO_CONNECT_SYMBOL => @PLACE"+pt(at)+" => @ORIENT("+quote(ins.Orient)+")")
 					endpoints = append(endpoints, endpoint{markerBits, at, sid})
