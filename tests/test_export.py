@@ -8,18 +8,12 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT/'tests/reference'))
+sys.path.insert(0, str(ROOT/'tests/support'))
 from rnl_export import ExportError
-from rnl_export import cdl, edif, spectre
-from rnl_export.convert import convert, load_orders
-from rnl_export.job import run_job
-from rnl_export.symbols import literal, quote
-from rnl_export.behavior import interfaces
+from rnl_export import edif
 from rnl_export import resources
-from fixtures import drawing, netlist, spectre_netlist, marker_drawing
-
-if os.environ.get('RNL_EXPORT_BACKEND', 'go') == 'go':
-    from go_backend import convert, run_job, interfaces
+from fixtures import drawing, netlist, spectre_netlist, marker_drawing, clean_check
+from go_backend import convert, run_job, interfaces
 
 PACKAGE = resources.read('eda-symbol.rnl')
 ORDERS = {('analogLib', 'res'): ['PLUS', 'MINUS']}
@@ -40,8 +34,6 @@ class ExportTests(unittest.TestCase):
                     .replace(') leaf\n', ') '+escaped+'\n'))
         return (netlist().replace('.SUBCKT leaf ', '.SUBCKT '+name+' ')
                 .replace('/ leaf\n', '/ '+name+'\n'))
-
-    @unittest.skipIf(os.environ.get('RNL_EXPORT_BACKEND') == 'python', 'Per-cell layout is a Go backend extension')
     def test_split_filenames_follow_source_cell_and_keep_native_subcircuit_name(self):
         for dialect, extension, prefix in [('cdl', 'sp', '.'), ('spectre', 'scs', '')]:
             with self.subTest(dialect=dialect):
@@ -53,8 +45,6 @@ class ExportTests(unittest.TestCase):
                 self.assertNotIn(prefix+'include ', files[report['entry']])
                 self.assertIn(('subckt ' if dialect == 'spectre' else '.SUBCKT ')+name+' A B\n', files[filename])
                 self.assertIn((') ' if dialect == 'spectre' else '/ ')+name+'\n', files[report['entry']])
-
-    @unittest.skipIf(os.environ.get('RNL_EXPORT_BACKEND') == 'python', 'Per-cell layout is a Go backend extension')
     def test_split_native_alias_does_not_conflict_with_cell_filename(self):
         files, _ = convert(self.native_leaf('TOP', 'spectre'), drawing(), ORDERS, PACKAGE, 'top', dialect='spectre', split=True)
         self.assertIn('leaf.scs', files)
@@ -89,31 +79,17 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(plain.replace('subckt top A B\n', '').replace('ends top\n', ''), spectre_netlist())
         self.assertIn('subckt top A B\n', plain)
         split, _ = self.export(dialect='spectre', split=True)
-        if os.environ.get('RNL_EXPORT_BACKEND') == 'python':
-            self.assertIn('include "leaf.scs"', split['top.scs'])
-        else:
-            self.assertNotIn('include ', split['top.scs'])
-            self.assertNotIn('#"I0" @SET-SYMBOL', split['top.scs'])
+        self.assertNotIn('include ', split['top.scs'])
+        self.assertNotIn('#"I0" @SET-SYMBOL', split['top.scs'])
         self.assertIn('# @SET-SYMBOL %block_symbol', split['leaf.scs'])
         current, _ = self.export(dialect='spectre', hierarchy=False)
         self.assertNotIn('subckt leaf', current['top.scs'])
         self.assertIn('#"I0" @SET-SYMBOL %symbol_0', current['top.scs'])
 
-    def test_spectre_sources_switches_continuations_and_case(self):
-        text = ('// Library name: work\n// Cell name: top\n'
-                'V0 (P 0) vsource type=pulse val0=0 \\\n  val1=VDD\n'
-                'v0 (p 0) vsource type=sine ampl=A\n'
-                'E0 (P p C 0) vcvs gain=2\n'
-                'W0 (P p C 0) relay ropen=1T rclosed=10\n')
-        lines, blocks = spectre.read(text, 'top')
-        self.assertEqual(''.join(lines), text)
-        self.assertEqual(set(blocks['top'].instances), {'V0', 'v0', 'E0', 'W0'})
-        self.assertEqual(blocks['top'].instances['W0'], ['W0', 'P', 'p', 'C', '0', 'relay'])
+    def test_spectre_connectivity_disagreement_fails(self):
+        # The parser cases of this test are Go unit tests (parsers_test.go).
         with self.assertRaisesRegex(ExportError, 'connectivity disagrees'):
             convert(spectre_netlist().replace('R0 (A B)', 'R0 (a B)'), drawing(), ORDERS, PACKAGE, 'top', dialect='spectre')
-        for text in ('subckt a p\n', 'V0 (a 0) vsource \\', 'simulator lang=spice\n', 'model m resistor\n'):
-            with self.assertRaises(ExportError):
-                spectre.read(text, 'top')
 
     def test_spectre_uses_native_bus_name_maps(self):
         maps = {name: {'net': {p+'<'+i+'>': p+'_'+i for p in ('A', 'B') for i in ('1', '0')}} for name in ('leaf', 'top')}
@@ -124,15 +100,6 @@ class ExportTests(unittest.TestCase):
         self.assertIn('@PIN(terminal=["A_1", "A_0"])', files['top.scs'])
         with self.assertRaisesRegex(ExportError, 'name map and EDIF connectivity disagree'):
             convert(native.replace('R0_1 (A_1 B_1)', 'R0_1 (A_0 B_1)'), drawing(True), ORDERS, PACKAGE, 'top', dialect='spectre', name_maps=maps)
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory)
-            (path/'map').mkdir()
-            (path/'ihnl').mkdir()
-            (path/'map/current').write_text('((nil version "2.1") (model ("work/leaf/schematic" "leaf")) ("leaf" "ihnl/leaf"))')
-            (path/'ihnl/leaf').write_text('((net ("A<1>" "A_1")) (inst ("R0<1>" "R0_1")))')
-            self.assertEqual(spectre.load_name_maps(path), {'leaf': {'net': {'A<1>': 'A_1'}, 'inst': {'R0<1>': 'R0_1'}}})
-            (path/'map/current').write_text('((nil version "2.1") ("leaf" "ihnl/missing-map"))')
-            self.assertEqual(spectre.load_name_maps(path), {'leaf': {}})
 
     def test_current_symbol_export_and_ports_choose_subcircuit(self):
         # Reuse the original fixture's block shape as a standalone top symbol.
@@ -179,14 +146,6 @@ class ExportTests(unittest.TestCase):
         self.assertIn('#"I0" @SET-SYMBOL %symbol_0', files['top.scs'])
         self.assertTrue(files['top.scs'].endswith('ends top\nahdl_include "/model/leaf.va"\n'))
 
-    def test_repeated_bus_nets_retain_each_member(self):
-        self.assertEqual(edif.scalar_names(edif.parse('(array (rename bus "<*3>TOP") 3)')), ['TOP']*3)
-        self.assertEqual(edif.scalar_names(edif.parse('(array (rename bus "<*2>A<1:0>,B") 5)')), ['A<1>', 'A<0>', 'A<1>', 'A<0>', 'B'])
-        source = drawing(True).replace('"A<1:0>"', '"<*2>A"').replace('"B<1:0>"', '"<*2>B"')
-        # These repeated connected nets occur inside a block, not as duplicate ports.
-        cell = edif.read(source)['work', 'leaf']
-        self.assertEqual([n.name for n in cell.nets], ['A', 'A', 'B', 'B'])
-        self.assertEqual(cell.nets[1].terminals[-1], ('r0[1]', 'plus'))
 
     def test_ground_and_wire_end_no_connect(self):
         text = '// Library name: work\n// Cell name: top\nR0 (A 0) resistor r=1k\n'
@@ -208,7 +167,7 @@ class ExportTests(unittest.TestCase):
                         (Path(directory)/name).write_text(content, encoding='utf-8')
                     result = subprocess.run([str(binary), 'check', str(Path(directory)/'top.scs')], text=True, encoding='utf-8', capture_output=True)
                     self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
-                    self.assertIn('0 errors, 0 warnings', result.stdout+result.stderr)
+                    self.assertTrue(clean_check(result.stdout+result.stderr), result.stdout+result.stderr)
 
     def test_combined_preserves_every_electrical_line(self):
         files, report = self.export()
@@ -220,11 +179,8 @@ class ExportTests(unittest.TestCase):
 
     def test_separate_and_current_level_keep_child_symbol(self):
         split, _ = self.export(split=True)
-        if os.environ.get('RNL_EXPORT_BACKEND') == 'python':
-            self.assertIn('.include "leaf.sp"', split['top.sp'])
-        else:
-            self.assertNotIn('.include ', split['top.sp'])
-            self.assertNotIn('#"XI0" @SET-SYMBOL', split['top.sp'])
+        self.assertNotIn('.include ', split['top.sp'])
+        self.assertNotIn('#"XI0" @SET-SYMBOL', split['top.sp'])
         self.assertIn('# @SET-SYMBOL %block_symbol', split['leaf.sp'])
         current, _ = self.export(hierarchy=False)
         self.assertNotIn('.SUBCKT leaf', current['top.sp'])
@@ -237,8 +193,6 @@ class ExportTests(unittest.TestCase):
         self.assertIn('{#"RR0<1>" #"RR0<0>"} @BUNDLE', files['top.sp'])
         self.assertIn('@PIN(terminal=["A<1>", "A<0>"])', files['top.sp'])
         self.assertIn('{&"A<1>" &"A<0>"} @WIRE', files['top.sp'])
-        cells = edif.read(drawing(True))
-        self.assertEqual(cells['work', 'leaf'].nets[0].terminals, [(None, 'a[0]'), ('r0[0]', 'plus')])
 
     def test_terminal_order_is_required(self):
         with self.assertRaisesRegex(ExportError, 'termOrder'):
@@ -258,39 +212,14 @@ class ExportTests(unittest.TestCase):
         with self.assertRaisesRegex(ExportError, 'connectivity disagrees'):
             convert(netlist().replace('RR0 A B', 'RR0 B A'), drawing(), ORDERS, PACKAGE, 'top')
 
-    def test_name_collision_fails_instead_of_guessing(self):
-        cells = edif.read(drawing())
-        _, blocks = cdl.read(netlist().replace('RR0 A B', 'R0 A B 1k\nRR0 A B'))
-        with self.assertRaisesRegex(ExportError, 'Ambiguous CDL name'):
-            cdl.match_instances(blocks['leaf'], cells['work', 'leaf'])
 
-    def test_native_pin_instance_location_wins_over_connect_location(self):
-        text = drawing().replace('(portImplementation A (connectLocation (figure pin (dot (pt 0 0)))))',
-            '(portImplementation A (connectLocation (figure pin (dot (pt 0 0)))) (instance PIN (transform (orientation MY) (origin (pt -90 20)))))')
-        cell = edif.read(text)['work', 'top']
-        self.assertEqual(cell.port_positions['a'], (-90, 20))
-        self.assertEqual(cell.port_orientations['a'], 'MY')
 
-    def test_all_eight_orientations(self):
-        expected = [(2, 3), (-3, 2), (-2, -3), (3, -2), (2, -3), (-2, 3), (3, 2), (-3, -2)]
-        self.assertEqual([edif.transform((2, 3), o) for o in edif.MATRICES], expected)
 
-    def test_aliases_and_escaping_are_data(self):
-        self.assertEqual(edif.name(edif.parse('(rename id (stringDisplay "A%34%B"))')), 'A"B')
-        self.assertEqual(literal('a_b\\c'), 'a\\_b\\textbackslash{}c')
-        self.assertEqual(quote('a"b\\c'), '"a""b\\c"')
-        self.assertEqual(load_orders('(("a" "b" ("P" "N")))'), {('a', 'b'): ['P', 'N']})
-        self.assertEqual(edif.parse('("a\\"b" "c\\\\d")', skill=True), ['a"b', 'c\\d'])
-        for text in ('(unclosed', '("unclosed)', ')('):
-            with self.assertRaises(ExportError):
-                edif.parse(text)
 
     def test_bad_scale_and_array_width_are_rejected(self):
         for scale in (0, -1, float('nan')):
             with self.assertRaises(ExportError):
                 self.export(scale=scale)
-        with self.assertRaisesRegex(ExportError, 'Cannot expand'):
-            edif.read(drawing(True).replace('"A<1:0>") 2', '"A<1:0>") 3'))
 
     def test_job_does_not_replace_existing_output(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -318,7 +247,7 @@ class ExportTests(unittest.TestCase):
                     entry = 'top.scs' if options.get('dialect') == 'spectre' else 'top.sp'
                     result = subprocess.run([str(binary), 'check', str(Path(directory)/entry)], text=True, encoding='utf-8', capture_output=True)
                     self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
-                    self.assertIn('0 errors, 0 warnings', result.stdout+result.stderr)
+                    self.assertTrue(clean_check(result.stdout+result.stderr), result.stdout+result.stderr)
 
 
 if __name__ == '__main__':

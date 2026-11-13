@@ -7,9 +7,6 @@ from fixtures import primitive_drawing, drawing, spectre_netlist
 from rnl_export import ExportError, edif, resources
 from go_backend import convert
 import test_symbols
-
-
-@unittest.skipIf(os.environ.get('RNL_EXPORT_BACKEND') == 'python', 'Native PDK expansions are a Go backend extension')
 class PDKTests(unittest.TestCase):
     def test_optional_cdf_terminals_require_complete_active_pin_coverage(self):
         source, _ = primitive_drawing('vsource', [(0, 3), (0, -3)], 'R0')

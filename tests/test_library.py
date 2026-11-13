@@ -9,8 +9,8 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent/'reference'))
-from fixtures import drawing, spectre_netlist, netlist, marker_drawing
+sys.path.insert(0, str(Path(__file__).resolve().parent/'support'))
+from fixtures import drawing, spectre_netlist, netlist, marker_drawing, clean_check
 from go_backend import call, cell_json
 from rnl_export import ExportError, edif, resources
 
@@ -28,9 +28,6 @@ def with_dependencies(files, entry):
         if name.endswith(extension) and ported.search(files[name]):
             text += ('include ' if spectre else '.include ')+json.dumps(name)+'\n'
     return dict(files, **{caller: text}), caller
-
-
-@unittest.skipIf(os.environ.get('RNL_EXPORT_BACKEND') == 'python', 'Shared-library export is a Go backend extension')
 class LibraryTests(unittest.TestCase):
     def capture(self, native, source, top, dialect='spectre', **options):
         return call(op='capture', library='work', netlist=native, drawing=source, top=top,
@@ -75,7 +72,7 @@ class LibraryTests(unittest.TestCase):
                     (root/actual).write_text(context[actual], encoding='utf-8')
                 result = subprocess.run([binary, 'check', str(root/actual)], capture_output=True, text=True, encoding='utf-8')
                 self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
-                self.assertIn('0 errors, 0 warnings', result.stdout+result.stderr)
+                self.assertTrue(clean_check(result.stdout+result.stderr), result.stdout+result.stderr)
 
     def external_inputs(self, dialect, library='other', native_name='Leaf_native_2', top='top', portless=False):
         tree = edif.parse(drawing())

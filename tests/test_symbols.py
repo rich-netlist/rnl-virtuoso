@@ -10,15 +10,12 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT/'tests/reference'))
-from rnl_export import ExportError, edif, orientation, resources
-from rnl_export.convert import convert
-from rnl_export.symbols import package_pins, symbol_definition
+sys.path.insert(0, str(ROOT/'tests/support'))
+from rnl_export import ExportError, edif, resources
+from rnl_export.symbols import package_pins
 from rnl_export.symbols import STANDARD
 from fixtures import drawing, netlist, spectre_netlist, primitive_drawing
-
-if os.environ.get('RNL_EXPORT_BACKEND', 'go') == 'go':
-    from go_backend import convert, symbol_definition, orientation_api as orientation
+from go_backend import convert, symbol_definition, orientation_api as orientation
 
 PACKAGE = resources.read('eda-symbol.rnl')
 BINARY = Path(os.environ.get('RNL_BIN', str(ROOT/'target'/('rnl.exe' if os.name == 'nt' else 'rnl'))))
@@ -36,8 +33,6 @@ class SymbolTests(unittest.TestCase):
             result = json.loads(process.stdout)
             self.assertFalse([d for d in result['diagnostics'] if d['severity'] in ('error', 'warning')], result['diagnostics'])
             return next(level for level in result['levels'] if level['title'] == title) if title else result['levels'][0]
-
-    @unittest.skipIf(os.environ.get('RNL_EXPORT_BACKEND') == 'python', 'Dialect-specific packages are a Go backend extension')
     def test_spectre_instance_letters_do_not_override_cell_symbols(self):
         files, _ = convert(spectre_netlist(), drawing(), {('analogLib', 'res'): ['PLUS', 'MINUS']}, PACKAGE, 'top', dialect='spectre')
         level = self.dump(files, 'top')
@@ -61,8 +56,6 @@ class SymbolTests(unittest.TestCase):
         self.assertEqual(text.count('@RECTANGLE'), 1)  # Only the original body.
         for forbidden in ('#ff0000', 'width=0.8', 'direction=', 'linecolor=', 'fillcolor=', 'textcolor=', 'linewidth=', 'linestyle=', '@SET-STYLE'):
             self.assertNotIn(forbidden, text)
-
-    @unittest.skipIf(os.environ.get('RNL_EXPORT_BACKEND') == 'python', 'Selection-box modes are a Go backend extension')
     def test_selection_box_modes_keep_native_union_or_graphic_extent(self):
         native = '// Fixture\n// Library name: work\n// Cell name: top\nX0 (N1 N2) resistor r=1k\n'
         snapshot = '(("analogLib" "custom_bounds" "symbol" 160 (((-0.0625 -0.15625) (0.0625 -0.125)) ((-0.0625 0.125) (0.0625 0.15625)))))'

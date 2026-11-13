@@ -1,4 +1,4 @@
-"""Build and run the shared Python/Go regression suite from any working directory."""
+"""Build the Go backend and run the fixture tests against it from any working directory."""
 import argparse
 import os
 from pathlib import Path
@@ -35,10 +35,7 @@ def main():
         print('RNL checker not found: drawing/checker assertions will be skipped.', flush=True)
     env['RNL_EXPORT_BIN'] = str(host)
     env['RNL_EXPORT_LINUX_BIN'] = str(linux)
-    for backend in ('python', 'go'):
-        print('Fixture backend: '+backend, flush=True)
-        run([sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-v'],
-            dict(env, RNL_EXPORT_BACKEND=backend))
+    run([sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-v'], env)
 
 
 if __name__ == '__main__':

@@ -6,16 +6,12 @@ import re
 import sys
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'tests/reference'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'tests/support'))
 from rnl_export import edif, resources
-from rnl_export.convert import convert
 from rnl_export.edif import Cell, Net
-from rnl_export.routing import draw_routes
 from fixtures import primitive_drawing
 import test_symbols
-
-if os.environ.get('RNL_EXPORT_BACKEND', 'go') == 'go':
-    from go_backend import convert, draw_routes
+from go_backend import convert, draw_routes
 
 
 class RouteTests(unittest.TestCase):

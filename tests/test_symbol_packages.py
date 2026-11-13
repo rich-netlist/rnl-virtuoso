@@ -6,15 +6,12 @@ import unittest
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent/'reference'))
+sys.path.insert(0, str(Path(__file__).resolve().parent/'support'))
 
 from fixtures import drawing, netlist, spectre_netlist, marker_drawing
 from go_backend import call
 from rnl_export import edif, resources, ExportError
 import test_library
-
-
-@unittest.skipIf(os.environ.get('RNL_EXPORT_BACKEND') == 'python', 'Optional symbol packages use the Go backend')
 class SymbolPackageTests(unittest.TestCase):
     def root_symbol(self):
         tree = edif.parse(drawing())

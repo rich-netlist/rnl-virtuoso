@@ -5,9 +5,6 @@ import unittest
 from fixtures import drawing, netlist, spectre_netlist
 import test_symbols
 from go_backend import convert
-
-
-@unittest.skipIf(os.environ.get('RNL_EXPORT_BACKEND') == 'python', 'Port directions use the Go backend')
 class PortTests(unittest.TestCase):
     def export(self, array=False, frame='R0', directions=('INPUT', 'OUTPUT'), dialect='spectre', repeated=False):
         source = drawing(array)

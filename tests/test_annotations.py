@@ -9,9 +9,6 @@ from fixtures import drawing, primitive_drawing, spectre_netlist
 import test_symbols
 from test_symbols import BINARY, PACKAGE
 from go_backend import convert
-
-
-@unittest.skipIf(os.environ.get('RNL_EXPORT_BACKEND') == 'python', 'Annotation fixes use the Go backend')
 class AnnotationTests(unittest.TestCase):
     def export(self, source=None, **options):
         if source is None:

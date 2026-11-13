@@ -1,4 +1,5 @@
 """Small, original fixtures. No Cadence library drawings are redistributed."""
+import re
 
 
 def drawing(array=False):
@@ -85,3 +86,8 @@ def primitive_drawing(cell, pins, orientation):
             '(library work (cell top (view schematic (interface) (contents '
             '(instance X0 (viewRef symbol (cellRef %s (libraryRef analogLib))) (transform (orientation %s) (origin (pt 200 -100)))) %s)))))') % (cell, interface, pin_impl, cell, orientation, ' '.join(nets))
     return text, world_pins
+
+
+def clean_check(output):
+    """True when an rnl check summary reports no errors, violations or warnings."""
+    return re.search(r"(?m)^0 errors, (?:0 violations, )?0 warnings,", output) is not None
