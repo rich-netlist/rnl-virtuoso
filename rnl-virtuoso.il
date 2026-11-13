@@ -280,7 +280,7 @@ procedure(rnlSymbolLibraryList(value)
   )
 )
 
-procedure(rnlStartExport(lib cell view destination hierarchy split scale @optional (format "spectre") (scope "") (capture nil) (notify t) (schematicViews "schematic") (symbolViews "symbol") (exportSelectionBox t) (autoCheckSave t) (exportSymbols nil) (symbolLibraries nil))
+procedure(rnlStartExport(lib cell view destination hierarchy split scale @optional (format "spectre") (scope "") (capture nil) (notify t) (schematicViews "schematic") (symbolViews "symbol") (exportSelectionBox t) (autoCheckSave t) (symbolLibraries nil) (symbolPackage nil))
   let((cv rows work port cds command simulator hasSymbol symbol annotations annotationRows schematicList symbolList symbolView symbolSelections symbolRows selectionBoxes selectionRows)
     rnlPreflightError = nil
     when(rnlActiveJob error("An RNL export is already running.\n"))
@@ -358,8 +358,12 @@ procedure(rnlStartExport(lib cell view destination hierarchy split scale @option
     fprintf(port "%L\n" selectionRows)
     close(port)
     port = outfile(strcat(work "/request.sx"))
-    fprintf(port "%L\n" list("rnl-export-job-v8" rnlInstallDirectory lib cell view cds
-      getWorkingDir() destination hierarchy split scale car(getInstallPath()) format hasSymbol scope capture schematicViews symbolViews if(symbolView then symbolView else "") exportSelectionBox exportSymbols symbolLibraries))
+    ; symbolPackage, for a cell of a library export whose symbol-only cells form
+    ; a package: list(mode name directory symbolParts).
+    fprintf(port "%L\n" list("rnl-export-job-v9" rnlInstallDirectory lib cell view cds
+      getWorkingDir() destination hierarchy split scale car(getInstallPath()) format hasSymbol scope capture schematicViews symbolViews if(symbolView then symbolView else "") exportSelectionBox symbolLibraries
+      if(symbolPackage then car(symbolPackage) else "") if(symbolPackage then cadr(symbolPackage) else "")
+      if(symbolPackage then caddr(symbolPackage) else "") if(symbolPackage then cadddr(symbolPackage) else nil)))
     close(port)
     command = strcat(rnlShellQuote(strcat(rnlInstallDirectory "/bin/rnl-virtuoso")) " "
       rnlShellQuote(strcat(work "/request.sx")))
@@ -407,7 +411,7 @@ procedure(rnlExportCallback(form)
       form->outputDirectory->value form->includeHierarchy->value
       form->fileMode->value == "Separate files" form->drawingScale->value
       if(form->netlistFormat->value == "Spectre (simulation)" then "spectre" else "cdl")
-      if(!form->includeExternal || form->includeExternal->value then "" else car(form->rnlSource)) nil t form->schematicViews->value form->symbolViews->value form->exportSelectionBox->value form->autoCheckSave->value form->exportSymbols->value form->symbolLibraries->value) t)
+      if(!form->includeExternal || form->includeExternal->value then "" else car(form->rnlSource)) nil t form->schematicViews->value form->symbolViews->value form->exportSelectionBox->value form->autoCheckSave->value form->symbolLibraries->value) t)
     hiSetCallbackStatus(form if(result then t else nil))
     unless(result rnlNotice("Export could not start. See the CIW error message."))
   )
@@ -418,8 +422,8 @@ procedure(rnlShowExport()
     cv = geGetEditCellView()
     unless(cv && cv->cellViewType == "schematic"
       error("Open a schematic editor before choosing Export RNL.\n"))
-    unless(rnlExportForm && rnlExportForm->symbolLibraries
-      rnlExportForm = hiCreateAppForm(?name 'rnlExportFormV0100 ?formTitle "Export RNL"
+    unless(rnlExportForm && rnlExportForm->symbolLibraries && !rnlExportForm->exportSymbols
+      rnlExportForm = hiCreateAppForm(?name 'rnlExportFormV0101 ?formTitle "Export RNL"
         ?callback 'rnlExportCallback ?buttonLayout 'OKCancel ?unmapAfterCB t ?dontBlock t
         ?fields list(
           hiCreateStringField(?name 'sourceDesign ?prompt "Source" ?editable nil)
@@ -428,7 +432,6 @@ procedure(rnlShowExport()
           hiCreateStringField(?name 'symbolLibraries ?prompt "Symbol libraries (.rnl paths, highest priority first; empty: eda-symbol)" ?value "")
           hiCreateBooleanButton(?name 'autoCheckSave ?buttonText "Automatically Check & Save stale schematics" ?value t)
           hiCreateBooleanButton(?name 'exportSelectionBox ?buttonText "Export selection box" ?value t)
-            hiCreateBooleanButton(?name 'exportSymbols ?buttonText "Export symbols.rnl separately" ?value nil)
           hiCreateStringField(?name 'outputDirectory ?prompt "New output directory")
           hiCreateCyclicField(?name 'netlistFormat ?prompt "Netlist format"
             ?choices list("Spectre (simulation)" "SPICE / CDL (LVS)") ?value "Spectre (simulation)")

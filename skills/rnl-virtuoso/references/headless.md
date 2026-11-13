@@ -75,8 +75,10 @@ unrelated interactive/bridge startup to work around an unexplained failure.
 - `--symbol-library PATH` (repeatable, highest priority first) replaces the
   bundled `eda-symbol` with the given RNL symbol libraries; use only packages the
   user names. Config key `symbol_libraries`;
-- `--selection-box=false` uses graphic extent instead of native selection boxes;
-  `--symbols` enables the additional `symbols.rnl` collection.
+- `--selection-box=false` uses graphic extent instead of native selection boxes.
+- `--symbol-only-cells package` (library only) writes the cells without schematic
+  as one symbol package with a mapping file, `--symbol-package-name` naming it;
+  the default `subcircuit` writes an empty subcircuit with its symbol for each.
 - Boolean flags use `--flag=false`, not `--flag false`. Keep source writes off
   unless authorized. A headless process cannot export another session's unsaved edits.
 - stdout is one JSON result. stderr gives the log path, or native messages with

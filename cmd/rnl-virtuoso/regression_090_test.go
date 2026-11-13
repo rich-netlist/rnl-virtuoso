@@ -60,14 +60,14 @@ func TestParameterMergeRetainsNativeDeclarationAndRejectsChangedBody(t *testing.
 		return libraryCapture{Dialect: "spectre", Definitions: []libraryDefinition{d}}
 	}
 	for _, parts := range [][]libraryCapture{{part(root), part(child)}, {part(child), part(root)}} {
-		files, _ := assembleLibrary(parts, "work", "spectre", true, false, testResources())
+		files, _ := assembleLibrary(parts, "work", "spectre", true, symbolOnlyMode{Kind: "subcircuit"}, testResources())
 		if !strings.Contains(files["leaf.scs"], "parameters gain=2") || !strings.Contains(files["leaf.scs"], "subckt leaf A B") {
 			t.Fatal(files)
 		}
 	}
 	child.Body = strings.Replace(child.Body, "r=gain", "r=2*gain", 1)
 	rejects(t, "Conflicting native", func() {
-		assembleLibrary([]libraryCapture{part(root), part(child)}, "work", "spectre", true, false, testResources())
+		assembleLibrary([]libraryCapture{part(root), part(child)}, "work", "spectre", true, symbolOnlyMode{Kind: "subcircuit"}, testResources())
 	})
 	child.Body = root.Body
 	root.Body = strings.Replace(root.Body, "R0", "parameters gain=3\nR0", 1)
@@ -148,7 +148,7 @@ func TestEmptyRootUsesVerifiedSourcePortsForNativeRenaming(t *testing.T) {
 	b.Root = false
 	b.Body = "subckt leaf A_0\nends leaf\n"
 	parts := []libraryCapture{{Dialect: "spectre", Definitions: []libraryDefinition{a, b}}}
-	files, _ := assembleLibrary(parts, "work", "spectre", true, false, testResources())
+	files, _ := assembleLibrary(parts, "work", "spectre", true, symbolOnlyMode{Kind: "subcircuit"}, testResources())
 	if !strings.Contains(files["leaf.scs"], "subckt leaf A_0\n") {
 		t.Fatal(files)
 	}
@@ -169,7 +169,7 @@ func TestUnusedSyntheticRootParametersMerge(t *testing.T) {
 	root.Root = true
 	root.Body = strings.Replace(child.Body, "R0", "parameters gain unused\nR0", 1)
 	for _, pair := range [][2]libraryDefinition{{root, child}, {child, root}} {
-		files, _ := assembleLibrary([]libraryCapture{{Dialect: "spectre", Definitions: []libraryDefinition{pair[0]}}, {Dialect: "spectre", Definitions: []libraryDefinition{pair[1]}}}, "work", "spectre", true, false, testResources())
+		files, _ := assembleLibrary([]libraryCapture{{Dialect: "spectre", Definitions: []libraryDefinition{pair[0]}}, {Dialect: "spectre", Definitions: []libraryDefinition{pair[1]}}}, "work", "spectre", true, symbolOnlyMode{Kind: "subcircuit"}, testResources())
 		if strings.Contains(files["leaf.scs"], "parameters gain") {
 			t.Fatal("unused synthetic declarations survived native child selection")
 		}

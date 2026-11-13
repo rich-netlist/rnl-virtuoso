@@ -65,19 +65,15 @@ native hierarchy and model references.
 Unsafe filenames or case-insensitive file/directory collisions stop the export
 rather than overwrite a file or invent a different name.
 When the current cell has a saved view matching the symbol list, its native EDIF is also
-converted. The symbol is embedded in the current subcircuit (when it has ports)
-and can be included in the optional `symbols.rnl` collection. The **Export
-symbols.rnl separately** setting (`?exportSymbols`, default `nil`, since 0.9.4)
-controls that additional package only. `cell-symbol.rnl` is no longer generated.
-Combined and separate single-cell exports use the same option, including portless
-cells with a symbol. Native EDIF symbol capture and embedded schematic symbols
-are preserved when the setting is off.
+converted. The symbol is embedded in the current subcircuit when it has ports.
+Since 0.10.0 no separate symbol collection is written: `?exportSymbols` and
+`symbols.rnl` are gone, and `cell-symbol.rnl` was dropped before them.
 Keep the directory together when opening or copying the result.
 
 ## Whole-library export
 
 Choose **Library** in the CIW form. All cells matching the schematic view list are exported;
-cells matching only the symbol list are exported as reusable symbols. Cells with neither
+cells matching only the symbol list are symbol-only cells (below). Cells with neither
 view are skipped and listed in `library-report.json`. The exporter reads saved
 views. By default, stale schematic connectivity is checked and saved in the
 source design (including current edits); disable **Automatically Check & Save
@@ -100,18 +96,35 @@ The common output directory contains:
   are relative to each file, including files inside these directories.
   Portless entries include their required descendants only; unrelated cells and
   other portless testbenches are never included.
-- `<symbol-only-cell>.rnl`: each library cell without a schematic is always saved
-  as its own reusable symbol package `virtuoso/<library>/<cell>` version `0.2` (RNL 0.4),
-  with symbol `$"library/cell"`. Foreign primary symbol-only cells, if present,
-  follow the same library subdirectory layout. These files do not depend on the
-  optional collection setting.
-- Optional `symbols.rnl` (default off): package `virtuoso-library/<library>` version `0.2` (RNL 0.4), with reusable
-  symbols named `$"library/cell"`, including symbol-only cells and referenced
-  interfaces. For example: `@USE-PACKAGE(name="virtuoso-library/myLib", version="0.2", path="symbols.rnl")`.
-- Shared `eda-symbol.rnl`, `eda-style.rnl` and `library-report.json`. The report
-  maps source cells, native subcircuit names, entry paths, symbol-only files and exported symbols,
-  and records `export_symbols`, the optional `symbol_file` (null when disabled),
-  `symbol_only_files`, model references, notes and skipped cells.
+- Symbol-only cells, as **Cells without schematic** / `?symbolOnlyCells` /
+  `--symbol-only-cells` chooses (0.10.0+):
+  - `subcircuit` (default): `<cell>.scs` / `.sp` holds an empty subcircuit of
+    the cell's name with the symbol as its block symbol. Its ports follow the
+    cell's CDF terminal order when that names the symbol's terminals, else the
+    order of the symbol's pins. A portless top whose netlist calls the cell
+    includes the file; subcircuit files include nothing, and their instances of
+    the cell keep a local copy of its symbol. A cell that the netlister stops at
+    (a `spectre`, `veriloga`, `veriloga_ans` or `auCdl` view) is defined by that
+    view, such as a Verilog-A module or a device in a model file, and gets no
+    file; the report names the view.
+  - `package`: one package `<name>.rnl` (RNL 0.4, version `0.1`) holds the symbols
+    of all symbol-only cells, named `LIBRARY_CELL` in capitals, and the mapping
+    file `<name>.virtuoso.json` beside it maps each cell to its symbol, every
+    terminal to the pin of the same name. A cell whose CDF gives a fixed model
+    name also gets a `@DEVICE` with its terminal order and a `model=` rule in the
+    package, for readers without the mapping. The name is `?symbolPackageName` /
+    `--symbol-package-name`, by default the library name in lower case with
+    other characters than letters, digits and `-` written as `-`. The symbol-only
+    cells are exported first, and the library's other cells use the package as
+    their first symbol library.
+- Shared `eda-style.rnl`, the symbol libraries (by default `eda-symbol.rnl`) and
+  `library-report.json`; a library of symbol-only cells exported as a package
+  needs neither of the first two. The report maps source cells, native
+  subcircuit names, entry paths and the symbol-only cells, and records
+  `symbol_libraries`, `symbol_only_cells` (the mode), `symbol_only_files` (each
+  cell's file, or `null` and the view that defines it), `symbol_package` (name,
+  version, file, mapping and symbols), model references, notes and skipped cells.
+
 
 The queue runs one native job at a time. Results are published together only
 after all cells have been attempted and the merge succeeds. Existing output
@@ -305,7 +318,7 @@ mapping. Missing or extra members still fail.
   enclosing rectangle; symbol outlines, pin markers, labels and the cellview bbox
   do not expand it. With the option disabled, explicit boxes are omitted and RNL
   computes the non-text graphic extent. This applies to root/child symbols,
-  symbol-only cells and reusable symbol packages.
+  symbol-only cells and generated symbol packages.
 - Exported custom symbols contain geometry, layout/text size and `@PIN`s with
   unknown direction omitted. They contain no generated pin squares or fixed
   colors, line widths or style assignments. Presentation and optional pin marks

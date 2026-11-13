@@ -24,11 +24,18 @@ procedure(rnlCIWDefaults(form)
   )
 )
 
+procedure(rnlCIWSymbolModeChanged(form)
+  hiSetFieldEnabled(form->symbolPackageName
+    form->exportScope->value == "Library" && form->symbolOnlyCells->value == "One symbol package")
+)
+
 procedure(rnlCIWModeChanged(form)
   hiSetFieldEnabled(form->sourceCell form->exportScope->value == "Cell")
   hiSetFieldEnabled(form->includeExternal t)
   hiSetFieldEnabled(form->includeHierarchy form->exportScope->value == "Cell")
   hiSetFieldEnabled(form->fileMode form->exportScope->value == "Cell")
+  hiSetFieldEnabled(form->symbolOnlyCells form->exportScope->value == "Library")
+  rnlCIWSymbolModeChanged(form)
   unless(form->rnlPreviousScope == form->exportScope->value
     form->includeExternal->value = form->exportScope->value == "Cell"
     form->rnlPreviousScope = form->exportScope->value)
@@ -61,12 +68,14 @@ procedure(rnlCIWExportCallback(form)
       if(form->exportScope->value == "Library" then
         rnlStartLibraryExport(form->sourceLibrary->value form->outputDirectory->value
           form->includeHierarchy->value form->fileMode->value == "Separate files"
-          form->drawingScale->value format form->includeExternal->value t form->schematicViews->value form->symbolViews->value form->exportSelectionBox->value form->autoCheckSave->value form->exportSymbols->value form->symbolLibraries->value)
+          form->drawingScale->value format form->includeExternal->value t form->schematicViews->value form->symbolViews->value form->exportSelectionBox->value form->autoCheckSave->value form->symbolLibraries->value
+          if(form->symbolOnlyCells->value == "One symbol package" then "package" else "subcircuit")
+          if(form->symbolOnlyCells->value == "One symbol package" then form->symbolPackageName->value else ""))
       else
         rnlStartExport(form->sourceLibrary->value form->sourceCell->value nil
           form->outputDirectory->value form->includeHierarchy->value
           form->fileMode->value == "Separate files" form->drawingScale->value format
-          if(form->includeExternal->value then "" else form->sourceLibrary->value) nil t form->schematicViews->value form->symbolViews->value form->exportSelectionBox->value form->autoCheckSave->value form->exportSymbols->value form->symbolLibraries->value)) t)
+          if(form->includeExternal->value then "" else form->sourceLibrary->value) nil t form->schematicViews->value form->symbolViews->value form->exportSelectionBox->value form->autoCheckSave->value form->symbolLibraries->value)) t)
     hiSetCallbackStatus(form if(result then t else nil))
     unless(result rnlNotice("Export could not start. See the CIW error message."))
   )
@@ -76,8 +85,8 @@ procedure(rnlShowCIWExport()
   let((libraries cv)
     libraries = sort(ddGetLibList()~>name 'alphalessp)
     unless(libraries error("No libraries are available.\n"))
-    unless(rnlCIWExportForm && rnlCIWExportForm->symbolLibraries
-      rnlCIWExportForm = hiCreateAppForm(?name 'rnlCIWExportFormV0100 ?formTitle "Export RNL"
+    unless(rnlCIWExportForm && rnlCIWExportForm->symbolOnlyCells
+      rnlCIWExportForm = hiCreateAppForm(?name 'rnlCIWExportFormV0101 ?formTitle "Export RNL"
         ?callback 'rnlCIWExportCallback ?buttonLayout 'OKCancel ?unmapAfterCB t ?dontBlock t
         ?fields list(
           hiCreateCyclicField(?name 'exportScope ?prompt "Export" ?choices list("Cell" "Library")
@@ -92,7 +101,10 @@ procedure(rnlShowCIWExport()
           hiCreateStringField(?name 'symbolLibraries ?prompt "Symbol libraries (.rnl paths, highest priority first; empty: eda-symbol)" ?value "")
           hiCreateBooleanButton(?name 'autoCheckSave ?buttonText "Automatically Check & Save stale schematics" ?value t)
           hiCreateBooleanButton(?name 'exportSelectionBox ?buttonText "Export selection box" ?value t)
-          hiCreateBooleanButton(?name 'exportSymbols ?buttonText "Export symbols.rnl separately" ?value nil)
+          hiCreateCyclicField(?name 'symbolOnlyCells ?prompt "Cells without schematic (library)"
+            ?choices list("Empty subcircuits" "One symbol package") ?value "Empty subcircuits"
+            ?callback "rnlCIWSymbolModeChanged(hiGetCurrentForm())")
+          hiCreateStringField(?name 'symbolPackageName ?prompt "Symbol package name (empty: library name)" ?value "")
           hiCreateStringField(?name 'outputDirectory ?prompt "New output directory")
           hiCreateCyclicField(?name 'netlistFormat ?prompt "Netlist format"
             ?choices list("Spectre (simulation)" "SPICE / CDL (LVS)") ?value "Spectre (simulation)")
@@ -114,7 +126,7 @@ procedure(rnlShowCIWExport()
   )
 )
 
-procedure(rnlStartLibraryExport(lib destination hierarchy split scale @optional (format "spectre") (external nil) (notify t) (schematicViews "schematic") (symbolViews "symbol") (exportSelectionBox t) (autoCheckSave t) (exportSymbols nil) (symbolLibraries nil))
+procedure(rnlStartLibraryExport(lib destination hierarchy split scale @optional (format "spectre") (external nil) (notify t) (schematicViews "schematic") (symbolViews "symbol") (exportSelectionBox t) (autoCheckSave t) (symbolLibraries nil) (symbolOnlyCells "subcircuit") (symbolPackageName ""))
   let((library tasks skipped work schematicList symbolList selected)
     when(rnlActiveJob || rnlActiveBatch error("An RNL export is already running.\n"))
     library = ddGetObj(lib)
@@ -127,17 +139,27 @@ procedure(rnlStartLibraryExport(lib destination hierarchy split scale @optional 
     schematicList = rnlViewList(schematicViews "schematicViews")
     symbolList = rnlViewList(symbolViews "symbolViews")
     symbolLibraries = rnlSymbolLibraryList(symbolLibraries)
+    unless(member(symbolOnlyCells list("subcircuit" "package"))
+      error("symbolOnlyCells must be \"subcircuit\" or \"package\".\n"))
+    unless(symbolPackageName symbolPackageName = "")
+    unless(stringp(symbolPackageName) && (symbolPackageName == "" || rexMatchp("^[a-z0-9][a-z0-9-]*$" symbolPackageName))
+      error("symbolPackageName must use lower-case letters, digits and -.\n"))
+    when(symbolPackageName != "" && symbolOnlyCells != "package"
+      error("symbolPackageName requires symbolOnlyCells \"package\".\n"))
     foreach(cell library->cells
       cond(
         ((selected = rnlFindView(lib cell->name schematicList)) tasks = cons(list(cell->name selected "schematic") tasks))
         ((selected = rnlFindView(lib cell->name symbolList)) tasks = cons(list(cell->name selected "symbol") tasks))
         (t skipped = cons(cell->name skipped))))
     unless(tasks error("Library %s has no schematic or symbol views.\n" lib))
-    tasks = sort(tasks lambda((a b) alphalessp(car(a) car(b))))
+    ; Symbol-only cells first: in package mode the cells converted after them
+    ; use their package.
+    tasks = sort(tasks lambda((a b)
+      if(caddr(a) == caddr(b) then alphalessp(car(a) car(b)) else caddr(a) == "symbol")))
     work = rnlCreateOutputWork(destination)
     rnlActiveBatch = list(nil 'library lib 'destination destination 'notify notify
       'hierarchy hierarchy 'split t 'scale scale 'format format 'external external
-      'schematicViews schematicViews 'symbolViews symbolViews 'exportSelectionBox exportSelectionBox 'autoCheckSave autoCheckSave 'exportSymbols exportSymbols 'symbolLibraries symbolLibraries 'tasks tasks 'parts nil 'failures nil 'skipped skipped 'directory work 'phase "cells" 'count 0 'total length(tasks))
+      'schematicViews schematicViews 'symbolViews symbolViews 'exportSelectionBox exportSelectionBox 'autoCheckSave autoCheckSave 'symbolLibraries symbolLibraries 'symbolOnlyCells symbolOnlyCells 'symbolPackageName symbolPackageName 'symbolParts nil 'tasks tasks 'parts nil 'failures nil 'skipped skipped 'directory work 'phase "cells" 'count 0 'total length(tasks))
     rnlLastBatch = rnlActiveBatch
     printf("RNL: library %s: %d cells; work: %s\n" lib length(tasks) work)
     rnlBatchNext()
@@ -146,7 +168,7 @@ procedure(rnlStartLibraryExport(lib destination hierarchy split scale @optional 
 )
 
 procedure(rnlStartSymbolJob(lib cell scale format @optional (view "symbol") (schematicViews "schematic") (symbolViews "symbol") (exportSelectionBox t))
-  let((cv cds work port command selectionRows)
+  let((cv cds work port command selectionRows stopView termOrder model cdfInfo)
     cv = dbOpenCellViewByType(lib cell view nil "r")
     unless(cv error("Cannot open %s/%s/%s.\n" lib cell view))
     unwindProtect(
@@ -156,14 +178,25 @@ procedure(rnlStartSymbolJob(lib cell scale format @optional (view "symbol") (sch
     cds = ddGetForcedLib()
     when(!cds || cds == "" cds = ddGetStartup("cds.lib"))
     unless(rnlActiveBatch error("Symbol jobs require a library export workspace.\n"))
+    ; The view the netlister stops at defines the cell; the CDF gives the order
+    ; of its terminals and, when it is a fixed name, its model. Read only.
+    stopView = rnlFindView(lib cell if(format == "spectre" then list("spectre" "veriloga" "veriloga_ans") else list("auCdl")))
+    cdfInfo = car(errset(let((cdf sim)
+      cdf = cdfGetBaseCellCDF(ddGetObj(lib cell))
+      sim = when(cdf && cdf->simInfo get(cdf->simInfo if(format == "spectre" then 'spectre else 'auCdl)))
+      when(sim list(sim->termOrder if(format == "spectre" then sim->model else sim->modelName)))) nil))
+    termOrder = foreach(mapcar name car(cdfInfo) if(stringp(name) then name else sprintf(nil "%s" name)))
+    model = cadr(cdfInfo)
+    model = cond((stringp(model) model) (model && symbolp(model) get_pname(model)) (t ""))
     work = strcat(rnlActiveBatch->directory "/symbol_" sprintf(nil "%d" rnlActiveBatch->count))
     unless(createDir(work) error("Cannot create symbol work directory.\n"))
     port = outfile(strcat(work "/selection-boxes.sx"))
     fprintf(port "%L\n" selectionRows)
     close(port)
     port = outfile(strcat(work "/request.sx"))
-    fprintf(port "%L\n" list("rnl-symbol-job-v3" rnlInstallDirectory lib cell cds
-      getWorkingDir() car(getInstallPath()) scale format view schematicViews symbolViews exportSelectionBox))
+    fprintf(port "%L\n" list("rnl-symbol-job-v4" rnlInstallDirectory lib cell cds
+      getWorkingDir() car(getInstallPath()) scale format view schematicViews symbolViews exportSelectionBox
+      if(stopView then stopView else "") termOrder model))
     close(port)
     command = strcat(rnlShellQuote(strcat(rnlInstallDirectory "/bin/rnl-virtuoso")) " " rnlShellQuote(strcat(work "/request.sx")))
     rnlActiveJob = list(nil 'directory work)
@@ -200,7 +233,9 @@ procedure(rnlBatchNext()
         if(caddr(task) == "schematic" then
           destination = strcat(batch->directory "/cell_" sprintf(nil "%d" batch->count))
           rnlStartExport(batch->library car(task) cadr(task) destination batch->hierarchy t
-            batch->scale batch->format if(batch->external then "" else batch->library) t t batch->schematicViews batch->symbolViews batch->exportSelectionBox batch->autoCheckSave nil batch->symbolLibraries)
+            batch->scale batch->format if(batch->external then "" else batch->library) t t batch->schematicViews batch->symbolViews batch->exportSelectionBox batch->autoCheckSave batch->symbolLibraries
+            when(batch->symbolOnlyCells == "package"
+              list("package" batch->symbolPackageName strcat(batch->directory "/symbol-package") reverse(batch->symbolParts))))
         else rnlStartSymbolJob(batch->library car(task) batch->scale batch->format cadr(task) batch->schematicViews batch->symbolViews batch->exportSelectionBox)) t)
       batch->starting = nil
       unless(result
@@ -209,8 +244,9 @@ procedure(rnlBatchNext()
     unless(rnlActiveJob
       batch->phase = "merge"
       port = outfile(strcat(batch->directory "/request.sx"))
-      fprintf(port "%L\n" list("rnl-library-merge-v3" rnlInstallDirectory batch->library
-        batch->destination batch->format batch->split reverse(batch->parts) batch->external batch->hierarchy batch->skipped reverse(batch->failures) batch->exportSymbols))
+      fprintf(port "%L\n" list("rnl-library-merge-v4" rnlInstallDirectory batch->library
+        batch->destination batch->format batch->split reverse(batch->parts) batch->external batch->hierarchy batch->skipped reverse(batch->failures)
+        batch->symbolOnlyCells batch->symbolPackageName))
       close(port)
       command = strcat(rnlShellQuote(strcat(rnlInstallDirectory "/bin/rnl-virtuoso")) " "
         rnlShellQuote(strcat(batch->directory "/request.sx")))
@@ -239,6 +275,8 @@ procedure(rnlBatchProcessDone(job status)
     else
       if(status == 0 then
         batch->parts = cons(strcat(job->directory "/library-parts.json") batch->parts)
+        when(caddr(batch->currentTask) == "symbol"
+          batch->symbolParts = cons(car(batch->parts) batch->symbolParts))
       else
         message = "Native export or conversion failed."
         port = infile(strcat(job->directory "/error.txt"))

@@ -168,27 +168,46 @@ func runJob(request, resourceDir string) map[string]any {
 	fields := parse(readText(request), true).list
 	if len(fields) > 0 {
 		switch fields[0].atom {
-		case "rnl-library-merge-v1", "rnl-library-merge-v2", "rnl-library-merge-v3":
+		case "rnl-library-merge-v1", "rnl-library-merge-v2", "rnl-library-merge-v3", "rnl-library-merge-v4":
 			return runLibraryMerge(request, fields, resourceDir)
-		case "rnl-symbol-job-v1", "rnl-symbol-job-v2", "rnl-symbol-job-v3":
+		case "rnl-symbol-job-v1", "rnl-symbol-job-v2", "rnl-symbol-job-v3", "rnl-symbol-job-v4":
 			return runSymbolJob(request, fields)
 		}
 	}
-	// v8 adds the symbol libraries: package paths, highest priority first; an
-	// empty list means the bundled default.
+	// v9 has the symbol libraries (package paths, highest priority first; an
+	// empty list means the bundled default) and, for a cell of a library export
+	// whose symbol-only cells form a package, the mode, the package name, the
+	// directory to write the package in and the parts of the symbol-only cells.
+	// v8 had the libraries after a flag for symbols.rnl, which v7 added and
+	// which is no longer written.
 	var symbolLibraries []libraryInput
-	if len(fields) == 22 && fields[0].atom == "rnl-export-job-v8" {
-		for _, path := range fields[21].list {
+	libraryPaths := func(list node) {
+		for _, path := range list.list {
 			if strings.TrimSpace(path.atom) != "" {
 				symbolLibraries = append(symbolLibraries, libraryInput{Path: path.atom})
 			}
 		}
-		fields = fields[:21]
-		fields[0] = atom("rnl-export-job-v7")
 	}
-	exportSymbols := false
-	if len(fields) == 21 && fields[0].atom == "rnl-export-job-v7" {
-		exportSymbols = requestBoolean(fields[20])
+	switch {
+	case len(fields) == 25 && fields[0].atom == "rnl-export-job-v9":
+		libraryPaths(fields[20])
+		if fields[21].atom == "package" {
+			mode := parseSymbolOnlyMode("package", fields[22].atom, fields[2].atom)
+			path := filepath.Join(fields[23].atom, mode.Package+".rnl")
+			if generated := writeGeneratedLibrary(path, readParts(fields[24].list)); generated != nil {
+				if len(symbolLibraries) == 0 {
+					symbolLibraries = []libraryInput{{Path: filepath.Join(resourceDir, "eda-symbol.rnl")}}
+				}
+				symbolLibraries = append([]libraryInput{*generated}, symbolLibraries...)
+			}
+		}
+		fields = fields[:20]
+		fields[0] = atom("rnl-export-job-v6")
+	case len(fields) == 22 && fields[0].atom == "rnl-export-job-v8":
+		libraryPaths(fields[21])
+		fields = fields[:20]
+		fields[0] = atom("rnl-export-job-v6")
+	case len(fields) == 21 && fields[0].atom == "rnl-export-job-v7":
 		fields = fields[:20]
 		fields[0] = atom("rnl-export-job-v6")
 	}
@@ -340,7 +359,7 @@ func runJob(request, resourceDir string) map[string]any {
 	if capture {
 		parts = &libraryCapture{Library: library, Cell: cellName, Dialect: dialect}
 	}
-	files, report := convert(convertInput{Netlist: electrical, Drawing: drawing, Orders: orders, SymbolLibraries: symbolLibraries, Top: cellName, Hierarchy: &hierarchy, Split: split, Scale: &scale, Dialect: dialect, NameMaps: maps, RootSymbol: rootSymbol, BehaviorModels: models, StylePackage: &style, LibraryScope: scope, Capture: parts, Annotations: annotations, SymbolDrawings: symbolDrawings, ExportSelectionBox: &exportSelectionBox, SelectionBoxes: boxSnapshot, ExportSymbols: exportSymbols}, resourceDir)
+	files, report := convert(convertInput{Netlist: electrical, Drawing: drawing, Orders: orders, SymbolLibraries: symbolLibraries, Top: cellName, Hierarchy: &hierarchy, Split: split, Scale: &scale, Dialect: dialect, NameMaps: maps, RootSymbol: rootSymbol, BehaviorModels: models, StylePackage: &style, LibraryScope: scope, Capture: parts, Annotations: annotations, SymbolDrawings: symbolDrawings, ExportSelectionBox: &exportSelectionBox, SelectionBoxes: boxSnapshot}, resourceDir)
 	report["schematic_views"], report["symbol_views"] = schematicViews, symbolViews
 	if parts != nil {
 		parts.Notes = report["notes"].([]string)

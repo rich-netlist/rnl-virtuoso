@@ -26,7 +26,7 @@ func TestHeadlessOptionsAndConfig(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if !o.External || !o.Hierarchy || !o.AutoCheckSave || o.Symbols || o.Output != filepath.Join(base, "result") || len(o.EnvCSH) != 1 || o.EnvCSH[0] != envFile || o.Virtuoso != "custom-virtuoso" {
+	if !o.External || !o.Hierarchy || !o.AutoCheckSave || o.SymbolOnlyCells != "subcircuit" || o.Output != filepath.Join(base, "result") || len(o.EnvCSH) != 1 || o.EnvCSH[0] != envFile || o.Virtuoso != "custom-virtuoso" {
 		t.Fatalf("bad options: %+v", o)
 	}
 	override := filepath.Join(base, "override.csh")

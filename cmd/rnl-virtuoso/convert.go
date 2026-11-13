@@ -30,7 +30,6 @@ func loadOrders(text string) map[cellKey][]string {
 }
 
 type convertInput struct {
-	ExportSymbols      bool                `json:"export_symbols"`
 	Netlist            string              `json:"netlist"`
 	Drawing            string              `json:"drawing"`
 	Orders             []orderEntry        `json:"orders"`
@@ -912,9 +911,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 		}
 	}
 	if dialect == "spectre" && rootSub {
-		escape := func(s string) string {
-			return rx(`^[0-9]|[^a-zA-Z0-9_]`).ReplaceAllStringFunc(s, func(s string) string { return `\` + s })
-		}
+		escape := spectreName
 		ps := []string{}
 		for _, p := range root.Ports {
 			ps = append(ps, escape(p))
@@ -941,7 +938,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 	files := map[string]string{}
 	entry := netlistFilename(in.Top, extension)
 	parts := in.Capture
-	if (in.Split || in.ExportSymbols) && parts == nil {
+	if in.Split && parts == nil {
 		parts = &libraryCapture{Library: rootCell.Library, Cell: rootCell.Name, Dialect: dialect}
 	}
 	if parts != nil {
@@ -978,7 +975,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 		parts.SymbolLibraries = libraryRecords(in.SymbolLibraries, libraries)
 		if in.Split {
 			var layout map[string]any
-			files, layout = assembleLibrary([]libraryCapture{*parts}, rootCell.Library, dialect, true, in.ExportSymbols, resourceDir)
+			files, layout = assembleLibrary([]libraryCapture{*parts}, rootCell.Library, dialect, true, symbolOnlyMode{Kind: "subcircuit"}, resourceDir)
 			cellIndex = layout["definitions"]
 		}
 	}
@@ -986,19 +983,13 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 		files[l.File] = l.Text
 	}
 	files["eda-style.rnl"] = style
-	var symbolFile any
-	if in.ExportSymbols {
-		packageText, _ := reusableSymbolPackage("virtuoso-library/"+rootCell.Library, parts.Symbols)
-		files["symbols.rnl"] = packageText
-		symbolFile = "symbols.rnl"
-	}
 	notes = unique(notes)
 	sort.Strings(notes)
 	kind := "top"
 	if rootSub {
 		kind = "subcircuit"
 	}
-	return files, map[string]any{"symbol_libraries": libraryReport(libraries), "unmapped_cells": sortedSet(unmapped), "warnings": unique(warnings), "export_symbols": in.ExportSymbols, "export_selection_box": boxPolicy.native, "entry": entry, "top": root.Name, "root_kind": kind, "symbol_file": symbolFile, "statistics": stats, "notes": notes, "definitions": cellIndex}
+	return files, map[string]any{"symbol_libraries": libraryReport(libraries), "unmapped_cells": sortedSet(unmapped), "warnings": unique(warnings), "export_selection_box": boxPolicy.native, "entry": entry, "top": root.Name, "root_kind": kind, "statistics": stats, "notes": notes, "definitions": cellIndex}
 }
 
 func netlistFilename(name, extension string) string {

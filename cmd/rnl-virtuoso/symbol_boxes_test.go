@@ -75,11 +75,11 @@ func TestSelectionBoxRootSymbolAndLibraryCapture(t *testing.T) {
 		capture := &libraryCapture{Library: "work", Cell: "top", Dialect: "spectre"}
 		files, report := convert(convertInput{Top: "top", Dialect: "spectre", Drawing: drawing, RootSymbol: &symbol,
 			Netlist:            "// Library name: work\n// Cell name: top\n",
-			ExportSelectionBox: &enabled, SelectionBoxes: snapshot, Capture: capture, ExportSymbols: true}, testResources())
+			ExportSelectionBox: &enabled, SelectionBoxes: snapshot, Capture: capture}, testResources())
 		if report["export_selection_box"] != enabled || capture.ExportSelectionBox == nil || *capture.ExportSelectionBox != enabled {
 			t.Fatal(report, capture)
 		}
-		for _, text := range []string{files["top.scs"], files["symbols.rnl"], capture.Symbols[0].Definition} {
+		for _, text := range []string{files["top.scs"], capture.Symbols[0].Definition} {
 			if enabled && !strings.Contains(text, "box=[-1, -1, 1, 1]") {
 				t.Fatal(text)
 			}

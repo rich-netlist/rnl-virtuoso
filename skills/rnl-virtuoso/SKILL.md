@@ -85,9 +85,11 @@ When retrieving results, copy the entire output directory with relative paths
 intact, including external-library and presentation-package files. Report the
 source/target, mode/options, status, failed cells/reasons and output/log paths.
 
-The optional `symbols.rnl` collection is off by default; `symbol_file: null` is
-expected. `cell-symbol.rnl` is no longer emitted. Symbol-only cells still have
-`<cell>.rnl` files, listed in `symbol_only_files`; keep them. Ported files have no
+Cells without schematic become empty-subcircuit files by default, listed in
+`symbol_only_files`; with `--symbol-only-cells package` / `?symbolOnlyCells
+"package"` they form one symbol package with a mapping file (`symbol_package`),
+which a later export takes as a symbol library, such as for a PDK. Keep them.
+No separate `symbols.rnl` is written since 0.10.0. Ported files have no
 native includes; callers load dependencies once. Portless tops include descendants
 once. Native model and Verilog-A references remain external. Export success does
 not establish simulation success.

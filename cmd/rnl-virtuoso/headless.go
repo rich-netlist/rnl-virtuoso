@@ -29,12 +29,13 @@ type headlessConfig struct {
 	SymbolLibraries []string `json:"symbol_libraries"`
 }
 type headlessOptions struct {
-	Project, Library, Cell, Output, Logs, Install, Virtuoso                               string
-	Config, Format, FileMode, View, SchematicViews, SymbolViews                           string
-	EnvCSH, SymbolLibraries                                                               cshFiles
-	Hierarchy, External, AutoCheckSave, SelectionBox, Symbols, CDSInit, Verbose, NoConfig bool
-	Scale                                                                                 float64
-	Timeout                                                                               time.Duration
+	Project, Library, Cell, Output, Logs, Install, Virtuoso                      string
+	Config, Format, FileMode, View, SchematicViews, SymbolViews                  string
+	SymbolOnlyCells, SymbolPackageName                                           string
+	EnvCSH, SymbolLibraries                                                      cshFiles
+	Hierarchy, External, AutoCheckSave, SelectionBox, CDSInit, Verbose, NoConfig bool
+	Scale                                                                        float64
+	Timeout                                                                      time.Duration
 }
 
 func expandHeadlessPath(value, base string) (string, error) {
@@ -75,7 +76,8 @@ func parseHeadlessOptions(args []string, exe string, stderr io.Writer) (headless
 	fs.BoolVar(&o.External, "external", false, "Include foreign cells (default: true for cell, false for library)")
 	fs.BoolVar(&o.AutoCheckSave, "auto-check-save", true, "Check and save stale source schematics; use =false for read-only export")
 	fs.BoolVar(&o.SelectionBox, "selection-box", true, "Use native symbol selection boxes")
-	fs.BoolVar(&o.Symbols, "symbols", false, "Also emit symbols.rnl")
+	fs.StringVar(&o.SymbolOnlyCells, "symbol-only-cells", "subcircuit", "Cells with a symbol and no schematic: subcircuit (an empty subcircuit with the symbol each) or package (one symbol package with a mapping file) (library only)")
+	fs.StringVar(&o.SymbolPackageName, "symbol-package-name", "", "Name of the symbol package of --symbol-only-cells package (default: the library name in lower case) (library only)")
 	fs.Float64Var(&o.Scale, "scale", 10, "EDIF units per RNL unit")
 	fs.DurationVar(&o.Timeout, "timeout", 30*time.Minute, "Maximum whole-run duration (e.g. 30m, 2h); 0 disables")
 	fs.BoolVar(&o.CDSInit, "cdsinit", false, "Allow .cdsinit startup; default skips it")
@@ -102,6 +104,15 @@ func parseHeadlessOptions(args []string, exe string, stderr io.Writer) (headless
 	}
 	if o.Cell == "" && (seen["hierarchy"] || seen["file-mode"] || seen["view"]) {
 		return o, errors.New("--hierarchy, --file-mode and --view require --cell")
+	}
+	if o.Cell != "" && (seen["symbol-only-cells"] || seen["symbol-package-name"]) {
+		return o, errors.New("--symbol-only-cells and --symbol-package-name apply to a library export; omit --cell")
+	}
+	if o.SymbolOnlyCells != "subcircuit" && o.SymbolOnlyCells != "package" {
+		return o, errors.New("--symbol-only-cells must be subcircuit or package")
+	}
+	if seen["symbol-package-name"] && o.SymbolOnlyCells != "package" {
+		return o, errors.New("--symbol-package-name requires --symbol-only-cells package")
 	}
 	if !seen["external"] {
 		o.External = o.Cell != ""
@@ -261,7 +272,13 @@ func headlessDriver(o headlessOptions) string {
 	}
 	call += " ?format " + q(o.Format) + " ?external " + b(o.External) + " ?scale " + strconv.FormatFloat(o.Scale, 'g', -1, 64) +
 		" ?schematicViews " + q(o.SchematicViews) + " ?symbolViews " + q(o.SymbolViews) + " ?autoCheckSave " + b(o.AutoCheckSave) +
-		" ?exportSelectionBox " + b(o.SelectionBox) + " ?exportSymbols " + b(o.Symbols)
+		" ?exportSelectionBox " + b(o.SelectionBox)
+	if o.Cell == "" {
+		call += " ?symbolOnlyCells " + q(o.SymbolOnlyCells)
+		if o.SymbolPackageName != "" {
+			call += " ?symbolPackageName " + q(o.SymbolPackageName)
+		}
+	}
 	if len(o.SymbolLibraries) > 0 {
 		libraries := []string{}
 		for _, p := range o.SymbolLibraries {

@@ -12,8 +12,9 @@ netlist and drawing without rewriting device statements.
 - Write RNL 0.4: name the standard collection `rnl-std-all` 0.4, the symbol libraries
   (by default the bundled `eda-symbol` 0.2, with an editable Virtuoso mapping) and `eda-style` 0.2. Open the result with a
   viewer or checker that reads RNL 0.4; version 0.9.6 is the last that writes RNL 0.3.
-- Whole-library exports share deduplicated definitions and an optional reusable symbol package,
-  with optional referenced external cells and support for symbol-only cells.
+- Whole-library exports share deduplicated definitions, with optional referenced external cells.
+  Cells without schematic become empty subcircuits with their symbols, or one symbol package
+  with a mapping file that later exports use as a symbol library, such as for a PDK.
 
 ## Install
 
@@ -53,15 +54,20 @@ Each cell's actual circuit is saved as `<cell>.scs` / `.sp` at the export root;
 foreign cells go to `<external-library>/<cell>.scs` / `.sp`, once per source cell.
 There are no entry wrappers or `netlists/` directory. Subcircuits have no native
 includes; portless tops include their descendants once in a flat list. Single-cell
-exports also retain the combined-file option. Optionally export a shared `symbols.rnl`; the output always shares
-the two presentation packages. The report lists entries, native
+exports also retain the combined-file option. The output always shares
+the style package and the symbol libraries. The report lists entries, native
 definitions and exported symbols. The external-cell option preserves interfaces
 and symbols when off, and includes referenced schematic definitions when on.
 
-**Export symbols.rnl separately** is off by default (SKILL: `?exportSymbols nil`).
-Enable it to add the reusable symbol collection to either cell or library exports.
-Symbol-only library cells always get their own `<cell>.rnl`; `cell-symbol.rnl` is
-no longer generated. Embedded schematic symbols are preserved.
+**Cells without schematic** (library export) chooses how cells that have a symbol
+and no schematic are written. **Empty subcircuits** (the default, SKILL
+`?symbolOnlyCells "subcircuit"`) gives each its own `<cell>.scs` / `.sp`: an empty
+subcircuit that carries the symbol, included by a portless top that calls the
+cell. **One symbol package** (`"package"`) writes all their symbols into one
+package with a mapping file beside it, which later exports take as a symbol
+library; this is how a PDK's device symbols are exported once and reused.
+`symbols.rnl` and `cell-symbol.rnl` are no longer generated. Embedded schematic
+symbols are preserved.
 Failed cells are skipped and reported with their reasons and logs; `complete`
 is false when any cell failed, and the completion notice gives the failure count.
 

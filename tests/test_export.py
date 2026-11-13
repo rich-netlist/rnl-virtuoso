@@ -118,7 +118,6 @@ class ExportTests(unittest.TestCase):
             for options in ({}, {'split': True}, {'hierarchy': False}):
                 files, report = self.export(dialect=dialect, root_symbol=source, **options)
                 self.assertEqual(report['root_kind'], 'subcircuit')
-                self.assertIsNone(report['symbol_file'])
                 self.assertNotIn('cell-symbol.rnl', files)
                 self.assertNotIn('symbols.rnl', files)
                 text = files[report['entry']]
@@ -130,7 +129,6 @@ class ExportTests(unittest.TestCase):
         no_ports_symbol = '(edif test (edifVersion 2 0 0) (library work (cell top (view symbol (interface (symbol (figure device (rectangle (pt 0 0) (pt 20 20)))))))))'
         files, report = convert('// Library name: work\n// Cell name: top\nR0 (A 0) resistor r=1k\n', marker_drawing(), ORDERS, PACKAGE, 'top', dialect='spectre', root_symbol=no_ports_symbol)
         self.assertEqual(report['root_kind'], 'top')
-        self.assertIsNone(report['symbol_file'])
         self.assertNotIn('cell-symbol.rnl', files)
         self.assertNotIn('subckt top', files['top.scs'])
         self.assertNotIn('# @SET-SYMBOL', files['top.scs'])
