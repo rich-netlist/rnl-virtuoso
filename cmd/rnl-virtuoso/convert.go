@@ -836,6 +836,11 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 				marker = sid + "_marker"
 				ss = append(ss, sid+" @SET-SYMBOL "+definition+"_symbol", marker+" = $IO_PORT @ATTACH "+ref("&", netmap[bits[0]])+" => @PLACE"+pt(at)+" => @ORIENT("+quote(placement.Orient)+")")
 			}
+			if len(bits) > 1 {
+				// The tag is drawn on its own usage; a wire joins its pin to the
+				// anchor's, or the net would be drawn in two parts.
+				ss = append(ss, "{"+ref("&", netmap[bits[0]])+`} @WIRE(mode="straight") {`+usagePin(marker, "pin")+" "+term+"}")
+			}
 			if symbol != "" {
 				ss = append(ss, marker+" @SET-SYMBOL "+symbol)
 			}
