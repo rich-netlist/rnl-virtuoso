@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -236,7 +237,8 @@ func readParts(paths []node) []libraryCapture {
 
 // writeGeneratedLibrary writes the package of the symbol-only cells of a library
 // export at path, with its mapping file beside it, for the cells of the export
-// to use. It returns nil when there are no symbol-only cells.
+// to use. It returns nil when there are no symbol-only cells. Each cell of the
+// export writes it again, with the same content.
 func writeGeneratedLibrary(path string, parts []libraryCapture) *libraryInput {
 	parts = symbolOnlyParts(parts)
 	if len(parts) == 0 {
@@ -244,7 +246,9 @@ func writeGeneratedLibrary(path string, parts []libraryCapture) *libraryInput {
 	}
 	name := strings.TrimSuffix(filepath.Base(path), ".rnl")
 	text, mapping, _ := generatedSymbolLibrary(name, parts)
-	mkdir(filepath.Dir(path))
+	if e := os.MkdirAll(filepath.Dir(path), 0755); e != nil {
+		fail("%s", e)
+	}
 	writeText(path, text)
 	writeText(strings.TrimSuffix(path, ".rnl")+".virtuoso.json", mapping)
 	return &libraryInput{Path: path}

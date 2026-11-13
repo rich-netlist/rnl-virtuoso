@@ -429,7 +429,8 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split bool
 				if part.StopView != "" {
 					entry["defined_by_view"] = part.StopView
 				} else {
-					entry["defined_by_subcircuit"] = definitions[normalize(source.Cell, dialect)].Library + "/" + source.Cell
+					def := definitions[normalize(source.Cell, dialect)]
+					entry["defined_by_subcircuit"] = def.Library + "/" + def.Cell
 				}
 				symbolOnlyFiles = append(symbolOnlyFiles, entry)
 				continue

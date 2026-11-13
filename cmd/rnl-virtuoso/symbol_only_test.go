@@ -71,6 +71,8 @@ func TestGeneratedPackageIsASymbolLibrary(t *testing.T) {
 		t.Fatal("a package without symbol-only cells")
 	}
 	parts := []libraryCapture{converted, onlyPart("myLib", "amp", libraryCapture{Model: "amp", TermOrder: []string{"out", "in"}})}
+	writeGeneratedLibrary(path, parts)
+	// Every cell of the export writes it again.
 	input := writeGeneratedLibrary(path, parts)
 	if input == nil || input.Path != path || !isFile(strings.TrimSuffix(path, ".rnl")+".virtuoso.json") {
 		t.Fatal(input)
