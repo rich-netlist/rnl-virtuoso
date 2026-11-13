@@ -1,23 +1,28 @@
 # Export resources
 
-`eda-symbol.rnl` and `eda-style.rnl` are pinned snapshots of the split packages
-provided for this integration from branch `feat/virtuoso-symbols`, on 2026-10-20.
-They are CC0-1.0, as recorded in the repository's REUSE annotations and the
-plugin's license notice. The plugin carries these snapshots in both source and
-packaged installations so it does not depend on another worktree's location or
-the former combined `libraries/eda-style` package.
+`eda-symbol.rnl` and `eda-style.rnl` are byte-for-byte snapshots of the public
+packages `eda-symbol` 0.2 and `eda-style` 0.2 of
+[rnl-packages](https://github.com/rich-netlist/rnl-packages). They are CC0-1.0,
+as recorded in the repository's REUSE annotations and the plugin's license
+notice. The plugin carries these snapshots in both source and packaged
+installations, and exported files reference them with `path=`.
 
-The package versions are **0.1**; their RNL language version is **0.3**. Exported
-files reference both packages explicitly. Replace the `eda-style` reference to
-apply another presentation without editing exported symbol geometry. Pin marks
-are supplied by the style package, not by the converter's custom symbols.
+The package versions are **0.2**; their RNL language version is **0.4**. Exported
+files name the standard collection `rnl-std-all` 0.4 first, then both packages.
+Replace the `eda-style` reference to apply another presentation without editing
+exported symbol geometry. Pin marks are supplied by the style package, not by the
+converter's custom symbols.
 
-The source snapshot includes SPICE instance-letter rules (`I*`, `V*`, etc.).
-Exported **Spectre** copies omit that section and keep model/type rules:
-Spectre instance names do not identify device types. CDL copies keep the SPICE
-rules. This adaptation applies to both cell and shared-library exports.
+The pins of `eda-symbol` 0.2 keep the coordinates of 0.1 and bind the terminal
+names of the standard series 0.4 (eda-only symbols for masters without standard
+terminal names stay positional). Its SPICE instance-letter rules (`I*`, `V*`,
+etc.) are in a record with `language="spice"`: they act only on SPICE sections,
+never on Spectre instance names, so Spectre and CDL exports ship the same copy.
 
-`symbol-orientations.json` describes the 18 changed symbol interfaces. Its
+`symbol-orientations.json` (schema 2) describes the 18 changed symbol interfaces
+under `symbols`, and under `terminals` the terminal names that each package
+symbol with named pins binds, in node order; the converter writes them as
+`@SET-SYMBOL(terminals=[…])`. Its
 `package_to_source` is the compensation applied to the **new package's local
 coordinates** before the instance's Virtuoso/EDIF orientation. For example,
 `DIODE` uses `R270` and `VOLTAGE_CONTROLLED_SWITCH` uses `MYR90`. `R90` means

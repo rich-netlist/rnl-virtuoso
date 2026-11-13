@@ -127,6 +127,8 @@ func drawRoutes(c *cell, endpoints []endpoint, netmap map[string]string, scale f
 	bits := []stringSet{}
 	netOrder := map[string]int{}
 	terminals := map[point][]endpoint{}
+	// Where each vertex reference lies, so a junction dot is placed without a solver.
+	positions := map[string]point{}
 	terminalOrder := []point{}
 	candidates := map[point]bool{}
 	for _, r := range c.Routes {
@@ -154,6 +156,7 @@ func drawRoutes(c *cell, endpoints []endpoint, netmap map[string]string, scale f
 			terminalOrder = append(terminalOrder, e.At)
 		}
 		terminals[e.At] = append(terminals[e.At], e)
+		positions[e.Ref] = e.At
 		candidates[e.At] = true
 	}
 	points := []map[point]bool{}
@@ -207,6 +210,7 @@ func drawRoutes(c *cell, endpoints []endpoint, netmap map[string]string, scale f
 			r = "%p" + strconvI(nextPoint)
 			nextPoint++
 			statements = append(statements, r+" = "+pt(p))
+			positions[r] = p
 		}
 		references[p][key] = r
 		return r
@@ -358,7 +362,11 @@ func drawRoutes(c *cell, endpoints []endpoint, netmap map[string]string, scale f
 	}
 	for _, p := range joinOrder {
 		if len(joins[p]) >= 3 {
-			statements = append(statements, "$JUNCTION @ATTACH "+p)
+			junction := "$JUNCTION @ATTACH " + p
+			if at, ok := positions[p]; ok {
+				junction += " => @PLACE" + pt(at)
+			}
+			statements = append(statements, junction)
 		}
 	}
 	return statements, len(wireKeys)

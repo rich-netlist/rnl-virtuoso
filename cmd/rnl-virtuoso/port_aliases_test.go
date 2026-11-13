@@ -49,7 +49,7 @@ func TestPagePortAliasInHierarchicalConversion(t *testing.T) {
 				Package: resource(testResources(), "eda-symbol.rnl"), NameMaps: map[string]nameMap{"leaf": {"net": {"A<0>": "A_0", "A<1>": "A_1"}}}}, testResources())
 			text := files["top.scs"]
 			for _, fragment := range []string{"subckt leaf A_1 A_0\n", "I0 (N1 N0) leaf\n",
-				`@ATTACH &"A_0" &"A_1"`, `%port_0_marker @TEXT("A<0:1>", key="name")`, `%port_1_marker @TEXT("A<0:1>", key="name")`,
+				`@ATTACH &"A_0" &"A_1"`, `%port_0_marker @TEXT("A<0:1>", key="netname")`, `%port_1_marker @TEXT("A<0:1>", key="netname")`,
 				`@PLACE(-2, 0) => @ORIENT("` + orient + `")`, `%port_0_marker @SET-SYMBOL %input_port_symbol`} {
 				if !strings.Contains(text, fragment) {
 					t.Fatalf("missing %q in:\n%s", fragment, text)
@@ -96,7 +96,7 @@ func TestOneBitPageBusAliasKeepsRangeLabel(t *testing.T) {
 			Netlist:  "// Library name: work\n// Cell name: leaf\n// View name: schematic\n",
 			NameMaps: map[string]nameMap{"leaf": {"net": {"A<0>": "A_0"}}}}, testResources())
 		for _, marker := range []string{"%port_0", "%port_1"} {
-			if !strings.Contains(files["leaf.scs"], marker+` @TEXT("A<0:0>", key="name")`) {
+			if !strings.Contains(files["leaf.scs"], marker+` @TEXT("A<0:0>", key="netname")`) {
 				t.Fatal("one-bit bus range label lost", files["leaf.scs"])
 			}
 		}

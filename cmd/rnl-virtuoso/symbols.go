@@ -7,24 +7,6 @@ import (
 	"strings"
 )
 
-// Instance letters describe device types only in SPICE. Spectre permits any
-// instance name, including I0 for a subcircuit. Keep the pinned geometry and
-// model/type rules, but omit the snapshot's SPICE-only section for Spectre.
-func symbolPackage(text, dialect string) string {
-	if dialect != "spectre" {
-		return text
-	}
-	start := strings.Index(text, "  /* SPICE element letter rules */")
-	if start < 0 {
-		return text
-	}
-	end := strings.Index(text[start:], "  /* Spectre & Virtuoso")
-	if end < 0 {
-		fail("Cannot locate the end of the SPICE symbol rules")
-	}
-	return text[:start] + "  /* SPICE instance-letter rules omitted for this Spectre export. */\n" + text[start+end:]
-}
-
 func strconvI(i int) string { return strconv.Itoa(i) }
 func quote(s string) string {
 	return `"` + strings.NewReplacer("\n", " ", "\r", " ", `"`, `""`).Replace(s) + `"`
@@ -75,7 +57,7 @@ func packagePins(text string) map[string]map[string]point {
 	return out
 }
 
-// Directional ports have no separate symbol in rnl-std 0.3. Copy the two
+// Directional ports have no separate symbol in the standard series. Copy the two
 // self-contained EDA glyphs locally so removing eda-symbol later is still valid.
 func packageSymbolDefinition(text, name, id string) string {
 	m := rx(`\$` + name + `\s*=\s*(@DEFINE-SYMBOL\b)`).FindStringSubmatchIndex(text)
@@ -203,12 +185,22 @@ func graphics(n node, scale float64) []string {
 	return out
 }
 func symbolDefinition(c *cell, id string, terminals map[string]string, scale float64, notes *[]string) string {
+	return symbolDefinitionNamed(c, id, terminals, nil, scale, notes)
+}
+
+// symbolDefinitionNamed also gives the pins of the listed ports a local name,
+// such as the pins of a usage, which are reached by name (RNL 0.4, 9.2.4).
+func symbolDefinitionNamed(c *cell, id string, terminals, pinNames map[string]string, scale float64, notes *[]string) string {
 	if chosen := c.ExportSymbol; chosen != nil {
-		mapping := map[string]string{}
+		mapping, names := map[string]string{}, map[string]string{}
 		for p, name := range chosen.Ports {
-			mapping[p] = terminals[portID(c, name, "spectre", nil)]
+			original := portID(c, name, "spectre", nil)
+			mapping[p] = terminals[original]
+			if n, ok := pinNames[original]; ok {
+				names[p] = n
+			}
 		}
-		return symbolDefinition(chosen, id, mapping, scale, notes)
+		return symbolDefinitionNamed(chosen, id, mapping, names, scale, notes)
 	}
 	if !c.Symbol.group {
 		fail("No EDIF symbol geometry for %s/%s", c.Library, c.Name)
@@ -284,7 +276,11 @@ func symbolDefinition(c *cell, id string, terminals map[string]string, scale flo
 		if len(values) > 1 {
 			value = "[" + strings.Join(values, ", ") + "]"
 		}
-		body = append(body, pt(scaled(c.Pins[members[0]], scale))+" @PIN(terminal="+value+")")
+		local := ""
+		if n := pinNames[members[0]]; n != "" {
+			local = "%" + n + " = "
+		}
+		body = append(body, local+pt(scaled(c.Pins[members[0]], scale))+" @PIN(terminal="+value+")")
 		if pin.at(1).group {
 			for _, d := range children(pin.at(1), "display") {
 				label := c.Labels[port]
@@ -321,7 +317,7 @@ func loadRules(text string) map[string]orientationRule {
 	if e := json.Unmarshal([]byte(text), &data); e != nil {
 		fail("Unsupported symbol orientation configuration: %s", e)
 	}
-	if data.Schema != 1 || len(data.Package) != 2 || data.Package["name"] != "eda-symbol" || data.Package["version"] != "0.1" {
+	if data.Schema != 2 || len(data.Package) != 2 || data.Package["name"] != "eda-symbol" || data.Package["version"] != "0.2" {
 		fail("Unsupported symbol orientation configuration")
 	}
 	if data.Symbols == nil {
@@ -352,6 +348,27 @@ func loadRules(text string) map[string]orientationRule {
 	}
 	return out
 }
+// loadTerminals reads, for each package symbol with named pins, the terminal
+// names it binds in node order. SET-SYMBOL writes them as terminals= (11.3).
+func loadTerminals(text string) map[string][]string {
+	var data struct {
+		Terminals map[string][]string `json:"terminals"`
+	}
+	if e := json.Unmarshal([]byte(text), &data); e != nil {
+		fail("Unsupported symbol orientation configuration: %s", e)
+	}
+	for name, names := range data.Terminals {
+		seen := stringSet{}
+		for _, n := range names {
+			if n == "" || seen[strings.ToLower(n)] || strings.Trim(n, "0123456789") == "" {
+				fail("Invalid terminal names for %s", name)
+			}
+			seen[strings.ToLower(n)] = true
+		}
+	}
+	return data.Terminals
+}
+
 func compose(outer, inner string) string {
 	x := transform(transform(point{1, 0}, inner, point{}), outer, point{})
 	y := transform(transform(point{0, 1}, inner, point{}), outer, point{})

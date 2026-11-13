@@ -156,11 +156,14 @@ class ExportTests(unittest.TestCase):
             self.assertEqual(report['statistics']['instances'], 1)
             self.assertIn('$GROUND @ATTACH &"0"', output)
             if stub:
-                self.assertIn('$FIGURE @ATTACH %marker_2 => @SET-SYMBOL $NO_CONNECT_SYMBOL', output)
+                self.assertIn('$FIGURE @ATTACH %marker_2 => @SET-SYMBOL $NO_CONNECT_SYMBOL => @PLACE(4, 0)', output)
                 self.assertIn('%marker_2 = (4, 0)', output)
                 self.assertIn('{#"R0":1 %marker_2}', output)
             else:
-                self.assertIn('$NO_CONNECT @ATTACH #"R0":1', output)
+                self.assertIn('$NO_CONNECT @ATTACH #"R0":1 => @PLACE(0, 0)', output)
+            # Usages have no terminals in RNL 0.4; the ground's wire ends at its pin.
+            self.assertIn('%marker_1::pin', output)
+            self.assertNotRegex(output, r'%(marker|port)_\d+:[^:]')
             if binary.is_file():
                 with tempfile.TemporaryDirectory() as directory:
                     for name, content in files.items():
@@ -175,7 +178,7 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(plain, netlist())
         self.assertEqual(report['statistics']['instances'], 2)
         self.assertIn('# @SET-SYMBOL %block_symbol', files['top.sp'])
-        self.assertIn('#"RR0" @SET-SYMBOL $RESISTOR', files['top.sp'])
+        self.assertIn('#"RR0" @SET-SYMBOL(terminals=["p", "n"]) $RESISTOR', files['top.sp'])
 
     def test_separate_and_current_level_keep_child_symbol(self):
         split, _ = self.export(split=True)

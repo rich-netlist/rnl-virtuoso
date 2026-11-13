@@ -133,17 +133,20 @@ func TestSpectreMapDecodesIdentifierEscapesAfterSkillStrings(t *testing.T) {
 	}
 }
 
-func TestSymbolPackageIsDialectSpecific(t *testing.T) {
+func TestSymbolPackageServesBothDialectsUnchanged(t *testing.T) {
+	// The SPICE letter rules act only on SPICE sections (RNL 0.4, 2.8), so the
+	// exported copy is the pinned package itself, for Spectre and CDL alike.
 	text := readText(filepath.Join("..", "..", "resources", "eda-symbol.rnl"))
-	if symbolPackage(text, "cdl") != text {
-		t.Fatal("SPICE rules lost")
+	spice := strings.Index(text, `@RNL(language="spice") {`)
+	letter := strings.Index(text, `@SELECT-INSTANCE(name="I*"`)
+	model := strings.Index(text, `@SELECT-INSTANCE(model="isource"`)
+	if spice < 0 || letter < spice || model < 0 || strings.Index(text[spice:], "\n}\n")+spice < letter || strings.Index(text[spice:], "\n}\n")+spice > model {
+		t.Fatal("instance letters must sit in the SPICE record and model rules outside it")
 	}
-	spectre := symbolPackage(text, "spectre")
-	if strings.Contains(spectre, `@SELECT-INSTANCE(name="I*")`) || !strings.Contains(spectre, `@SELECT-INSTANCE(model="isource")`) {
-		t.Fatal("Spectre symbol rules depend on instance letters or lost primitive matching")
-	}
-	if symbolPackage(spectre, "spectre") != spectre {
-		t.Fatal("not idempotent")
+	drawing := testEDIF(`(cell top (view schematic (interface (port A)) (contents (net A (joined (portRef A))))))`)
+	files, _ := convert(convertInput{Top: "top", Dialect: "spectre", Drawing: drawing, Netlist: "// Library name: work\n// Cell name: top\n// View name: schematic\n", Package: text}, testResources())
+	if files["eda-symbol.rnl"] != text {
+		t.Fatal("the Spectre copy differs from the pinned package")
 	}
 }
 
@@ -203,7 +206,7 @@ func TestOrientationRulesAndAllFrames(t *testing.T) {
 			}
 		}
 	}
-	base := `{"schema":1,"package":{"name":"eda-symbol","version":"0.1"},"symbols":{"DIODE":{"package_to_source":"R270","align_pins":[1,2]}}}`
+	base := `{"schema":2,"package":{"name":"eda-symbol","version":"0.2"},"symbols":{"DIODE":{"package_to_source":"R270","align_pins":[1,2]}}}`
 	rules := loadRules(base)
 	at, o := place("DIODE", []point{{0, 3}, {0, -3}}, []point{{-3, 0}, {3, 0}}, "MY", point{20, -10}, rules)
 	if at != (point{20, -10}) || o != compose("MY", "R270") {

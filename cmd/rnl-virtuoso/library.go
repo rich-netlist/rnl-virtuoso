@@ -330,7 +330,7 @@ func assembleLibrary(parts []libraryCapture, library, dialect string, split, exp
 		notes = append(notes, part.Notes...)
 		modelReferences = append(modelReferences, part.ModelReferences...)
 	}
-	files := map[string]string{"eda-symbol.rnl": symbolPackage(resource(resourceDir, "eda-symbol.rnl"), dialect), "eda-style.rnl": resource(resourceDir, "eda-style.rnl")}
+	files := map[string]string{"eda-symbol.rnl": resource(resourceDir, "eda-symbol.rnl"), "eda-style.rnl": resource(resourceDir, "eda-style.rnl")}
 	names := []string{}
 	for key := range definitions {
 		names = append(names, key)

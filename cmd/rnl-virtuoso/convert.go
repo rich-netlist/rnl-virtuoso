@@ -95,9 +95,28 @@ func portID(c *cell, spelling, dialect string, names map[string]string) string {
 	}
 	return id
 }
+// RNL 0.4 uses no package implicitly: the header names the standard collection,
+// drops its automatic fill (the drawing already holds every wire, port and
+// marker of the source schematic), then the two EDA packages. One package per
+// line, so a reader can replace or remove one of them.
+const rnlVersion = "0.4"
+
 func header(carrier string) string {
-	return strings.ReplaceAll("* @RNL(type=\"header\") {\n*   @VERSION(\"0.3\");\n*   @USE-PACKAGE(name=\"eda-symbol\", version=\"0.1\", path=\"eda-symbol.rnl\");\n*   @USE-PACKAGE(name=\"eda-style\", version=\"0.1\", path=\"eda-style.rnl\")\n* }\n", "*", carrier)
+	return strings.ReplaceAll(`* @RNL(type="header") {
+*   @VERSION("`+rnlVersion+`");
+*   @USE-PACKAGE(name="rnl-std-all", version="0.4");
+*   @USE-PACKAGE(name="rnl-std-fill") {};
+*   @USE-PACKAGE(name="eda-symbol", version="0.2", path="eda-symbol.rnl");
+*   @USE-PACKAGE(name="eda-style", version="0.2", path="eda-style.rnl")
+* }
+`, "*", carrier)
 }
+
+// A usage has no terminals in RNL 0.4 (12.1): wires end at a named pin of its symbol.
+func usagePin(usage, pin string) string { return usage + "::" + pin }
+
+// The pins of a PDK expansion group's symbol are named, never like its roles p1..pn.
+func expandedPin(i int) string { return "pin_" + strconvI(i+1) }
 func record(ss []string, carrier string) string {
 	body := strings.Join(ss, ";\n")
 	out := carrier + ` @RNL(author="rnl-virtuoso") {` + "\n"
@@ -174,7 +193,6 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 	if dialect != "cdl" && dialect != "spectre" {
 		fail("Unsupported native netlist format: %s", dialect)
 	}
-	in.Package = symbolPackage(in.Package, dialect)
 	hierarchy := in.Hierarchy == nil || *in.Hierarchy
 	style := resource(resourceDir, "eda-style.rnl")
 	if in.StylePackage != nil {
@@ -185,6 +203,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 		rules = loadRules(resource(resourceDir, "symbol-orientations.json"))
 	}
 	standards := packagePins(in.Package)
+	terminalNames := loadTerminals(resource(resourceDir, "symbol-orientations.json"))
 	standardNames := standard
 	if in.Standard != nil {
 		standardNames = in.Standard
@@ -512,19 +531,18 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 				symbol = standardNames[strings.ToLower(master.Name)]
 			}
 			var destination []point
+			// A package symbol with named pins binds the terminal names of the
+			// standard series; SET-SYMBOL lists them in node order (11.3), so the
+			// instance binds by position whatever names the host gives it.
+			names := terminalNames[symbol]
 			if pins, ok := standards[symbol]; symbol != "" && ok {
-				aliases := map[string]string{"d": "1", "g": "2", "s": "3", "b": "4", "c": "1", "e": "3", "p": "1", "n": "2", "a": "1", "k": "2"}
-				numeric := map[string]point{}
-				for p, pos := range pins {
-					k := p
-					if a, ok := aliases[p]; ok {
-						k = a
-					}
-					numeric[k] = pos
-				}
-				complete := true
+				complete := len(names) == 0 || len(order) <= len(names)
 				for i := range order {
-					p, ok := numeric[strconvI(i+1)]
+					key := strconvI(i + 1)
+					if len(names) > 0 && i < len(names) {
+						key = strings.ToLower(names[i])
+					}
+					p, ok := pins[key]
 					if !ok {
 						complete = false
 					}
@@ -540,7 +558,15 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 					src = append(src, scaled(master.Pins[p], scale))
 				}
 				xy, outputOrient = place(symbol, src, destination, ins.Orient, xy, rules)
-				ss = append(ss, host+" @SET-SYMBOL $"+symbol)
+				assignment := " @SET-SYMBOL $" + symbol
+				if len(names) > 0 {
+					quoted := []string{}
+					for _, n := range names[:len(order)] {
+						quoted = append(quoted, quote(n))
+					}
+					assignment = " @SET-SYMBOL(terminals=[" + strings.Join(quoted, ", ") + "]) $" + symbol
+				}
+				ss = append(ss, host+assignment)
 				stats["standard_symbols"]++
 				// Exported children supply their own block symbols in every file mode.
 				// Only leaves and omitted child definitions need a local interface.
@@ -560,7 +586,14 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 							mapping[p] = quote("p" + strconvI(i+1))
 						}
 					}
-					ss = append(ss, symbolDefinition(master, sid, mapping, scale, &notes))
+					var pinNames map[string]string
+					if group != nil {
+						pinNames = map[string]string{}
+						for i, p := range order {
+							pinNames[p] = expandedPin(i)
+						}
+					}
+					ss = append(ss, symbolDefinitionNamed(master, sid, mapping, pinNames, scale, &notes))
 					stats["custom_symbols"]++
 				}
 				ss = append(ss, host+" @SET-SYMBOL "+sid)
@@ -592,7 +625,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 				}
 				terminalRef := host + ":" + strconvI(i+1)
 				if group != nil {
-					terminalRef = host + ":p" + strconvI(i+1)
+					terminalRef = usagePin(host, expandedPin(i))
 				}
 				endpoints = append(endpoints, endpoint{unique(bits), original, terminalRef})
 			}
@@ -644,9 +677,9 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 					}
 				}
 				if len(targets) == 1 {
-					ss = append(ss, "$NO_CONNECT @ATTACH "+targets[0]+" => @ORIENT("+quote(ins.Orient)+")")
+					ss = append(ss, "$NO_CONNECT @ATTACH "+targets[0]+" => @PLACE"+pt(at)+" => @ORIENT("+quote(ins.Orient)+")")
 				} else {
-					ss = append(ss, sid+" = "+pt(at), "$FIGURE @ATTACH "+sid+" => @SET-SYMBOL $NO_CONNECT_SYMBOL => @ORIENT("+quote(ins.Orient)+")")
+					ss = append(ss, sid+" = "+pt(at), "$FIGURE @ATTACH "+sid+" => @SET-SYMBOL $NO_CONNECT_SYMBOL => @PLACE"+pt(at)+" => @ORIENT("+quote(ins.Orient)+")")
 					endpoints = append(endpoints, endpoint{markerBits, at, sid})
 				}
 				continue
@@ -656,7 +689,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 				kind = "GROUND"
 			}
 			ss = append(ss, sid+" = $"+kind+" @ATTACH "+ref("&", netmap[original])+" => @PLACE"+pt(at)+" => @ORIENT("+quote(ins.Orient)+")")
-			endpoints = append(endpoints, endpoint{[]string{original}, at, sid + ":p"})
+			endpoints = append(endpoints, endpoint{[]string{original}, at, usagePin(sid, "pin")})
 		}
 		portSymbols := stringSet{}
 		for index, placement := range c.PortPlacements {
@@ -695,7 +728,7 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 				ss = append(ss, packageSymbolDefinition(in.Package, glyph, symbol))
 				portSymbols[symbol] = true
 			}
-			definition, args, term := "$IO_PORT", netsRef(bits, netmap), ":p"
+			definition, args, term := "$IO_PORT", netsRef(bits, netmap), usagePin(sid, "pin")
 			if len(bits) > 1 {
 				definition = "%bus_port_type_" + strconvI(index)
 				roles, terms, names := []string{}, []string{}, []string{}
@@ -705,14 +738,15 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 						role += "" + strconvI(i)
 					}
 					roles = append(roles, `["`+role+`", "net"]`)
-					terms = append(terms, strconvI(i+1))
+					terms = append(terms, quote(role))
 					names = append(names, ref("&", netmap[n]))
 				}
-				// A multi-net anchor supplies the electrical bus pin. A separate
-				// IO_PORT supplies the visible marker, so any theme's IO_PORT
-				// style rules apply without copying colors into the drawing.
-				ss = append(ss, definition+" = @DEFINE(roles=["+strings.Join(roles, ", ")+"]) {}", definition+"_symbol = @DEFINE-SYMBOL {(0, 0) @PIN(terminal=["+strings.Join(terms, ", ")+"])}", netsRef(bits, netmap)+" @REMOVE-FROM $PORT_FILL_SET")
-				args, term = strings.Join(names, " "), ":1"
+				// A multi-net anchor supplies the electrical bus pin: its one pin
+				// binds every role by name (11.3). A separate IO_PORT supplies the
+				// visible marker, so any theme's IO_PORT style rules apply without
+				// copying colors into the drawing.
+				ss = append(ss, definition+" = @DEFINE(roles=["+strings.Join(roles, ", ")+"]) {}", definition+"_symbol = @DEFINE-SYMBOL {%pin = (0, 0) @PIN(terminal=["+strings.Join(terms, ", ")+"])}")
+				args = strings.Join(names, " ")
 			}
 			ss = append(ss, sid+" = "+definition+" @ATTACH "+args+" => @PLACE"+pt(at)+" => @ORIENT("+quote(placement.Orient)+")")
 			if len(bits) > 1 {
@@ -726,9 +760,9 @@ func convert(in convertInput, resourceDir string) (map[string]string, map[string
 				if len(bits) == 1 && placement.Label == "" {
 					label = netmap[bits[0]]
 				}
-				ss = append(ss, marker+" @TEXT("+quote(literal(label))+`, key="name")`)
+				ss = append(ss, marker+" @TEXT("+quote(literal(label))+`, key="netname")`)
 			}
-			endpoints = append(endpoints, endpoint{bits, at, sid + term})
+			endpoints = append(endpoints, endpoint{bits, at, term})
 		}
 		// Native netlisting drops explicitly ignored instrumentation. A net
 		// connected only to such instances has no electrical counterpart either.
