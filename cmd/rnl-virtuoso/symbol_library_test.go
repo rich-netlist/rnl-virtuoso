@@ -174,3 +174,29 @@ func TestMappingChecksAlignmentPinsAndPortGlyphs(t *testing.T) {
 	glyph := strings.Replace(text, "%p = (0, 3)", "%pin = (0, 3)", 1)
 	loadSymbolLibrary(libraryInput{File: "parts.rnl", Text: glyph, Mapping: mapping(`"cells": [], "ports": {"input": "PART"}`)})
 }
+
+func TestTheBundledMappingCoversReferenceLibraries(t *testing.T) {
+	libraries := loadSymbolLibraries(nil, testResources())
+	cases := []struct {
+		library, cell, symbol string
+		nodes, terminals      []string
+	}{
+		// Named pins pair by name, whatever the node order.
+		{"ahdlLib", "and_gate", "AND_2INPUT", []string{"vin1", "vin2", "vout"}, []string{"b", "a", "y"}},
+		{"analogLib", "schottky", "SCHOTTKY", []string{"PLUS", "MINUS"}, []string{"a", "k"}},
+		{"functional", "comparator", "COMPARATOR", []string{"in", "ref", "out"}, []string{"inp", "inn", "out"}},
+		// Numbered pins bind by position, in the cell's node order.
+		{"analogLib", "sp2tswitch", "SP2TSWITCH", []string{"t0", "t1", "t2"}, nil},
+		{"ahdlLib", "thyristor", "THYRISTOR", []string{"vanode", "vcathode", "vgate"}, nil},
+	}
+	for _, c := range cases {
+		choice := chooseSymbol(libraries, cellKey{c.library, c.cell}, "I0", "", "spectre", c.nodes)
+		if choice == nil || choice.Symbol != c.symbol || !reflect.DeepEqual(choice.Terminals, c.terminals) {
+			t.Fatalf("%s/%s: %+v", c.library, c.cell, choice)
+		}
+	}
+	// A cell whose module order differs from its CDF order is not mapped by position.
+	if choice := chooseSymbol(libraries, cellKey{"rfLib", "quadrature"}, "I0", "", "spectre", []string{"lag", "lead"}); choice != nil {
+		t.Fatalf("rfLib/quadrature: %+v", choice)
+	}
+}

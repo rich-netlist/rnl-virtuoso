@@ -607,6 +607,9 @@ func runLibraryMerge(request string, fields []node, resourceDir string) map[stri
 	}
 	validateExportWorkspace(output, filepath.Dir(request))
 	files, report := assembleLibrary(readParts(fields[6].list), library, dialect, split, mode, resourceDir)
+	// The native includes of a library export are absolute; a relative one is
+	// relative to a cell job's directory, which the merge does not know.
+	addModelFiles(files, report, "")
 	report["include_external_cells"], report["include_hierarchy"] = fields[7].atom == "t", fields[8].atom == "t"
 	skipped := []string{}
 	if len(fields) >= 10 {

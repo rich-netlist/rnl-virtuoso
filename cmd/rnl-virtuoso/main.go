@@ -81,6 +81,7 @@ func testJSON(dir string) {
 			out["capture"] = capture
 		case "library":
 			files, report := assembleLibrary(req.Captures, req.Library, req.Dialect, req.Split, parseSymbolOnlyMode(req.SymbolOnlyCells, req.SymbolPackage, req.Library), dir)
+			addModelFiles(files, report, "")
 			out["files"], out["report"] = files, report
 		case "", "convert":
 			files, report := convert(req.convertInput, dir)
