@@ -324,7 +324,11 @@ mapping. Missing or extra members still fail.
   package-qualified names: a chosen symbol whose name a library of higher priority
   also defines is copied into the level as a `%` definition, with a warning in the
   report's `warnings`.
-  The bundled `eda-symbol` maps common `analogLib` primitives. Its pins bind the terminal
+  The bundled `eda-symbol` maps common primitives of `analogLib` and the
+  behavioral cells of `ahdlLib`, `rfLib` and `functional` that it has a symbol
+  for, each checked against the pins of the cell's own symbol. A symbol whose
+  pins are numbered binds them by position, in the cell's node order, and is
+  mapped only where that order puts every pin in place. Its named pins bind the terminal
   names of the standard series 0.4, so the exporter writes them in CDF node order,
   such as `#"R0" @SET-SYMBOL(terminals=["p", "n"]) $RESISTOR`: the instance binds
   by position whatever terminal names its host gives it, and the same statement

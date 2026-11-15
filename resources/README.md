@@ -25,8 +25,11 @@ package because it is not RNL (RNL 0.4, 16.4). Every symbol library may have one
 named `<package file without .rnl>.virtuoso.json`:
 
 - `schema` 1 and `package`, the name and version the package declares;
-- `cells`: `library`, `cell` and `symbol`, optionally with the cell's own
-  `terminals`, `package_to_source` and `align_pins`;
+- `cells`: `library`, `cell` and `symbol`, optionally with `pins` (each terminal
+  of the cell paired with the symbol terminal that draws it) or the cell's own
+  `terminals`, and `package_to_source` and `align_pins`. A cell with neither,
+  for a symbol without terminal names, binds the numbered pins by position in
+  its node order;
 - `terminals`: the terminal names that each symbol with named pins binds, in node
   order; the converter writes them as `@SET-SYMBOL(terminals=[…])`;
 - `symbols`: the 18 changed symbol interfaces, with their compensation;
