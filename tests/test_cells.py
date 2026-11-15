@@ -1,6 +1,7 @@
 """Original per-cell file-layout and shared-descendant regressions."""
 import copy
 import os
+import tempfile
 import unittest
 
 import test_library
@@ -87,7 +88,10 @@ class PerCellTests(unittest.TestCase):
         captures[2]['Template'] += 'ahdl_include "/models/behavior.va"\n'
         result = call(op='library', library='work', dialect='spectre', split=True, captures=captures)
         self.assertNotIn('ahdl_include', result['files']['A.scs'])
+        # A file that cannot be read keeps its path, with a note.
         self.assertIn('ahdl_include "/models/behavior.va"', result['files']['bench.scs'])
+        self.assertTrue(any('/models/behavior.va' in note for note in result['report']['notes']))
+        self.assertEqual(result['report']['behavior_model_files'], [])
         for cell in ('../escape', 'A'):
             bad = diamond_captures()
             bad[0]['Definitions'][1]['Cell'] = cell
@@ -97,6 +101,25 @@ class PerCellTests(unittest.TestCase):
                 bad[0]['Definitions'][1]['Cell'] = 'a'
             with self.subTest(cell=cell), self.assertRaisesRegex(ExportError, 'Unsafe|Conflicting'):
                 call(op='library', library='work', dialect='spectre', split=True, captures=bad)
+
+    def test_verilog_a_files_are_copied_into_the_export(self):
+        with tempfile.TemporaryDirectory() as root:
+            # The file of a Virtuoso veriloga view: <library>/<cell>/veriloga/veriloga.va.
+            source = os.path.join(root, 'models', 'behavior', 'veriloga', 'veriloga.va')
+            os.makedirs(os.path.dirname(source))
+            module = '`include "disciplines.vams"\nmodule behavior(a, b);\ninout a, b;\nelectrical a, b;\nendmodule\n'
+            with open(source, 'w', encoding='utf-8', newline='\n') as f:
+                f.write(module)
+            reference = source.replace(os.sep, '/')
+            captures = diamond_captures()
+            captures[2]['Template'] += 'ahdl_include "%s"\n' % reference
+            result = call(op='library', library='work', dialect='spectre', split=True, captures=captures)
+            files = result['files']
+            self.assertIn('ahdl_include "veriloga/behavior.va"', files['bench.scs'])
+            self.assertNotIn(reference, files['bench.scs'])
+            self.assertEqual(files['veriloga/behavior.va'], module)
+            self.assertEqual(result['report']['behavior_model_files'], [dict(source=reference, file='veriloga/behavior.va')])
+            self.check(files, ['bench.scs', 'A.scs', 'B.scs'])
 
     def test_single_cell_export_uses_the_same_paths_and_respects_external_scope(self):
         helper = test_library.LibraryTests(methodName='runTest')

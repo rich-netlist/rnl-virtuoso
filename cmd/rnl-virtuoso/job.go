@@ -367,6 +367,7 @@ func runJob(request, resourceDir string) map[string]any {
 		writeText(filepath.Join(work, "library-parts.json"), jsonText(parts))
 	}
 	report["version"], report["backend"], report["source"], report["work_directory"], report["output_directory"], report["format"], report["behavior_model_references"] = version, "go", map[string]string{"library": library, "cell": cellName, "view": view}, work, output, dialect, refs
+	addModelFiles(files, report, working)
 	staging, e := os.MkdirTemp(work, "stage-")
 	if e != nil {
 		fail("%s", e)

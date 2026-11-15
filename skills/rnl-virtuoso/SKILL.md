@@ -91,5 +91,6 @@ Cells without schematic become empty-subcircuit files by default, listed in
 which a later export takes as a symbol library, such as for a PDK. Keep them.
 No separate `symbols.rnl` is written since 0.10.0. Ported files have no
 native includes; callers load dependencies once. Portless tops include descendants
-once. Native model and Verilog-A references remain external. Export success does
+once. Verilog-A files named by `ahdl_include` are copied into `veriloga/` and
+referenced relatively; other model references remain external. Export success does
 not establish simulation success.

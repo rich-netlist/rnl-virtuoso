@@ -53,8 +53,8 @@ A cell with ports contains its own subcircuit definitions and RNL, with no nativ
 include statements. A portless top includes all required descendant cell files,
 including enabled external cells, once each in a flat list. Descendant files do
 not include each other, avoiding duplicate definitions through shared children.
-Native model/Verilog-A include statements remain in portless top entries; model
-files are not copied. A standalone subcircuit is a definition fragment and needs
+Native model/Verilog-A include statements remain in portless top entries; the
+Verilog-A files are copied into `veriloga/` and other model files are not. A standalone subcircuit is a definition fragment and needs
 its dependencies and model references supplied by its caller.
 Exported child symbols live inside their own subcircuit definitions; parents
 inherit them without local copies or per-instance symbol overrides. Load those
@@ -85,7 +85,8 @@ the Combined file option applies only to single-cell export. **Include reference
 external cells** controls foreign schematic definitions: when off, their instance
 calls and symbols remain as external interfaces. When on, schematic definitions
 emitted by the native hierarchy exporter are included. Native stop views, PDK
-primitives and Verilog-A leaves remain leaves; model references stay external.
+primitives and Verilog-A leaves remain leaves; model references other than
+Verilog-A files stay external.
 
 The common output directory contains:
 
@@ -125,7 +126,8 @@ The common output directory contains:
   subcircuit names, entry paths and the symbol-only cells, and records
   `symbol_libraries`, `symbol_only_cells` (the mode), `symbol_only_files` (each
   cell's file, or `null` and the view that defines it), `symbol_package` (name,
-  version, file, mapping and symbols), model references, notes and skipped cells.
+  version, file, mapping and symbols), model references, the copied Verilog-A
+  files (`behavior_model_files`), notes and skipped cells.
 
 ### PDK symbols
 
@@ -293,11 +295,18 @@ mapping. Missing or extra members still fail.
   may use explicit direction declarations or only `electrical` declarations.
   Internal electrical nodes and function/task arguments are excluded. Module
   header order and declared bus direction are preserved; conflicting direction
-  and electrical ranges are reported with the module and port names. Native
-  `ahdl_include` lines are preserved, with their original model file references
-  recorded in the export report. Model files remain external; copying the RNL
-  bundle does not make a portable simulation deck. Ordinary `veriloga` takes
-  precedence over `veriloga_ans` when both exist.
+  and electrical ranges are reported with the module and port names. The
+  Verilog-A files that native `ahdl_include` lines name are copied into the
+  export's `veriloga/` directory, and those lines point at the copies by a path
+  relative to the netlist file, so the export is checked (the modules give the
+  block symbols) and simulated without the machine it came from. The file of a
+  Virtuoso view, `<cell>/<view>/veriloga.va`, is copied as `<cell>.va`; any
+  other file keeps its name, and a second file of the same name gets `_2`. The
+  report lists the original references under `behavior_model_references` and
+  each copy under `behavior_model_files`. A file that cannot be read keeps its
+  original path, with a note. Files that a Verilog-A file includes in turn are
+  not copied. Ordinary `veriloga` takes precedence over `veriloga_ans` when both
+  exist.
 - Leaf instances take their symbols from the **symbol libraries**: RNL packages
   given in priority order (`?symbolLibraries`, `--symbol-library`, or the forms'
   **Symbol libraries** field). The default list holds only the bundled

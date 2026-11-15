@@ -46,7 +46,8 @@ Choose a **new output directory**. All exporter logs, native work files and
 scratch stay below its reserved `.rnl/` subdirectory, including failed jobs. **Spectre (simulation)** is recommended for
 sources, switches and Verilog-A models; CDL is an LVS export and may omit them.
 Keep the generated netlist, symbol/style files and report together.
-External model references remain external; this does not package a runnable simulation deck.
+Verilog-A files named by `ahdl_include` are copied into `veriloga/` beside the netlist; other model
+references (PDK model libraries) remain external, so this is not a self-contained simulation deck.
 
 From **CIW → File → Export → RNL...**, choose **Cell** and a library/cell without
 opening its editor, or **Library** to export all schematic and symbol-only cells.
