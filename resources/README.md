@@ -13,9 +13,10 @@ Replace the `eda-style` reference to apply another presentation without editing
 exported symbol geometry. Pin marks are supplied by the style package, not by the
 converter's custom symbols.
 
-The pins of `eda-symbol` 0.2 keep the coordinates of 0.1 and bind the terminal
-names of the standard series 0.4 (eda-only symbols for masters without standard
-terminal names stay positional). Its SPICE instance-letter rules (`I*`, `V*`,
+The pins of `eda-symbol` 0.2 keep the coordinates of 0.1, except that the
+diodes (`DIODE`, `ZENER_DIODE`, `SCHOTTKY`) and `TRANSFORMER` stand upright as in
+the standard series 0.4, and bind the terminal names of that series (eda-only
+symbols for masters without standard terminal names stay positional). Its SPICE instance-letter rules (`I*`, `V*`,
 etc.) are in a record with `language="spice"`: they act only on SPICE sections,
 never on Spectre instance names, so Spectre and CDL exports ship the same copy.
 
@@ -32,17 +33,19 @@ named `<package file without .rnl>.virtuoso.json`:
   its node order;
 - `terminals`: the terminal names that each symbol with named pins binds, in node
   order; the converter writes them as `@SET-SYMBOL(terminals=[…])`;
-- `symbols`: the 18 changed symbol interfaces, with their compensation;
+- `symbols`: the 15 symbols whose pins differ from the Virtuoso symbols they draw,
+  with their compensation;
 - `ports`: the glyphs copied for input and output schematic pins; each names
   its pin `%pin`, where the port's wires end.
 
 Its
 `package_to_source` is the compensation applied to the **new package's local
 coordinates** before the instance's Virtuoso/EDIF orientation. For example,
-`DIODE` uses `R270` and `VOLTAGE_CONTROLLED_SWITCH` uses `MYR90`. `R90` means
-`(x,y) -> (-y,x)`; `MY` negates x and `MX` negates y. Coordinate formulas and
-the actual package pins decide these rules, including the legacy SCHOTTKY
-anode at `(0,3)`, which differs from the handoff document's description.
+`ZENER_DIODE` uses `R180`, because `analogLib`'s Zener has its cathode on top, and
+`VOLTAGE_CONTROLLED_SWITCH` uses `MYR90`. `R90` means `(x,y) -> (-y,x)`; `MY`
+negates x and `MX` negates y. The upright diodes and transformer match their
+`analogLib` symbols as drawn and need no entry. Coordinate formulas and the
+actual pins of the package and of the Virtuoso symbols decide these rules.
 
 `align_pins` optionally chooses which positional terminals set the translation.
 Use it for changes that moved individual pins, such as a transmission line's

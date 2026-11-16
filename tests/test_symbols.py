@@ -84,10 +84,10 @@ class SymbolTests(unittest.TestCase):
 
     def test_configuration_covers_changed_symbols_and_rejects_bad_rules(self):
         rules = orientation.load_rules()
-        self.assertEqual(len(rules), 18)
+        self.assertEqual(len(rules), 15)
         self.assertTrue(set(rules).issubset(package_pins(PACKAGE)))
         bad = json.loads(resources.read('eda-symbol.virtuoso.json'))
-        bad['symbols']['DIODE']['package_to_source'] = 'guessed-rotation'
+        bad['symbols']['ZENER_DIODE']['package_to_source'] = 'guessed-rotation'
         with self.assertRaisesRegex(ExportError, 'Invalid package orientation'):
             orientation.load_rules(json.dumps(bad))
 
