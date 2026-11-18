@@ -185,6 +185,8 @@ func TestTheBundledMappingCoversReferenceLibraries(t *testing.T) {
 		{"ahdlLib", "and_gate", "AND_2INPUT", []string{"vin1", "vin2", "vout"}, []string{"b", "a", "y"}},
 		{"analogLib", "schottky", "SCHOTTKY", []string{"PLUS", "MINUS"}, []string{"a", "k"}},
 		{"functional", "comparator", "COMPARATOR", []string{"in", "ref", "out"}, []string{"inp", "inn", "out"}},
+		{"analogLib", "xfmr", "TRANSFORMER", []string{"P+", "P-", "S+", "S-"}, []string{"p1", "n1", "p2", "n2"}},
+		{"analogLib", "vcres", "VCRES", []string{"n+", "n-", "in+", "in-"}, nil},
 		// Numbered pins bind by position, in the cell's node order.
 		{"analogLib", "sp2tswitch", "SP2TSWITCH", []string{"t0", "t1", "t2"}, nil},
 		{"ahdlLib", "thyristor", "THYRISTOR", []string{"vanode", "vcathode", "vgate"}, nil},
