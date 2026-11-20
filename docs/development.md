@@ -103,6 +103,13 @@ ELF architecture/static linkage and writes executable permissions into the tar.
 The archive excludes Python, Go source code and temporary files. Existing archives
 and export directories are never overwritten.
 
+The same run writes, beside the archive, `rnl-virtuoso-skill.zip`: the files of
+`skills/rnl-virtuoso` under one folder `rnl-virtuoso/`, with `LICENSE` and
+`LICENSES/MIT.txt`. Its entries carry no owner and one time, `SOURCE_DATE_EPOCH`
+if set (for example the commit time of the release tag) and 1980-01-01 otherwise,
+so the same sources give the same bytes. The archive and the zip each get a
+`.sha256` file in the format of `sha256sum`. Upload all four to the release.
+
 The release binary was tested with Go 1.27.3. Its [Linux kernel baseline is 3.2](https://go.dev/wiki/MinimumRequirements);
 older kernels and other architectures are not validated. Cadence's own OS and
 license requirements remain separate from the converter's requirements.

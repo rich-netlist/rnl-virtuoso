@@ -1,11 +1,45 @@
-"""Build a Linux x86-64 plugin archive with a static Go backend."""
+"""Build a Linux x86-64 plugin archive with a static Go backend, and beside it the agent skill
+as rnl-virtuoso-skill.zip, each with a .sha256 file."""
 import argparse
+import hashlib
 import os
 from pathlib import Path
 import subprocess
 import struct
 import tarfile
 import tempfile
+import time
+import zipfile
+
+SKILL_ZIP = 'rnl-virtuoso-skill.zip'
+# The MIT license of the code, docs and skill, as the plugin archive and the skill zip carry it.
+MIT_FILES = ('LICENSE', 'LICENSES/MIT.txt')
+
+
+def write_sha256(path):
+    """Write `<path>.sha256` in the format of sha256sum, naming the file without its directory."""
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    with path.with_name(path.name + '.sha256').open('x', encoding='utf-8', newline='\n') as stream:
+        stream.write(f'{digest}  {path.name}\n')
+
+
+def write_skill_zip(here, output):
+    """The agent skill under one folder `rnl-virtuoso/`, with the MIT license. Every entry has the
+    same time, SOURCE_DATE_EPOCH if set and 1980-01-01 otherwise, and Unix mode 0644, so the same
+    sources give the same bytes on any machine."""
+    epoch = os.environ.get('SOURCE_DATE_EPOCH')
+    stamp = time.gmtime(int(epoch))[:6] if epoch else (1980, 1, 1, 0, 0, 0)
+    skill = here/'skills'/'rnl-virtuoso'
+    files = [(p, p.relative_to(skill).as_posix()) for p in skill.rglob('*') if p.is_file()]
+    files.extend((here/name, name) for name in MIT_FILES)
+    with output.open('xb') as stream, zipfile.ZipFile(stream, 'w') as archive:
+        for path, name in sorted(files, key=lambda pair: pair[1]):
+            info = zipfile.ZipInfo('rnl-virtuoso/'+name, date_time=stamp)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.create_system = 3
+            info.external_attr = 0o100644 << 16
+            archive.writestr(info, path.read_bytes())
+    write_sha256(output)
 
 
 def main():
@@ -17,10 +51,11 @@ def main():
     here = Path(__file__).resolve().parents[1]
     files = [(here/'rnl-virtuoso.il', 'rnl-virtuoso.il'), (here/'rnl-library.il', 'rnl-library.il'),
              (here/'rnl-api.il', 'rnl-api.il'), (here/'README.md', 'README.md'),
-             (here/'LICENSE', 'LICENSE'), (here/'Go-LICENSE.txt', 'Go-LICENSE.txt')]
+             (here/'Go-LICENSE.txt', 'Go-LICENSE.txt')]
+    files.extend((here/name, name) for name in MIT_FILES)
     files.extend((p, p.relative_to(here).as_posix()) for p in (here/'docs').glob('*.md'))
     files.extend((p, p.relative_to(here).as_posix()) for p in (here/'resources').iterdir() if p.is_file())
-    files.extend((here/'LICENSES'/name, 'LICENSES/'+name) for name in ('MIT.txt', 'CC0-1.0.txt', 'BSD-3-Clause.txt'))
+    files.extend((here/'LICENSES'/name, 'LICENSES/'+name) for name in ('CC0-1.0.txt', 'BSD-3-Clause.txt'))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='rnl-go-build-') as temporary:
         backend = args.backend
@@ -46,7 +81,11 @@ def main():
                 info.mode = 0o755 if name == 'bin/rnl-virtuoso' else 0o644
                 with path.open('rb') as source:
                     archive.addfile(info, source)
+    write_sha256(args.output)
+    skill_zip = args.output.with_name(SKILL_ZIP)
+    write_skill_zip(here, skill_zip)
     print(args.output.resolve())
+    print(skill_zip.resolve())
 
 
 if __name__ == '__main__':

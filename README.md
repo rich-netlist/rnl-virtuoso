@@ -114,7 +114,9 @@ after completion, and supports headless calls through standard input without a
 bridge or separate batch SKILL file; see [API documentation](docs/skill-api.md#blocking-export-and-headless-invocation).
 
 Copy [skills/rnl-virtuoso](skills/rnl-virtuoso) to your agent's skill directory
-(Codex: `~/.codex/skills/rnl-virtuoso`). It supports the headless CLI or an available
+(Codex: `~/.codex/skills/rnl-virtuoso`), or extract `rnl-virtuoso-skill.zip` from the
+[latest release](https://github.com/rich-netlist/rnl-virtuoso/releases/latest/download/rnl-virtuoso-skill.zip)
+there; it holds the same folder and its license. It supports the headless CLI or an available
 live-session connection, checks for a compatible installation, and asks before
 installing or upgrading at an agreed location. No other agent skill or specific
 bridge client is required. The skill contains no exporter or bridge assets;
@@ -132,7 +134,12 @@ python scripts/test.py
 ```
 
 The package contains a static Linux x86-64 backend. `--go /path/to/go` selects a
-compiler. To enable drawing/checker assertions, pass `--rnl /path/to/rnl` to the
+compiler. Beside the archive the script writes the agent skill as
+`rnl-virtuoso-skill.zip` (the folder `rnl-virtuoso/` with `LICENSE` and
+`LICENSES/MIT.txt`) and a `.sha256` file for each. A release uploads all four:
+the archive, the skill zip and their two checksum files. The skill zip's name has
+no version, so `releases/latest/download/rnl-virtuoso-skill.zip` always gives the
+latest skill. To enable drawing/checker assertions, pass `--rnl /path/to/rnl` to the
 test script. See [development notes](docs/development.md).
 
 ## License

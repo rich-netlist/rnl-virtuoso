@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -8,6 +9,7 @@ import tarfile
 import tempfile
 import unittest
 from unittest.mock import patch
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'tests/support'))
@@ -189,6 +191,38 @@ class SymbolTests(unittest.TestCase):
                 self.assertFalse(any(name.endswith('.py') for name in names))
                 for name in ('eda-symbol.rnl', 'eda-symbol.virtuoso.json', 'eda-style.rnl'):
                     self.assertIn('rnl-virtuoso/resources/'+name, names)
+                for name in ('LICENSE', 'LICENSES/MIT.txt', 'LICENSES/CC0-1.0.txt', 'LICENSES/BSD-3-Clause.txt', 'Go-LICENSE.txt'):
+                    self.assertIn('rnl-virtuoso/'+name, names)
+
+    def test_package_writes_the_skill_zip_and_checksums(self):
+        backend = os.environ.get('RNL_EXPORT_LINUX_BIN', str(ROOT/'target/rnl-virtuoso-linux-amd64'))
+        skill = ROOT/'skills/rnl-virtuoso'
+        expected = sorted(['rnl-virtuoso/'+p.relative_to(skill).as_posix() for p in skill.rglob('*') if p.is_file()]
+                          + ['rnl-virtuoso/LICENSE', 'rnl-virtuoso/LICENSES/MIT.txt'])
+        env = {k: v for k, v in os.environ.items() if k != 'SOURCE_DATE_EPOCH'}
+        zips = []
+        with tempfile.TemporaryDirectory() as directory:
+            for run in ('a', 'b'):
+                archive = Path(directory)/run/'plugin.tar.gz'
+                result = subprocess.run([sys.executable, str(ROOT/'scripts/package.py'), str(archive), '--backend', backend],
+                                        text=True, capture_output=True, env=env)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                skill_zip = archive.with_name('rnl-virtuoso-skill.zip')
+                for path in (archive, skill_zip):
+                    line = path.with_name(path.name + '.sha256').read_text(encoding='utf-8')
+                    self.assertEqual(line, hashlib.sha256(path.read_bytes()).hexdigest() + '  ' + path.name + '\n')
+                with zipfile.ZipFile(skill_zip) as bundle:
+                    self.assertEqual(sorted(bundle.namelist()), expected)
+                    self.assertEqual(bundle.read('rnl-virtuoso/SKILL.md'), (skill/'SKILL.md').read_bytes())
+                    self.assertEqual({i.date_time for i in bundle.infolist()}, {(1980, 1, 1, 0, 0, 0)})
+                    self.assertEqual({i.external_attr >> 16 for i in bundle.infolist()}, {0o100644})
+                zips.append(skill_zip.read_bytes())
+                # A second run into the same directory overwrites nothing.
+                again = subprocess.run([sys.executable, str(ROOT/'scripts/package.py'), str(archive), '--backend', backend],
+                                       text=True, capture_output=True, env=env)
+                self.assertNotEqual(again.returncode, 0)
+                self.assertEqual(skill_zip.read_bytes(), zips[-1])
+        self.assertEqual(zips[0], zips[1])
 
 
 if __name__ == '__main__':
